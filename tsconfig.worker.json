@@ -12,10 +12,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": [],
+    "types": ["./worker-configuration.d.ts"],
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/worker", "worker-configuration.d.ts"]
+  "include": ["src/worker"]
 }

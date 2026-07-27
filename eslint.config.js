@@ -11,15 +11,16 @@ export default tseslint.config(
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2022,
-      globals: {
-        ...globals.browser,
-        ...globals.serviceworker,
-        ...globals.node,
-      },
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
+    },
+  },
+  {
+    files: ['src/react-app/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: globals.browser,
     },
     plugins: {
       'react-hooks': reactHooks,
@@ -31,6 +32,32 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+    },
+  },
+  {
+    files: ['src/worker/**/*.ts'],
+    languageOptions: {
+      globals: globals.serviceworker,
+    },
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['node:*'],
+              message:
+                'Worker code must use Worker-compatible Web APIs unless nodejs_compat is configured.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['tests/**/*.ts', 'vite.config.ts', 'vitest.config.ts'],
+    languageOptions: {
+      globals: globals.node,
     },
   },
   {

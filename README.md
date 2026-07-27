@@ -21,7 +21,8 @@ Browser
 ```
 
 - Vite and the Cloudflare Vite plugin run the frontend and Worker together.
-- Wrangler deploys the Worker and `dist/client` static assets as one unit.
+- The Cloudflare Vite plugin generates the production asset directory and
+  deploys the Worker and client assets as one unit.
 - `/api/*` requests run through Hono before the SPA asset fallback.
 - SQL is isolated in repository modules and always uses D1 prepared statements.
 - `ENVIRONMENT` controls access to development-only routes.
@@ -54,6 +55,9 @@ Generate binding types after installing packages:
 npm run cf-typegen
 ```
 
+The committed generated types are checked automatically by
+`npm run typecheck`.
+
 ## Local development
 
 Create the local Worker variable file:
@@ -83,6 +87,12 @@ npm run dev
 ```
 
 Open the URL printed by Vite, normally `http://localhost:5173`.
+
+To preview the production build in the Workers runtime:
+
+```bash
+npm run preview
+```
 
 Available foundation endpoints:
 
@@ -166,9 +176,15 @@ npm run cf-typegen
 ```
 
 Run this command again whenever Worker bindings or variables change. The Worker
-also uses the focused `Bindings` interface in
-`src/worker/types/bindings.ts`, so binding use remains explicit at application
-boundaries.
+derives D1 bindings from the generated `Cloudflare.Env` interface. The focused
+`Bindings` type only widens the non-secret `ENVIRONMENT` value used by local
+development.
+
+Verify that the committed generated file matches `wrangler.jsonc`:
+
+```bash
+npm run cf-typegen:check
+```
 
 ## Quality checks
 
@@ -209,10 +225,12 @@ remains unavailable.
 | `npm run dev` | Start React and the Worker in the integrated local runtime |
 | `npm run build` | Type-check and create the production bundle |
 | `npm run deploy` | Build and deploy with Wrangler |
+| `npm run preview` | Build and preview in the local Workers runtime |
 | `npm run typecheck` | Check strict TypeScript projects |
 | `npm run lint` | Run ESLint |
 | `npm test` | Run Vitest once |
 | `npm run cf-typegen` | Generate Cloudflare binding declarations |
+| `npm run cf-typegen:check` | Fail if generated binding types are stale |
 | `npm run db:migrate:local` | Apply pending migrations to local D1 |
 | `npm run db:migrate:remote` | Apply pending migrations to remote D1 |
 

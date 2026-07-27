@@ -1,4 +1,5 @@
-export interface Bindings {
-  DB: D1Database
-  ENVIRONMENT: 'development' | 'test' | 'production'
+export type RuntimeEnvironment = 'development' | 'production'
+
+export type Bindings = Omit<Cloudflare.Env, 'ENVIRONMENT'> & {
+  ENVIRONMENT: RuntimeEnvironment
 }

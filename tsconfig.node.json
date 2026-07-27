@@ -11,7 +11,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["node", "vitest/globals"],
+    "types": ["node", "vitest/globals", "./worker-configuration.d.ts"],
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
@@ -20,7 +20,6 @@
     "vitest.config.ts",
     "eslint.config.js",
     "tests",
-    "src/worker",
-    "worker-configuration.d.ts"
+    "src/worker"
   ]
 }

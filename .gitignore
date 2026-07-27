@@ -8,9 +8,8 @@ coverage/
 
 # Cloudflare local state and generated deployment output
 .wrangler/
-.dev.vars
-.env
-.env.*
+.dev.vars*
+.env*
 !.env.example
 !.dev.vars.example
 
