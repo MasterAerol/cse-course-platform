@@ -1,8 +1,11 @@
 import { Hono } from 'hono'
 
+import { adminRoutes } from './routes/admin.routes'
+import { authRoutes } from './routes/auth.routes'
 import { devRoutes } from './routes/dev.routes'
 import { healthRoutes } from './routes/health.routes'
 import type { AppEnv } from './types/app'
+import { AppError } from './utils/app-error'
 import { errorResponse } from './utils/responses'
 
 export const app = new Hono<AppEnv>()
@@ -15,6 +18,8 @@ app.use('*', async (context, next) => {
 })
 
 app.route('/api/health', healthRoutes)
+app.route('/api/auth', authRoutes)
+app.route('/api/admin', adminRoutes)
 app.route('/api/dev', devRoutes)
 
 app.notFound((context) =>
@@ -27,10 +32,24 @@ app.notFound((context) =>
 )
 
 app.onError((error, context) => {
-  console.error('Unhandled Worker error', {
-    requestId: context.get('requestId'),
-    message: error.message,
-  })
+  if (error instanceof AppError) {
+    return errorResponse(
+      context,
+      error.status,
+      error.code,
+      error.message,
+      error.details,
+    )
+  }
+
+  console.error(
+    JSON.stringify({
+      message: 'Unhandled Worker error',
+      requestId: context.get('requestId'),
+      error: error.message,
+      path: context.req.path,
+    }),
+  )
 
   return errorResponse(
     context,

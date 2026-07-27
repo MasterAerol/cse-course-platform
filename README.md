@@ -1,31 +1,36 @@
 # CSE Course Platform
 
-Milestone 0 foundation for a Civil Service Examination learning platform. The
-repository combines a React single-page application, a Hono API, and Cloudflare
-D1 in one Cloudflare Worker deployment.
+Milestone 1 foundation for a Civil Service Examination learning platform. The
+repository combines a React single-page application, a Hono API, secure
+server-managed sessions, and Cloudflare D1 in one Cloudflare Worker deployment.
 
-This milestone intentionally contains no authentication, course pages, admin
-screens, quizzes, payments, or R2 integration.
+This milestone intentionally contains no course pages, content management,
+quizzes, payments, or R2 integration. The only admin page is an authorization
+check used to verify role enforcement.
 
 ## Architecture
 
 ```text
 Browser
-  ├── React + TypeScript SPA
-  └── fetch /api/*
-          └── Hono Worker
-                ├── routes
-                ├── services
-                ├── repositories
-                └── Cloudflare D1 (DB binding)
+  |-- React + TypeScript SPA
+  `-- fetch /api/* with an HttpOnly session cookie
+        `-- Hono Worker
+              |-- validation and authentication middleware
+              |-- services
+              |-- prepared D1 repositories
+              `-- Cloudflare D1 (DB binding)
 ```
 
 - Vite and the Cloudflare Vite plugin run the frontend and Worker together.
-- The Cloudflare Vite plugin generates the production asset directory and
-  deploys the Worker and client assets as one unit.
+- The plugin generates the production assets and deploys the Worker and SPA as
+  one unit.
 - `/api/*` requests run through Hono before the SPA asset fallback.
-- SQL is isolated in repository modules and always uses D1 prepared statements.
-- `ENVIRONMENT` controls access to development-only routes.
+- SQL is isolated in repository modules and uses bound D1 prepared statements.
+- `ENVIRONMENT` controls development-only routes and production cookie
+  security.
+- Passwords use versioned PBKDF2-HMAC-SHA-256 records with unique salts.
+- Raw session tokens exist only in HttpOnly cookies; D1 stores SHA-256 token
+  hashes and enforces expiration and revocation.
 
 ## Prerequisites
 
@@ -34,24 +39,12 @@ Browser
 - A Cloudflare account for remote D1 and deployment
 - Wrangler authentication for remote commands
 
-Check the local tool versions:
-
-```bash
-node --version
-npm --version
-```
-
 ## Installation
 
 ```bash
 git clone <repository-url>
 cd cse-course-platform
 npm install
-```
-
-Generate binding types after installing packages:
-
-```bash
 npm run cf-typegen
 ```
 
@@ -74,121 +67,97 @@ macOS or Linux:
 cp .dev.vars.example .dev.vars
 ```
 
-Apply the schema to the local D1 database:
+Apply the schema and start the integrated Vite/Workers server:
 
 ```bash
 npm run db:migrate:local
-```
-
-Start the integrated Vite and Workers development server:
-
-```bash
 npm run dev
 ```
 
 Open the URL printed by Vite, normally `http://localhost:5173`.
 
-To preview the production build in the Workers runtime:
+To preview a production build in the local Workers runtime:
 
 ```bash
 npm run preview
 ```
 
-Available foundation endpoints:
-
-- `GET /api/health` returns the public health response.
-- `GET /api/dev/database-check` runs `SELECT 1` through the D1 repository. It
-  returns 404 unless `ENVIRONMENT=development`.
-
 Local D1 state is stored under `.wrangler/` and is intentionally ignored by
 Git.
 
-## D1 creation
+## API endpoints
 
-Authenticate Wrangler:
+- `GET /api/health` returns the public health response.
+- `GET /api/dev/database-check` checks D1 and returns 404 unless
+  `ENVIRONMENT=development`.
+- `POST /api/auth/register` creates a student account and session.
+- `POST /api/auth/login` creates a session for valid active credentials.
+- `POST /api/auth/logout` revokes the current session and clears its cookie.
+- `GET /api/auth/me` returns the current public user or a 401 response.
+- `GET /api/admin/auth-check` requires an authenticated administrator.
+
+## Authentication
+
+Registration accepts `email`, `password`, `firstName`, and `lastName`. Email
+addresses are trimmed and lowercased. Passwords must be 12 to 128 characters
+and include an uppercase letter, lowercase letter, and number.
+
+The session cookie is HttpOnly, `SameSite=Lax`, scoped to `/`, and marked
+`Secure` when `ENVIRONMENT=production`. Sessions expire on the server after
+seven days. The frontend does not store authentication tokens in
+`localStorage` or other JavaScript-readable storage.
+
+Registration always creates the `student` role. There is deliberately no
+public admin registration or role-selection input. To test the admin-only
+route locally, register normally and then promote that known local account:
+
+```bash
+npx wrangler d1 execute DB --local --command "UPDATE users SET role = 'admin' WHERE email = 'normalized@example.com';"
+```
+
+Use a controlled operational process for production role changes. Do not add a
+default administrator password or commit credentials.
+
+## D1 setup and migrations
+
+Authenticate and create the production database:
 
 ```bash
 npx wrangler login
-```
-
-Create the production database:
-
-```bash
 npx wrangler d1 create cse-course-platform
 ```
 
-Wrangler prints the database binding configuration, including a generated
-`database_id`.
+Set the `database_id` in `wrangler.jsonc` to the ID Wrangler returns. Keep the
+binding name as `DB`.
 
-## D1 binding setup
-
-The Worker expects a binding named `DB`. Replace the placeholder
-`database_id` in `wrangler.jsonc` with the ID returned by `wrangler d1 create`:
-
-```jsonc
-{
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "cse-course-platform",
-      "database_id": "<cloudflare-d1-database-id>",
-      "migrations_dir": "migrations"
-    }
-  ]
-}
-```
-
-Keep the binding name as `DB`; application code accesses D1 as `env.DB`.
-
-## Migrations
-
-Migration files live in `migrations/` and are applied in filename order.
-
-Apply all pending migrations to the local database:
+Migration files live in `migrations/` and are applied in filename order:
 
 ```bash
 npm run db:migrate:local
-```
-
-Apply all pending migrations to the remote database:
-
-```bash
 npm run db:migrate:remote
 ```
 
-Remote migrations require Wrangler authentication and a real D1
-`database_id`. Review migration output before confirming changes to a
-production database.
-
-Create future migrations with sequential names rather than modifying a
-migration that has already been applied:
+Remote migrations require Wrangler authentication and the correct D1 database
+ID. Review the output before confirming production changes. Add future
+migrations instead of modifying one that has already been applied:
 
 ```bash
 npx wrangler d1 migrations create DB descriptive_name
 ```
 
-## Cloudflare binding type generation
+## Cloudflare binding types
 
-Generate `worker-configuration.d.ts` from `wrangler.jsonc`:
+Generate `worker-configuration.d.ts` after any binding or variable change:
 
 ```bash
 npm run cf-typegen
-```
-
-Run this command again whenever Worker bindings or variables change. The Worker
-derives D1 bindings from the generated `Cloudflare.Env` interface. The focused
-`Bindings` type only widens the non-secret `ENVIRONMENT` value used by local
-development.
-
-Verify that the committed generated file matches `wrangler.jsonc`:
-
-```bash
 npm run cf-typegen:check
 ```
 
-## Quality checks
+The Worker derives D1 bindings from generated `Cloudflare.Env`; the focused
+`Bindings` type widens only the non-secret `ENVIRONMENT` value needed locally.
 
-Run each locally testable check:
+## Quality checks
 
 ```bash
 npm run typecheck
@@ -197,15 +166,17 @@ npm test
 npm run build
 ```
 
-The production build writes client assets and Worker output beneath `dist/`.
+Tests execute in the Cloudflare Workers runtime and apply all migrations to an
+isolated local D1 database. The production build writes frontend and Worker
+output beneath `dist/`.
 
 ## Deployment
 
 Before deploying:
 
 1. Log in with `npx wrangler login`.
-2. Create the D1 database.
-3. Replace the placeholder D1 `database_id` in `wrangler.jsonc`.
+2. Create or select the production D1 database.
+3. Confirm the `database_id` in `wrangler.jsonc` targets that database.
 4. Apply remote migrations with `npm run db:migrate:remote`.
 
 Build and deploy:
@@ -214,9 +185,8 @@ Build and deploy:
 npm run deploy
 ```
 
-Wrangler uploads the Hono Worker and Vite client assets together. The production
-configuration sets `ENVIRONMENT=production`, so the database-check route
-remains unavailable.
+The production configuration sets `ENVIRONMENT=production`, which enables the
+`Secure` cookie attribute and keeps the development database check unavailable.
 
 ## npm scripts
 
@@ -226,9 +196,9 @@ remains unavailable.
 | `npm run build` | Type-check and create the production bundle |
 | `npm run deploy` | Build and deploy with Wrangler |
 | `npm run preview` | Build and preview in the local Workers runtime |
-| `npm run typecheck` | Check strict TypeScript projects |
+| `npm run typecheck` | Check generated bindings and strict TypeScript |
 | `npm run lint` | Run ESLint |
-| `npm test` | Run Vitest once |
+| `npm test` | Run Workers-runtime Vitest integration tests with local D1 |
 | `npm run cf-typegen` | Generate Cloudflare binding declarations |
 | `npm run cf-typegen:check` | Fail if generated binding types are stale |
 | `npm run db:migrate:local` | Apply pending migrations to local D1 |
@@ -260,9 +230,30 @@ traces:
 }
 ```
 
+Validation errors use the same envelope and may include allow-listed field
+messages:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "The request contains invalid fields.",
+    "requestId": "generated-request-id",
+    "details": {
+      "fieldErrors": {
+        "email": ["Enter a valid email address."]
+      }
+    }
+  }
+}
+```
+
 ## Official references
 
 - [Cloudflare Workers static assets](https://developers.cloudflare.com/workers/static-assets/)
 - [Cloudflare React and Vite guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/react/)
 - [Cloudflare D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)
+- [Cloudflare Workers Web Crypto](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/)
+- [Cloudflare Workers Vitest integration](https://developers.cloudflare.com/workers/testing/vitest-integration/)
 - [Hono on Cloudflare Workers](https://hono.dev/docs/getting-started/cloudflare-workers)
