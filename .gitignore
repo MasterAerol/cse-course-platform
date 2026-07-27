@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build and test output
+dist/
+coverage/
+*.tsbuildinfo
+
+# Cloudflare local state and generated deployment output
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+!.dev.vars.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors and operating systems
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Local-only files
+*.local
