@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" role="img" aria-labelledby="title desc">
+  <title id="title">Percentage grid</title>
+  <desc id="desc">A 100-square grid with 25 squares highlighted.</desc>
+  <rect width="220" height="220" rx="12" fill="#f6f8fb"/>
+  <g transform="translate(10 10)">
+    <rect width="200" height="200" fill="#ffffff"/>
+    <g stroke="#c8d3e2" stroke-width="1">
+      <path d="M20 0v200M40 0v200M60 0v200M80 0v200M100 0v200M120 0v200M140 0v200M160 0v200M180 0v200"/>
+      <path d="M0 20h200M0 40h200M0 60h200M0 80h200M0 100h200M0 120h200M0 140h200M0 160h200M0 180h200"/>
+    </g>
+    <g fill="#225dd8">
+      <rect x="0" y="0" width="20" height="20"/>
+      <rect x="20" y="0" width="20" height="20"/>
+      <rect x="40" y="0" width="20" height="20"/>
+      <rect x="60" y="0" width="20" height="20"/>
+      <rect x="80" y="0" width="20" height="20"/>
+      <rect x="0" y="20" width="20" height="20"/>
+      <rect x="20" y="20" width="20" height="20"/>
+      <rect x="40" y="20" width="20" height="20"/>
+      <rect x="60" y="20" width="20" height="20"/>
+      <rect x="80" y="20" width="20" height="20"/>
+      <rect x="0" y="40" width="20" height="20"/>
+      <rect x="20" y="40" width="20" height="20"/>
+      <rect x="40" y="40" width="20" height="20"/>
+      <rect x="60" y="40" width="20" height="20"/>
+      <rect x="80" y="40" width="20" height="20"/>
+      <rect x="0" y="60" width="20" height="20"/>
+      <rect x="20" y="60" width="20" height="20"/>
+      <rect x="40" y="60" width="20" height="20"/>
+      <rect x="60" y="60" width="20" height="20"/>
+      <rect x="80" y="60" width="20" height="20"/>
+      <rect x="0" y="80" width="20" height="20"/>
+      <rect x="20" y="80" width="20" height="20"/>
+      <rect x="40" y="80" width="20" height="20"/>
+      <rect x="60" y="80" width="20" height="20"/>
+      <rect x="80" y="80" width="20" height="20"/>
+    </g>
+    <rect width="200" height="200" fill="none" stroke="#8fa3bd" stroke-width="2"/>
+  </g>
+</svg>

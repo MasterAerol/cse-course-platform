@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
+import { CurriculumSubject } from '../components/CurriculumSubject'
 import { EnrollmentBadge } from '../components/EnrollmentBadge'
 import { fetchCourseDetail, type CourseDetail } from '../lib/api'
 
@@ -89,24 +90,19 @@ export function CourseDetailPage() {
           </section>
 
           <section className="curriculum-panel">
-            <h2>Curriculum summary</h2>
+            <h2>Curriculum</h2>
             {state.course.curriculum.map((subject) => (
-              <section key={subject.slug} className="curriculum-subject">
-                <h3>{subject.title}</h3>
-                <div className="topic-list">
-                  {subject.topics.map((topic) => (
-                    <article key={topic.slug} className="topic-row">
-                      <div>
-                        <h4>{topic.title}</h4>
-                        <p>
-                          {topic.publishedLessonCount} published lessons
-                        </p>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
+              <CurriculumSubject
+                key={subject.slug}
+                courseSlug={state.course.slug}
+                subject={subject}
+              />
             ))}
+            {user === null && (
+              <p className="meta-copy">
+                Sign in with an enrolled account to open protected lessons.
+              </p>
+            )}
           </section>
         </>
       )}

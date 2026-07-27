@@ -1,13 +1,13 @@
 # CSE Course Platform
 
-Milestone 2 foundation for a Civil Service Examination learning platform. The
+Milestone 3 foundation for a Civil Service Examination learning platform. The
 repository combines a React single-page application, a Hono API, secure
 server-managed sessions, a public course catalog, student enrollments, and
 Cloudflare D1 in one Cloudflare Worker deployment.
 
-This milestone intentionally contains no full lesson reader, content
-management editor, quiz execution, payments, or R2 integration. The admin area
-contains operational checks and enrollment support only.
+This milestone adds curriculum navigation and a protected lesson reader. It
+intentionally contains no lesson completion, sequential unlocking, admin lesson
+editor, quiz execution, payments, or R2 integration.
 
 ## Architecture
 
@@ -34,6 +34,8 @@ Browser
 - Raw session tokens exist only in HttpOnly cookies; D1 stores SHA-256 token
   hashes and enforces expiration and revocation.
 - Course APIs only return published courses and safe curriculum summaries.
+- Lesson reader APIs only return published course, subject, topic, lesson, and
+  ordered block data after server-side access checks.
 - Student progress is calculated from lesson-level rows, not stored as the
   single source of truth.
 
@@ -105,11 +107,18 @@ Git.
 - `GET /api/courses` returns published courses. If a valid session cookie is
   present, it includes that user's enrollment state.
 - `GET /api/courses/:courseSlug` returns published course details and a safe
-  curriculum summary without lesson block content.
+  curriculum summary with published lesson titles but without lesson block
+  content.
 - `GET /api/student/dashboard` requires authentication and returns the signed
   in student's enrollments, progress, and Continue Learning state.
 - `GET /api/student/courses/:courseSlug/progress` requires authentication and
   active course access.
+- `GET /api/student/courses/:courseSlug/curriculum` requires authentication
+  and returns ordered published subjects, topics, and lessons with basic
+  accessibility metadata.
+- `GET /api/student/lessons/:lessonPublicId` requires authentication and
+  returns the protected lesson reader payload, including ordered typed blocks
+  plus previous and next published lessons.
 
 ## Authentication
 
@@ -166,6 +175,13 @@ access. Dashboard progress is computed from completed required published
 lessons divided by all required published lessons. Draft lessons, unpublished
 subjects/topics, and preview-only lessons are excluded.
 
+Continue Learning is calculated in the Worker and points to the next lesson
+reader route when a lesson is available:
+
+```text
+/courses/<course-slug>/lessons/<lesson-public-id>
+```
+
 To enroll an existing user into `CSE Professional` remotely without hardcoding
 an email into a migration, replace the placeholder email and run:
 
@@ -175,6 +191,33 @@ npx wrangler d1 execute DB --remote --command "INSERT INTO course_enrollments (u
 
 For local development, use the same command with `--local` instead of
 `--remote`.
+
+## Lesson reader
+
+The lesson reader uses the existing `lesson_blocks` table. Each block's
+`content_json` is parsed with `JSON.parse`, validated with a block-specific Zod
+schema, and returned as a typed API structure. The frontend renders typed data
+only and does not render raw HTML from D1.
+
+Supported block types:
+
+- `heading`
+- `paragraph`
+- `callout`
+- `formula`
+- `example`
+- `image`
+- `video`
+- `divider`
+- `summary`
+
+Malformed or unsupported lesson blocks are safely skipped by the Worker and
+counted in `malformedBlockCount`. This keeps a bad content row from breaking
+the whole lesson while making the content issue visible to the frontend.
+
+The seed data includes polished sample blocks for `Introduction to
+Percentages` and short placeholder blocks for `Understanding Percentages` and
+`Fractions, Decimals and Percentages`.
 
 ## D1 setup and migrations
 

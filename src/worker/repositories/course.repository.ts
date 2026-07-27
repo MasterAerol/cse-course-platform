@@ -39,6 +39,25 @@ export interface CurriculumSummaryRow {
   published_lesson_count: number
 }
 
+export interface CurriculumLessonRow {
+  subject_id: number
+  subject_title: string
+  subject_slug: string
+  subject_position: number
+  topic_id: number
+  topic_title: string
+  topic_slug: string
+  topic_position: number
+  lesson_id: number
+  lesson_public_id: string
+  lesson_title: string
+  lesson_slug: string
+  lesson_type: string
+  lesson_position: number
+  estimated_minutes: number | null
+  is_preview: 0 | 1
+}
+
 export interface EnrollmentCourseRow {
   course_id: number
   course_public_id: string
@@ -80,6 +99,47 @@ export interface EnrollmentRow {
   access_starts_at: string
   access_expires_at: string | null
   has_active_access: 0 | 1
+}
+
+export interface PublishedLessonDetailRow {
+  lesson_id: number
+  lesson_public_id: string
+  lesson_title: string
+  lesson_slug: string
+  lesson_type: string
+  lesson_summary: string | null
+  estimated_minutes: number | null
+  lesson_position: number
+  is_preview: 0 | 1
+  topic_id: number
+  topic_title: string
+  topic_slug: string
+  topic_position: number
+  subject_id: number
+  subject_title: string
+  subject_slug: string
+  subject_position: number
+  course_id: number
+  course_title: string
+  course_slug: string
+}
+
+export interface LessonBlockRow {
+  id: number
+  block_type: string
+  content_json: string
+  position: number
+}
+
+export interface NavigationLessonRow {
+  lesson_public_id: string
+  lesson_title: string
+  lesson_slug: string
+  lesson_type: string
+  estimated_minutes: number | null
+  subject_position: number
+  topic_position: number
+  lesson_position: number
 }
 
 const publishedCourseSelect = `courses.id,
@@ -220,6 +280,46 @@ export async function findPublishedCurriculumSummary(
   return result.results
 }
 
+export async function findPublishedCurriculumLessons(
+  database: D1Database,
+  courseId: number,
+): Promise<CurriculumLessonRow[]> {
+  const result = await database
+    .prepare(
+      `SELECT
+        subjects.id AS subject_id,
+        subjects.title AS subject_title,
+        subjects.slug AS subject_slug,
+        subjects.position AS subject_position,
+        topics.id AS topic_id,
+        topics.title AS topic_title,
+        topics.slug AS topic_slug,
+        topics.position AS topic_position,
+        lessons.id AS lesson_id,
+        lessons.public_id AS lesson_public_id,
+        lessons.title AS lesson_title,
+        lessons.slug AS lesson_slug,
+        lessons.lesson_type,
+        lessons.position AS lesson_position,
+        lessons.estimated_minutes,
+        lessons.is_preview
+      FROM subjects
+      INNER JOIN topics
+        ON topics.subject_id = subjects.id
+        AND topics.status = 'published'
+      INNER JOIN lessons
+        ON lessons.topic_id = topics.id
+        AND lessons.status = 'published'
+      WHERE subjects.course_id = ?1
+        AND subjects.status = 'published'
+      ORDER BY subjects.position, topics.position, lessons.position`,
+    )
+    .bind(courseId)
+    .all<CurriculumLessonRow>()
+
+  return result.results
+}
+
 export async function findPublishedCourseEnrollment(
   database: D1Database,
   userId: number,
@@ -248,6 +348,24 @@ export async function findPublishedCourseEnrollment(
     .first<EnrollmentCourseRow>()
 }
 
+export async function findCourseEnrollmentById(
+  database: D1Database,
+  userId: number,
+  courseId: number,
+): Promise<EnrollmentRow | null> {
+  return database
+    .prepare(
+      `SELECT
+        ${enrollmentSelect}
+      FROM course_enrollments
+      WHERE user_id = ?1
+        AND course_id = ?2
+      LIMIT 1`,
+    )
+    .bind(userId, courseId)
+    .first<EnrollmentRow>()
+}
+
 export async function findStudentPublishedEnrollments(
   database: D1Database,
   userId: number,
@@ -272,6 +390,104 @@ export async function findStudentPublishedEnrollments(
     )
     .bind(userId)
     .all<EnrollmentCourseRow>()
+
+  return result.results
+}
+
+export async function findPublishedLessonByPublicId(
+  database: D1Database,
+  lessonPublicId: string,
+): Promise<PublishedLessonDetailRow | null> {
+  return database
+    .prepare(
+      `SELECT
+        lessons.id AS lesson_id,
+        lessons.public_id AS lesson_public_id,
+        lessons.title AS lesson_title,
+        lessons.slug AS lesson_slug,
+        lessons.lesson_type,
+        lessons.summary AS lesson_summary,
+        lessons.estimated_minutes,
+        lessons.position AS lesson_position,
+        lessons.is_preview,
+        topics.id AS topic_id,
+        topics.title AS topic_title,
+        topics.slug AS topic_slug,
+        topics.position AS topic_position,
+        subjects.id AS subject_id,
+        subjects.title AS subject_title,
+        subjects.slug AS subject_slug,
+        subjects.position AS subject_position,
+        courses.id AS course_id,
+        courses.title AS course_title,
+        courses.slug AS course_slug
+      FROM lessons
+      INNER JOIN topics
+        ON topics.id = lessons.topic_id
+        AND topics.status = 'published'
+      INNER JOIN subjects
+        ON subjects.id = topics.subject_id
+        AND subjects.status = 'published'
+      INNER JOIN courses
+        ON courses.id = subjects.course_id
+        AND courses.status = 'published'
+      WHERE lessons.public_id = ?1
+        AND lessons.status = 'published'
+      LIMIT 1`,
+    )
+    .bind(lessonPublicId)
+    .first<PublishedLessonDetailRow>()
+}
+
+export async function findLessonBlocks(
+  database: D1Database,
+  lessonId: number,
+): Promise<LessonBlockRow[]> {
+  const result = await database
+    .prepare(
+      `SELECT
+        id,
+        block_type,
+        content_json,
+        position
+      FROM lesson_blocks
+      WHERE lesson_id = ?1
+      ORDER BY position`,
+    )
+    .bind(lessonId)
+    .all<LessonBlockRow>()
+
+  return result.results
+}
+
+export async function findPublishedNavigationLessons(
+  database: D1Database,
+  courseId: number,
+): Promise<NavigationLessonRow[]> {
+  const result = await database
+    .prepare(
+      `SELECT
+        lessons.public_id AS lesson_public_id,
+        lessons.title AS lesson_title,
+        lessons.slug AS lesson_slug,
+        lessons.lesson_type,
+        lessons.estimated_minutes,
+        subjects.position AS subject_position,
+        topics.position AS topic_position,
+        lessons.position AS lesson_position
+      FROM lessons
+      INNER JOIN topics
+        ON topics.id = lessons.topic_id
+        AND topics.status = 'published'
+      INNER JOIN subjects
+        ON subjects.id = topics.subject_id
+        AND subjects.status = 'published'
+      WHERE subjects.course_id = ?1
+        AND lessons.status = 'published'
+      ORDER BY subjects.position, topics.position, lessons.position`,
+    )
+    .bind(courseId)
+    .all<NavigationLessonRow>()
 
   return result.results
 }

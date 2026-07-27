@@ -8,6 +8,7 @@ import { CourseCatalogPage } from './pages/CourseCatalogPage'
 import { CourseDetailPage } from './pages/CourseDetailPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { HomePage } from './pages/HomePage'
+import { LessonPage } from './pages/LessonPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegistrationPage } from './pages/RegistrationPage'
 
@@ -25,6 +26,10 @@ export function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route
+          path="courses/:courseSlug/lessons/:lessonPublicId"
+          element={<LessonPage />}
+        />
         <Route element={<AdminRoute />}>
           <Route path="admin" element={<AdminPage />} />
         </Route>

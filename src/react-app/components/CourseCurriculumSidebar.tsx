@@ -1,0 +1,32 @@
+import type { StudentCourseCurriculum } from '../lib/api'
+import { CurriculumSubject } from './CurriculumSubject'
+
+interface CourseCurriculumSidebarProps {
+  curriculum: StudentCourseCurriculum
+  currentLessonPublicId?: string
+  compact?: boolean
+}
+
+export function CourseCurriculumSidebar({
+  curriculum,
+  currentLessonPublicId,
+  compact = false,
+}: CourseCurriculumSidebarProps) {
+  return (
+    <nav className="curriculum-sidebar" aria-label="Course curriculum">
+      <div className="curriculum-sidebar__header">
+        <p className="eyebrow">Course content</p>
+        <h2>{curriculum.course.title}</h2>
+      </div>
+      {curriculum.subjects.map((subject) => (
+        <CurriculumSubject
+          key={subject.slug}
+          courseSlug={curriculum.course.slug}
+          subject={subject}
+          currentLessonPublicId={currentLessonPublicId}
+          compact={compact}
+        />
+      ))}
+    </nav>
+  )
+}

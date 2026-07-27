@@ -13,6 +13,19 @@ export const courseSlugSchema = z
   })
   .strict()
 
+export const lessonPublicIdSchema = z
+  .object({
+    lessonPublicId: z
+      .string({ error: 'Lesson id is required.' })
+      .min(1, 'Lesson id is required.')
+      .max(160, 'Lesson id must be 160 characters or fewer.')
+      .regex(
+        /^[a-z0-9]+(?:-[a-z0-9]+)*$/u,
+        'Lesson id must use lowercase letters, numbers, and hyphens.',
+      ),
+  })
+  .strict()
+
 const optionalAccessExpirationSchema = z.preprocess(
   (value) => (value === '' ? null : value),
   z
@@ -39,6 +52,7 @@ export const operationalEnrollmentSchema = z
   .strict()
 
 export type CourseSlugInput = z.infer<typeof courseSlugSchema>
+export type LessonPublicIdInput = z.infer<typeof lessonPublicIdSchema>
 export type OperationalEnrollmentInput = z.infer<
   typeof operationalEnrollmentSchema
 >

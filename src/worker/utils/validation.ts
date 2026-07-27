@@ -14,6 +14,7 @@ const validationFields = new Set<ValidationField>([
   'firstName',
   'lastName',
   'email',
+  'lessonPublicId',
   'password',
 ])
 

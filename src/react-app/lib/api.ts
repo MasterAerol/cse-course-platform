@@ -44,6 +44,26 @@ const enrollmentStateSchema = z.object({
   hasAccess: z.boolean(),
 })
 
+const lessonAccessibilitySchema = z.object({
+  canAccess: z.boolean(),
+  reason: z.enum([
+    'active_enrollment',
+    'preview',
+    'enrollment_required',
+  ]),
+})
+
+const curriculumLessonSchema = z.object({
+  publicId: z.string(),
+  title: z.string(),
+  slug: z.string(),
+  lessonType: z.string(),
+  position: z.number(),
+  estimatedMinutes: z.number().nullable(),
+  isPreview: z.boolean(),
+  accessibility: lessonAccessibilitySchema,
+})
+
 const courseSummarySchema = z.object({
   title: z.string(),
   slug: z.string(),
@@ -58,6 +78,7 @@ const curriculumTopicSchema = z.object({
   slug: z.string(),
   position: z.number(),
   publishedLessonCount: z.number(),
+  lessons: z.array(curriculumLessonSchema),
 })
 
 const curriculumSubjectSchema = z.object({
@@ -76,6 +97,7 @@ const continueLearningSchema = z.object({
   courseCompleted: z.boolean(),
   lesson: z
     .object({
+      publicId: z.string(),
       title: z.string(),
       slug: z.string(),
       lessonType: z.string(),
@@ -121,6 +143,132 @@ const courseProgressResponseSchema = z.object({
   data: courseProgressSchema,
 })
 
+const studentCourseCurriculumResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    course: courseSummarySchema,
+    subjects: z.array(curriculumSubjectSchema),
+  }),
+})
+
+const baseLessonBlockSchema = z.object({
+  id: z.number(),
+  position: z.number(),
+})
+
+const lessonBlockSchema = z.union([
+  baseLessonBlockSchema.extend({
+    type: z.literal('heading'),
+    content: z.object({
+      level: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      text: z.string(),
+    }),
+  }),
+  baseLessonBlockSchema.extend({
+    type: z.literal('paragraph'),
+    content: z.object({
+      text: z.string(),
+    }),
+  }),
+  baseLessonBlockSchema.extend({
+    type: z.literal('callout'),
+    content: z.object({
+      variant: z.enum(['info', 'important', 'warning']),
+      title: z.string(),
+      text: z.string(),
+    }),
+  }),
+  baseLessonBlockSchema.extend({
+    type: z.literal('formula'),
+    content: z.object({
+      expression: z.string(),
+      description: z.string(),
+    }),
+  }),
+  baseLessonBlockSchema.extend({
+    type: z.literal('example'),
+    content: z.object({
+      title: z.string(),
+      problem: z.string(),
+      steps: z.array(z.string()),
+      answer: z.string(),
+    }),
+  }),
+  baseLessonBlockSchema.extend({
+    type: z.literal('image'),
+    content: z.object({
+      src: z.string(),
+      alt: z.string(),
+      caption: z.string().optional(),
+    }),
+  }),
+  baseLessonBlockSchema.extend({
+    type: z.literal('video'),
+    content: z.object({
+      provider: z.literal('external'),
+      url: z.string(),
+      title: z.string(),
+    }),
+  }),
+  baseLessonBlockSchema.extend({
+    type: z.literal('divider'),
+    content: z.object({}),
+  }),
+  baseLessonBlockSchema.extend({
+    type: z.literal('summary'),
+    content: z.object({
+      items: z.array(z.string()),
+    }),
+  }),
+])
+
+const lessonNavigationItemSchema = z.object({
+  publicId: z.string(),
+  title: z.string(),
+  slug: z.string(),
+  lessonType: z.string(),
+  estimatedMinutes: z.number().nullable(),
+})
+
+const lessonDetailSchema = z.object({
+  publicId: z.string(),
+  title: z.string(),
+  slug: z.string(),
+  summary: z.string().nullable(),
+  lessonType: z.string(),
+  estimatedMinutes: z.number().nullable(),
+  isPreview: z.boolean(),
+  course: z.object({
+    title: z.string(),
+    slug: z.string(),
+  }),
+  subject: z.object({
+    title: z.string(),
+    slug: z.string(),
+    position: z.number(),
+  }),
+  topic: z.object({
+    title: z.string(),
+    slug: z.string(),
+    position: z.number(),
+  }),
+  blocks: z.array(lessonBlockSchema),
+  malformedBlockCount: z.number(),
+  previousLesson: lessonNavigationItemSchema.nullable(),
+  nextLesson: lessonNavigationItemSchema.nullable(),
+  navigation: z.object({
+    currentLessonPublicId: z.string(),
+    subjectPosition: z.number(),
+    topicPosition: z.number(),
+    lessonPosition: z.number(),
+  }),
+})
+
+const lessonDetailResponseSchema = z.object({
+  success: z.literal(true),
+  data: lessonDetailSchema,
+})
+
 const validationFieldErrorsSchema = z
   .object({
     accessExpiresAt: z.array(z.string()).optional(),
@@ -128,6 +276,7 @@ const validationFieldErrorsSchema = z
     firstName: z.array(z.string()).optional(),
     lastName: z.array(z.string()).optional(),
     email: z.array(z.string()).optional(),
+    lessonPublicId: z.array(z.string()).optional(),
     password: z.array(z.string()).optional(),
   })
   .strict()
@@ -154,10 +303,16 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>
 export type AdminCheckResponse = z.infer<typeof adminCheckResponseSchema>
 export type CourseSummary = z.infer<typeof courseSummarySchema>
 export type CourseDetail = z.infer<typeof courseDetailSchema>
+export type StudentCourseCurriculum = z.infer<
+  typeof studentCourseCurriculumResponseSchema
+>['data']
 export type StudentDashboard = z.infer<
   typeof studentDashboardResponseSchema
 >['data']
 export type CourseProgress = z.infer<typeof courseProgressSchema>
+export type CurriculumLesson = z.infer<typeof curriculumLessonSchema>
+export type LessonBlock = z.infer<typeof lessonBlockSchema>
+export type LessonDetail = z.infer<typeof lessonDetailSchema>
 export type ValidationFieldErrors = z.infer<
   typeof validationFieldErrorsSchema
 >
@@ -362,6 +517,32 @@ export async function fetchCourseProgress(
   const response = await request(
     `/api/student/courses/${encodeURIComponent(courseSlug)}/progress`,
     courseProgressResponseSchema,
+    { signal },
+  )
+
+  return response.data
+}
+
+export async function fetchStudentCourseCurriculum(
+  courseSlug: string,
+  signal?: AbortSignal,
+): Promise<StudentCourseCurriculum> {
+  const response = await request(
+    `/api/student/courses/${encodeURIComponent(courseSlug)}/curriculum`,
+    studentCourseCurriculumResponseSchema,
+    { signal },
+  )
+
+  return response.data
+}
+
+export async function fetchLessonDetail(
+  lessonPublicId: string,
+  signal?: AbortSignal,
+): Promise<LessonDetail> {
+  const response = await request(
+    `/api/student/lessons/${encodeURIComponent(lessonPublicId)}`,
+    lessonDetailResponseSchema,
     { signal },
   )
 

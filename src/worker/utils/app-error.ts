@@ -6,6 +6,7 @@ export type ValidationField =
   | 'firstName'
   | 'lastName'
   | 'email'
+  | 'lessonPublicId'
   | 'password'
 
 export type ValidationFieldErrors = Partial<

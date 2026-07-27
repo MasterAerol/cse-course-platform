@@ -1,19 +1,28 @@
 import {
+  findCourseEnrollmentById,
   findCourseIdBySlug,
+  findLessonBlocks,
   findPublishedCourseBySlug,
   findPublishedCourseEnrollment,
   findPublishedCourses,
-  findPublishedCurriculumSummary,
+  findPublishedCurriculumLessons,
+  findPublishedLessonByPublicId,
+  findPublishedNavigationLessons,
   findRequiredLessonProgressRows,
   findStudentPublishedEnrollments,
   findUserIdByEmail,
   upsertActiveEnrollment,
   type CourseDetailRow,
   type CourseListRow,
-  type CurriculumSummaryRow,
+  type CurriculumLessonRow,
   type EnrollmentCourseRow,
+  type NavigationLessonRow,
   type RequiredLessonProgressRow,
 } from '../repositories/course.repository'
+import {
+  parseLessonBlock,
+  type LessonBlock,
+} from '../schemas/lesson-block.schemas'
 import type { OperationalEnrollmentInput } from '../schemas/course.schemas'
 import { AppError } from '../utils/app-error'
 
@@ -38,6 +47,7 @@ export interface CurriculumTopicSummary {
   slug: string
   position: number
   publishedLessonCount: number
+  lessons: CurriculumLessonSummary[]
 }
 
 export interface CurriculumSubjectSummary {
@@ -53,6 +63,7 @@ export interface CourseDetail extends CourseSummary {
 }
 
 export interface ContinueLesson {
+  publicId: string
   title: string
   slug: string
   lessonType: string
@@ -79,6 +90,69 @@ export interface StudentDashboardCourse extends CourseProgressState {
 
 export interface StudentDashboard {
   courses: StudentDashboardCourse[]
+}
+
+export interface LessonAccessibility {
+  canAccess: boolean
+  reason: 'active_enrollment' | 'preview' | 'enrollment_required'
+}
+
+export interface CurriculumLessonSummary {
+  publicId: string
+  title: string
+  slug: string
+  lessonType: string
+  position: number
+  estimatedMinutes: number | null
+  isPreview: boolean
+  accessibility: LessonAccessibility
+}
+
+export interface StudentCourseCurriculum {
+  course: CourseSummary
+  subjects: CurriculumSubjectSummary[]
+}
+
+export interface LessonNavigationItem {
+  publicId: string
+  title: string
+  slug: string
+  lessonType: string
+  estimatedMinutes: number | null
+}
+
+export interface LessonDetail {
+  publicId: string
+  title: string
+  slug: string
+  summary: string | null
+  lessonType: string
+  estimatedMinutes: number | null
+  isPreview: boolean
+  course: {
+    title: string
+    slug: string
+  }
+  subject: {
+    title: string
+    slug: string
+    position: number
+  }
+  topic: {
+    title: string
+    slug: string
+    position: number
+  }
+  blocks: LessonBlock[]
+  malformedBlockCount: number
+  previousLesson: LessonNavigationItem | null
+  nextLesson: LessonNavigationItem | null
+  navigation: {
+    currentLessonPublicId: string
+    subjectPosition: number
+    topicPosition: number
+    lessonPosition: number
+  }
 }
 
 function mapEnrollment(row: {
@@ -126,10 +200,31 @@ function mapEnrollmentCourse(row: EnrollmentCourseRow): CourseSummary {
   }
 }
 
+function isActiveEnrollment(enrollment: EnrollmentState | null): boolean {
+  return enrollment?.hasAccess === true
+}
+
+function getLessonAccessibility(
+  row: Pick<CurriculumLessonRow, 'is_preview'>,
+  enrollment: EnrollmentState | null,
+): LessonAccessibility {
+  if (isActiveEnrollment(enrollment)) {
+    return { canAccess: true, reason: 'active_enrollment' }
+  }
+
+  if (row.is_preview === 1) {
+    return { canAccess: true, reason: 'preview' }
+  }
+
+  return { canAccess: false, reason: 'enrollment_required' }
+}
+
 function mapCurriculum(
-  rows: CurriculumSummaryRow[],
+  rows: CurriculumLessonRow[],
+  enrollment: EnrollmentState | null,
 ): CurriculumSubjectSummary[] {
   const subjects = new Map<number, CurriculumSubjectSummary>()
+  const topics = new Set<string>()
 
   for (const row of rows) {
     const existingSubject = subjects.get(row.subject_id)
@@ -143,12 +238,34 @@ function mapCurriculum(
         topics: [],
       }
 
-    subject.topics.push({
-      title: row.topic_title,
-      slug: row.topic_slug,
-      position: row.topic_position,
-      publishedLessonCount: row.published_lesson_count,
+    const topicKey = `${row.subject_id}:${row.topic_id}`
+    let topic = subject.topics.find(
+      (candidate) => candidate.slug === row.topic_slug,
+    )
+
+    if (!topics.has(topicKey) || topic === undefined) {
+      topic = {
+        title: row.topic_title,
+        slug: row.topic_slug,
+        position: row.topic_position,
+        publishedLessonCount: 0,
+        lessons: [],
+      }
+      subject.topics.push(topic)
+      topics.add(topicKey)
+    }
+
+    topic.lessons.push({
+      publicId: row.lesson_public_id,
+      title: row.lesson_title,
+      slug: row.lesson_slug,
+      lessonType: row.lesson_type,
+      position: row.lesson_position,
+      estimatedMinutes: row.estimated_minutes,
+      isPreview: row.is_preview === 1,
+      accessibility: getLessonAccessibility(row, enrollment),
     })
+    topic.publishedLessonCount = topic.lessons.length
 
     if (existingSubject === undefined) {
       subjects.set(row.subject_id, subject)
@@ -197,6 +314,7 @@ function calculateProgress(
           ? null
           : {
               title: nextIncompleteLesson.lesson_title,
+              publicId: nextIncompleteLesson.lesson_public_id,
               slug: nextIncompleteLesson.lesson_slug,
               lessonType: nextIncompleteLesson.lesson_type,
               summary: nextIncompleteLesson.summary,
@@ -211,6 +329,33 @@ function accessDeniedError(): AppError {
     'COURSE_ACCESS_DENIED',
     'You do not have active access to this course.',
   )
+}
+
+function mapNavigationLesson(
+  row: NavigationLessonRow | undefined,
+): LessonNavigationItem | null {
+  if (row === undefined) {
+    return null
+  }
+
+  return {
+    publicId: row.lesson_public_id,
+    title: row.lesson_title,
+    slug: row.lesson_slug,
+    lessonType: row.lesson_type,
+    estimatedMinutes: row.estimated_minutes,
+  }
+}
+
+function assertLessonAccess(
+  enrollment: EnrollmentState | null,
+  isPreview: boolean,
+): void {
+  if (isActiveEnrollment(enrollment) || isPreview) {
+    return
+  }
+
+  throw accessDeniedError()
 }
 
 export async function listCourses(
@@ -243,7 +388,8 @@ export async function getCourseDetail(
     )
   }
 
-  const curriculumRows = await findPublishedCurriculumSummary(
+  const enrollment = mapEnrollment(course)
+  const curriculumRows = await findPublishedCurriculumLessons(
     database,
     course.id,
   )
@@ -251,7 +397,46 @@ export async function getCourseDetail(
   return {
     ...mapCourse(course),
     description: course.description,
-    curriculum: mapCurriculum(curriculumRows),
+    curriculum: mapCurriculum(curriculumRows, enrollment),
+  }
+}
+
+export async function getStudentCourseCurriculum(
+  database: D1Database,
+  userId: number,
+  courseSlug: string,
+): Promise<StudentCourseCurriculum> {
+  const course = await findPublishedCourseBySlug(
+    database,
+    courseSlug,
+    userId,
+  )
+
+  if (course === null) {
+    throw new AppError(
+      404,
+      'COURSE_NOT_FOUND',
+      'The requested course was not found.',
+    )
+  }
+
+  const enrollment = mapEnrollment(course)
+  const curriculumRows = await findPublishedCurriculumLessons(
+    database,
+    course.id,
+  )
+  const subjects = mapCurriculum(curriculumRows, enrollment)
+
+  if (
+    !isActiveEnrollment(enrollment) &&
+    !curriculumRows.some((row) => row.is_preview === 1)
+  ) {
+    throw accessDeniedError()
+  }
+
+  return {
+    course: mapCourse(course),
+    subjects,
   }
 }
 
@@ -288,6 +473,104 @@ export async function getStudentCourseProgress(
     course: mapEnrollmentCourse(enrollment),
     enrollment: enrollmentState,
     ...progress,
+  }
+}
+
+export async function getStudentLessonDetail(
+  database: D1Database,
+  userId: number,
+  lessonPublicId: string,
+): Promise<LessonDetail> {
+  const lesson = await findPublishedLessonByPublicId(
+    database,
+    lessonPublicId,
+  )
+
+  if (lesson === null) {
+    throw new AppError(
+      404,
+      'LESSON_NOT_FOUND',
+      'The requested lesson was not found.',
+    )
+  }
+
+  const enrollmentRow = await findCourseEnrollmentById(
+    database,
+    userId,
+    lesson.course_id,
+  )
+  const enrollment =
+    enrollmentRow === null ? null : mapEnrollment(enrollmentRow)
+
+  assertLessonAccess(enrollment, lesson.is_preview === 1)
+
+  const [blockRows, navigationRows] = await Promise.all([
+    findLessonBlocks(database, lesson.lesson_id),
+    findPublishedNavigationLessons(database, lesson.course_id),
+  ])
+  const blocks: LessonBlock[] = []
+  let malformedBlockCount = 0
+
+  for (const row of blockRows) {
+    const result = parseLessonBlock({
+      id: row.id,
+      blockType: row.block_type,
+      contentJson: row.content_json,
+      position: row.position,
+    })
+
+    if (result.block === null) {
+      malformedBlockCount += 1
+      console.warn(
+        JSON.stringify({
+          message: 'Skipping malformed lesson block',
+          lessonPublicId,
+          blockId: row.id,
+          blockType: row.block_type,
+        }),
+      )
+      continue
+    }
+
+    blocks.push(result.block)
+  }
+
+  const currentIndex = navigationRows.findIndex(
+    (row) => row.lesson_public_id === lessonPublicId,
+  )
+
+  return {
+    publicId: lesson.lesson_public_id,
+    title: lesson.lesson_title,
+    slug: lesson.lesson_slug,
+    summary: lesson.lesson_summary,
+    lessonType: lesson.lesson_type,
+    estimatedMinutes: lesson.estimated_minutes,
+    isPreview: lesson.is_preview === 1,
+    course: {
+      title: lesson.course_title,
+      slug: lesson.course_slug,
+    },
+    subject: {
+      title: lesson.subject_title,
+      slug: lesson.subject_slug,
+      position: lesson.subject_position,
+    },
+    topic: {
+      title: lesson.topic_title,
+      slug: lesson.topic_slug,
+      position: lesson.topic_position,
+    },
+    blocks,
+    malformedBlockCount,
+    previousLesson: mapNavigationLesson(navigationRows[currentIndex - 1]),
+    nextLesson: mapNavigationLesson(navigationRows[currentIndex + 1]),
+    navigation: {
+      currentLessonPublicId: lesson.lesson_public_id,
+      subjectPosition: lesson.subject_position,
+      topicPosition: lesson.topic_position,
+      lessonPosition: lesson.lesson_position,
+    },
   }
 }
 

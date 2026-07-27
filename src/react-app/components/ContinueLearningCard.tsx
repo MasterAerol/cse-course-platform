@@ -46,9 +46,9 @@ export function ContinueLearningCard({
       </p>
       <Link
         className="button-link"
-        to={`/courses/${progress.course.slug}`}
+        to={`/courses/${progress.course.slug}/lessons/${progress.continueLearning.lesson.publicId}`}
       >
-        Open course
+        Open lesson
       </Link>
     </section>
   )
