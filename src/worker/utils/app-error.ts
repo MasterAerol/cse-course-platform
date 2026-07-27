@@ -1,6 +1,8 @@
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 
 export type ValidationField =
+  | 'accessExpiresAt'
+  | 'courseSlug'
   | 'firstName'
   | 'lastName'
   | 'email'

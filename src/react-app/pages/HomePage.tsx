@@ -48,13 +48,16 @@ export function HomePage() {
         <p className="eyebrow">CSE Course Platform</p>
         <h1 id="page-title">A secure place to begin learning.</h1>
         <p className="intro">
-          Sign in to your account or register as a student. Course content will
-          arrive in a later milestone.
+          Browse published CSE preparation courses, then sign in to continue
+          learning from your student dashboard.
         </p>
 
         <div className="button-row">
           {user === null ? (
             <>
+              <Link className="button-link" to="/courses">
+                Browse courses
+              </Link>
               <Link className="button-link" to="/login">
                 Sign in
               </Link>
@@ -63,9 +66,14 @@ export function HomePage() {
               </Link>
             </>
           ) : (
-            <Link className="button-link" to="/dashboard">
-              Open dashboard
-            </Link>
+            <>
+              <Link className="button-link" to="/dashboard">
+                Open dashboard
+              </Link>
+              <Link className="button-link button-link--secondary" to="/courses">
+                Browse courses
+              </Link>
+            </>
           )}
         </div>
 

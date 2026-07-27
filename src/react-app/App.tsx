@@ -4,6 +4,8 @@ import { AdminRoute } from './components/AdminRoute'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { PublicOnlyRoute } from './components/PublicOnlyRoute'
 import { AdminPage } from './pages/AdminPage'
+import { CourseCatalogPage } from './pages/CourseCatalogPage'
+import { CourseDetailPage } from './pages/CourseDetailPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
@@ -13,6 +15,8 @@ export function App() {
   return (
     <Routes>
       <Route index element={<HomePage />} />
+      <Route path="courses" element={<CourseCatalogPage />} />
+      <Route path="courses/:courseSlug" element={<CourseDetailPage />} />
 
       <Route element={<PublicOnlyRoute />}>
         <Route path="login" element={<LoginPage />} />

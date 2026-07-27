@@ -2,8 +2,10 @@ import { Hono } from 'hono'
 
 import { adminRoutes } from './routes/admin.routes'
 import { authRoutes } from './routes/auth.routes'
+import { courseRoutes } from './routes/course.routes'
 import { devRoutes } from './routes/dev.routes'
 import { healthRoutes } from './routes/health.routes'
+import { studentRoutes } from './routes/student.routes'
 import type { AppEnv } from './types/app'
 import { AppError } from './utils/app-error'
 import { errorResponse } from './utils/responses'
@@ -20,6 +22,8 @@ app.use('*', async (context, next) => {
 app.route('/api/health', healthRoutes)
 app.route('/api/auth', authRoutes)
 app.route('/api/admin', adminRoutes)
+app.route('/api/courses', courseRoutes)
+app.route('/api/student', studentRoutes)
 app.route('/api/dev', devRoutes)
 
 app.notFound((context) =>

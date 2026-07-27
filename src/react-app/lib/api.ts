@@ -37,8 +37,94 @@ const adminCheckResponseSchema = z.object({
   }),
 })
 
+const enrollmentStateSchema = z.object({
+  status: z.enum(['active', 'expired', 'revoked', 'completed']),
+  accessStartsAt: z.string(),
+  accessExpiresAt: z.string().nullable(),
+  hasAccess: z.boolean(),
+})
+
+const courseSummarySchema = z.object({
+  title: z.string(),
+  slug: z.string(),
+  shortDescription: z.string().nullable(),
+  level: z.string().nullable(),
+  thumbnailKey: z.string().nullable(),
+  enrollment: enrollmentStateSchema.nullable(),
+})
+
+const curriculumTopicSchema = z.object({
+  title: z.string(),
+  slug: z.string(),
+  position: z.number(),
+  publishedLessonCount: z.number(),
+})
+
+const curriculumSubjectSchema = z.object({
+  title: z.string(),
+  slug: z.string(),
+  position: z.number(),
+  topics: z.array(curriculumTopicSchema),
+})
+
+const courseDetailSchema = courseSummarySchema.extend({
+  description: z.string().nullable(),
+  curriculum: z.array(curriculumSubjectSchema),
+})
+
+const continueLearningSchema = z.object({
+  courseCompleted: z.boolean(),
+  lesson: z
+    .object({
+      title: z.string(),
+      slug: z.string(),
+      lessonType: z.string(),
+      summary: z.string().nullable(),
+    })
+    .nullable(),
+})
+
+const courseProgressSchema = z.object({
+  course: courseSummarySchema,
+  enrollment: enrollmentStateSchema,
+  progressPercentage: z.number(),
+  completedRequiredLessons: z.number(),
+  totalRequiredLessons: z.number(),
+  continueLearning: continueLearningSchema,
+})
+
+const dashboardCourseSchema = courseProgressSchema.extend({
+  enrolledAt: z.string(),
+})
+
+const coursesResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    courses: z.array(courseSummarySchema),
+  }),
+})
+
+const courseDetailResponseSchema = z.object({
+  success: z.literal(true),
+  data: courseDetailSchema,
+})
+
+const studentDashboardResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    courses: z.array(dashboardCourseSchema),
+  }),
+})
+
+const courseProgressResponseSchema = z.object({
+  success: z.literal(true),
+  data: courseProgressSchema,
+})
+
 const validationFieldErrorsSchema = z
   .object({
+    accessExpiresAt: z.array(z.string()).optional(),
+    courseSlug: z.array(z.string()).optional(),
     firstName: z.array(z.string()).optional(),
     lastName: z.array(z.string()).optional(),
     email: z.array(z.string()).optional(),
@@ -66,6 +152,12 @@ const apiErrorSchema = z.object({
 export type User = z.infer<typeof userSchema>
 export type HealthResponse = z.infer<typeof healthResponseSchema>
 export type AdminCheckResponse = z.infer<typeof adminCheckResponseSchema>
+export type CourseSummary = z.infer<typeof courseSummarySchema>
+export type CourseDetail = z.infer<typeof courseDetailSchema>
+export type StudentDashboard = z.infer<
+  typeof studentDashboardResponseSchema
+>['data']
+export type CourseProgress = z.infer<typeof courseProgressSchema>
 export type ValidationFieldErrors = z.infer<
   typeof validationFieldErrorsSchema
 >
@@ -226,4 +318,52 @@ export function fetchAdminCheck(
   return request('/api/admin/auth-check', adminCheckResponseSchema, {
     signal,
   })
+}
+
+export async function fetchCourses(
+  signal?: AbortSignal,
+): Promise<CourseSummary[]> {
+  const response = await request('/api/courses', coursesResponseSchema, {
+    signal,
+  })
+
+  return response.data.courses
+}
+
+export async function fetchCourseDetail(
+  courseSlug: string,
+  signal?: AbortSignal,
+): Promise<CourseDetail> {
+  const response = await request(
+    `/api/courses/${encodeURIComponent(courseSlug)}`,
+    courseDetailResponseSchema,
+    { signal },
+  )
+
+  return response.data
+}
+
+export async function fetchStudentDashboard(
+  signal?: AbortSignal,
+): Promise<StudentDashboard> {
+  const response = await request(
+    '/api/student/dashboard',
+    studentDashboardResponseSchema,
+    { signal },
+  )
+
+  return response.data
+}
+
+export async function fetchCourseProgress(
+  courseSlug: string,
+  signal?: AbortSignal,
+): Promise<CourseProgress> {
+  const response = await request(
+    `/api/student/courses/${encodeURIComponent(courseSlug)}/progress`,
+    courseProgressResponseSchema,
+    { signal },
+  )
+
+  return response.data
 }

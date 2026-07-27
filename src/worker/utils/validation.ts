@@ -9,6 +9,8 @@ import {
 } from './app-error'
 
 const validationFields = new Set<ValidationField>([
+  'accessExpiresAt',
+  'courseSlug',
   'firstName',
   'lastName',
   'email',
@@ -59,6 +61,18 @@ export async function parseJsonBody<T>(
 
   const result = schema.safeParse(body)
 
+  return parseValidationResult(result)
+}
+
+export function parseValidatedInput<T>(
+  result: ReturnType<ZodType<T>['safeParse']>,
+): T {
+  return parseValidationResult(result)
+}
+
+function parseValidationResult<T>(
+  result: ReturnType<ZodType<T>['safeParse']>,
+): T {
   if (!result.success) {
     throw new AppError(
       400,

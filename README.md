@@ -1,12 +1,13 @@
 # CSE Course Platform
 
-Milestone 1 foundation for a Civil Service Examination learning platform. The
+Milestone 2 foundation for a Civil Service Examination learning platform. The
 repository combines a React single-page application, a Hono API, secure
-server-managed sessions, and Cloudflare D1 in one Cloudflare Worker deployment.
+server-managed sessions, a public course catalog, student enrollments, and
+Cloudflare D1 in one Cloudflare Worker deployment.
 
-This milestone intentionally contains no course pages, content management,
-quizzes, payments, or R2 integration. The only admin page is an authorization
-check used to verify role enforcement.
+This milestone intentionally contains no full lesson reader, content
+management editor, quiz execution, payments, or R2 integration. The admin area
+contains operational checks and enrollment support only.
 
 ## Architecture
 
@@ -32,6 +33,9 @@ Browser
   Cloudflare Workers-compatible work factor.
 - Raw session tokens exist only in HttpOnly cookies; D1 stores SHA-256 token
   hashes and enforces expiration and revocation.
+- Course APIs only return published courses and safe curriculum summaries.
+- Student progress is calculated from lesson-level rows, not stored as the
+  single source of truth.
 
 ## Prerequisites
 
@@ -96,6 +100,16 @@ Git.
 - `POST /api/auth/logout` revokes the current session and clears its cookie.
 - `GET /api/auth/me` returns the current public user or a 401 response.
 - `GET /api/admin/auth-check` requires an authenticated administrator.
+- `POST /api/admin/enrollments` requires an authenticated administrator and
+  enrolls an existing user in a published course.
+- `GET /api/courses` returns published courses. If a valid session cookie is
+  present, it includes that user's enrollment state.
+- `GET /api/courses/:courseSlug` returns published course details and a safe
+  curriculum summary without lesson block content.
+- `GET /api/student/dashboard` requires authentication and returns the signed
+  in student's enrollments, progress, and Continue Learning state.
+- `GET /api/student/courses/:courseSlug/progress` requires authentication and
+  active course access.
 
 ## Authentication
 
@@ -132,6 +146,35 @@ npx wrangler d1 execute DB --local --command "UPDATE users SET role = 'admin' WH
 
 Use a controlled operational process for production role changes. Do not add a
 default administrator password or commit credentials.
+
+## Course catalog and enrollments
+
+The seed migration creates the published `CSE Professional` course with the
+`Numerical Ability` subject, the `Percentages` topic, and 11 published lesson
+stubs. The lesson rows contain placeholder summaries only; full lesson content
+is intentionally out of scope for this milestone.
+
+Enrollment checks are always server-side. Student APIs bind the authenticated
+session's internal user id and require:
+
+- `enrollment_status = 'active'`
+- `access_starts_at` at or before the current Worker/D1 time
+- `access_expires_at` either unset or in the future
+
+Expired, revoked, missing, or future-starting enrollments do not grant course
+access. Dashboard progress is computed from completed required published
+lessons divided by all required published lessons. Draft lessons, unpublished
+subjects/topics, and preview-only lessons are excluded.
+
+To enroll an existing user into `CSE Professional` remotely without hardcoding
+an email into a migration, replace the placeholder email and run:
+
+```bash
+npx wrangler d1 execute DB --remote --command "INSERT INTO course_enrollments (user_id, course_id, enrollment_status, access_starts_at, access_expires_at, enrollment_source) SELECT users.id, courses.id, 'active', CURRENT_TIMESTAMP, NULL, 'admin' FROM users CROSS JOIN courses WHERE users.email = lower(trim('<student-email@example.com>')) AND courses.slug = 'cse-professional' ON CONFLICT(user_id, course_id) DO UPDATE SET enrollment_status = 'active', access_starts_at = CURRENT_TIMESTAMP, access_expires_at = NULL, completed_at = NULL, enrollment_source = 'admin';"
+```
+
+For local development, use the same command with `--local` instead of
+`--remote`.
 
 ## D1 setup and migrations
 

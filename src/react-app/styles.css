@@ -169,7 +169,8 @@ h1 {
 
 .auth-page,
 .centered-page,
-.dashboard-page {
+.dashboard-page,
+.page-shell {
   min-height: 100vh;
   padding: 2rem;
   background:
@@ -356,6 +357,181 @@ input[aria-invalid="true"] {
   margin-top: 1rem;
 }
 
+.page-shell,
+.dashboard-page {
+  display: grid;
+  align-content: start;
+  gap: 2rem;
+}
+
+.page-header,
+.dashboard-header,
+.course-grid,
+.dashboard-grid,
+.curriculum-panel {
+  width: min(100%, 68rem);
+  margin: 0 auto;
+}
+
+.page-header h1,
+.dashboard-header h1 {
+  max-width: 13ch;
+  margin-bottom: 1rem;
+  font-size: clamp(2.3rem, 7vw, 4.3rem);
+}
+
+.page-header > p:not(.eyebrow),
+.dashboard-header > p {
+  max-width: 44rem;
+  color: #5b6b80;
+  line-height: 1.65;
+}
+
+.topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.course-grid,
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1rem;
+}
+
+.course-card,
+.curriculum-panel,
+.continue-card {
+  border: 1px solid rgb(25 52 91 / 10%);
+  border-radius: 0.8rem;
+  background: #fff;
+  box-shadow: 0 1rem 3rem rgb(29 54 92 / 8%);
+}
+
+.course-card {
+  display: grid;
+  gap: 1.25rem;
+  align-content: space-between;
+  padding: 1.35rem;
+}
+
+.course-card h2,
+.dashboard-card h2,
+.continue-card h2,
+.curriculum-panel h2 {
+  margin: 0 0 0.6rem;
+  color: #102039;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.course-card p:not(.eyebrow),
+.continue-card p:not(.eyebrow),
+.curriculum-panel p,
+.dashboard-card p {
+  color: #5b6b80;
+  line-height: 1.55;
+}
+
+.card-heading-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+}
+
+.card-heading-row .eyebrow {
+  margin: 0;
+}
+
+.badge {
+  display: inline-flex;
+  min-height: 1.8rem;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.badge--active {
+  background: #e8f7f1;
+  color: #087955;
+}
+
+.badge--muted {
+  background: #eef2f7;
+  color: #59687a;
+}
+
+.curriculum-panel {
+  padding: 1.5rem;
+}
+
+.curriculum-subject {
+  padding-top: 1rem;
+  border-top: 1px solid #e4eaf2;
+}
+
+.curriculum-subject h3,
+.topic-row h4,
+.continue-card h3 {
+  margin: 0 0 0.35rem;
+  color: #263a56;
+}
+
+.topic-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.topic-row {
+  padding: 0.9rem 0;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.dashboard-header {
+  margin-top: 2rem;
+}
+
+.dashboard-card {
+  padding: 1.35rem;
+}
+
+.progress {
+  width: 100%;
+  height: 0.7rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5ebf4;
+}
+
+.progress__bar {
+  height: 100%;
+  border-radius: inherit;
+  background: #0a9b6c;
+}
+
+.meta-copy {
+  margin: 0.75rem 0 0;
+  color: #68778a;
+  font-size: 0.92rem;
+}
+
+.continue-card {
+  margin-top: 1rem;
+  padding: 1rem;
+}
+
+.continue-card--muted {
+  background: #f6f8fb;
+  box-shadow: none;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -376,7 +552,8 @@ input[aria-invalid="true"] {
 
   .auth-page,
   .centered-page,
-  .dashboard-page {
+  .dashboard-page,
+  .page-shell {
     padding: 1rem;
   }
 
@@ -387,5 +564,11 @@ input[aria-invalid="true"] {
   .topbar {
     align-items: flex-start;
     gap: 1rem;
+    flex-direction: column;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 }

@@ -35,6 +35,78 @@ interface StoredAuthenticationRow {
   status: string
 }
 
+interface CourseListBody {
+  success: true
+  data: {
+    courses: Array<{
+      title: string
+      slug: string
+      shortDescription: string | null
+      level: string | null
+      thumbnailKey: string | null
+      enrollment: EnrollmentBody | null
+    }>
+  }
+}
+
+interface CourseDetailBody {
+  success: true
+  data: {
+    title: string
+    slug: string
+    description: string | null
+    enrollment: EnrollmentBody | null
+    curriculum: Array<{
+      title: string
+      slug: string
+      topics: Array<{
+        title: string
+        slug: string
+        publishedLessonCount: number
+      }>
+    }>
+  }
+}
+
+interface DashboardBody {
+  success: true
+  data: {
+    courses: DashboardCourseBody[]
+  }
+}
+
+interface CourseProgressBody {
+  success: true
+  data: DashboardCourseBody
+}
+
+interface DashboardCourseBody {
+  course: {
+    title: string
+    slug: string
+  }
+  enrollment: EnrollmentBody
+  progressPercentage: number
+  completedRequiredLessons: number
+  totalRequiredLessons: number
+  continueLearning: {
+    courseCompleted: boolean
+    lesson: {
+      title: string
+      slug: string
+      lessonType: string
+      summary: string | null
+    } | null
+  }
+}
+
+interface EnrollmentBody {
+  status: string
+  accessStartsAt: string
+  accessExpiresAt: string | null
+  hasAccess: boolean
+}
+
 const validPassword = 'SecurePassword123'
 
 const passwordValidationCases = [
@@ -155,6 +227,131 @@ async function register(
   }
 }
 
+async function getUserId(email: string): Promise<number> {
+  const user = await env.DB.prepare(
+    'SELECT id FROM users WHERE email = ?1 LIMIT 1',
+  )
+    .bind(email)
+    .first<{ id: number }>()
+
+  if (user === null) {
+    throw new Error(`Test user was not found: ${email}`)
+  }
+
+  return user.id
+}
+
+async function getCourseId(courseSlug = 'cse-professional'): Promise<number> {
+  const course = await env.DB.prepare(
+    'SELECT id FROM courses WHERE slug = ?1 LIMIT 1',
+  )
+    .bind(courseSlug)
+    .first<{ id: number }>()
+
+  if (course === null) {
+    throw new Error(`Test course was not found: ${courseSlug}`)
+  }
+
+  return course.id
+}
+
+async function getLessonId(lessonSlug: string): Promise<number> {
+  const lesson = await env.DB.prepare(
+    `SELECT lessons.id
+    FROM lessons
+    INNER JOIN topics ON topics.id = lessons.topic_id
+    INNER JOIN subjects ON subjects.id = topics.subject_id
+    INNER JOIN courses ON courses.id = subjects.course_id
+    WHERE courses.slug = 'cse-professional'
+      AND lessons.slug = ?1
+    LIMIT 1`,
+  )
+    .bind(lessonSlug)
+    .first<{ id: number }>()
+
+  if (lesson === null) {
+    throw new Error(`Test lesson was not found: ${lessonSlug}`)
+  }
+
+  return lesson.id
+}
+
+async function enrollUser(
+  email: string,
+  options: {
+    status?: 'active' | 'expired' | 'revoked' | 'completed'
+    accessStartsAt?: string
+    accessExpiresAt?: string | null
+  } = {},
+): Promise<void> {
+  const [userId, courseId] = await Promise.all([
+    getUserId(email),
+    getCourseId(),
+  ])
+
+  await env.DB.prepare(
+    `INSERT INTO course_enrollments (
+      user_id,
+      course_id,
+      enrollment_status,
+      access_starts_at,
+      access_expires_at,
+      enrollment_source
+    ) VALUES (?1, ?2, ?3, ?4, ?5, 'admin')
+    ON CONFLICT(user_id, course_id) DO UPDATE SET
+      enrollment_status = excluded.enrollment_status,
+      access_starts_at = excluded.access_starts_at,
+      access_expires_at = excluded.access_expires_at`,
+  )
+    .bind(
+      userId,
+      courseId,
+      options.status ?? 'active',
+      options.accessStartsAt ?? '2000-01-01T00:00:00.000Z',
+      options.accessExpiresAt ?? null,
+    )
+    .run()
+}
+
+async function setLessonProgress(
+  email: string,
+  lessonSlug: string,
+  status: 'in_progress' | 'completed',
+): Promise<void> {
+  const [userId, lessonId] = await Promise.all([
+    getUserId(email),
+    getLessonId(lessonSlug),
+  ])
+  const now = new Date().toISOString()
+
+  await env.DB.prepare(
+    `INSERT INTO lesson_progress (
+      user_id,
+      lesson_id,
+      status,
+      started_at,
+      completed_at,
+      last_viewed_at,
+      progress_percent
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?4, ?6)
+    ON CONFLICT(user_id, lesson_id) DO UPDATE SET
+      status = excluded.status,
+      started_at = COALESCE(lesson_progress.started_at, excluded.started_at),
+      completed_at = excluded.completed_at,
+      last_viewed_at = excluded.last_viewed_at,
+      progress_percent = excluded.progress_percent`,
+  )
+    .bind(
+      userId,
+      lessonId,
+      status,
+      now,
+      status === 'completed' ? now : null,
+      status === 'completed' ? 100 : 40,
+    )
+    .run()
+}
+
 describe('Worker foundation', () => {
   it('returns the standard health response', async () => {
     const response = await app.request(
@@ -227,6 +424,243 @@ describe('Worker foundation', () => {
       },
     })
     expect(consoleError).toHaveBeenCalledOnce()
+  })
+})
+
+describe('Course catalog and student learning APIs', () => {
+  it('hides draft courses from the public catalog', async () => {
+    const draftSlug = `draft-${crypto.randomUUID()}`
+
+    await env.DB.prepare(
+      `INSERT INTO courses (
+        public_id,
+        title,
+        slug,
+        short_description,
+        status
+      ) VALUES (?1, 'Draft Course', ?2, 'Hidden draft', 'draft')`,
+    )
+      .bind(`course-${draftSlug}`, draftSlug)
+      .run()
+
+    const response = await app.request(
+      '/api/courses',
+      undefined,
+      createBindings('production'),
+    )
+    const body = await response.json<CourseListBody>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.courses.some((course) => course.slug === draftSlug)).toBe(
+      false,
+    )
+  })
+
+  it('returns the published CSE Professional course and safe curriculum summary', async () => {
+    const response = await app.request(
+      '/api/courses/cse-professional',
+      undefined,
+      createBindings('production'),
+    )
+    const body = await response.json<CourseDetailBody>()
+
+    expect(response.status).toBe(200)
+    expect(body.data).toMatchObject({
+      title: 'CSE Professional',
+      slug: 'cse-professional',
+      enrollment: null,
+      curriculum: [
+        {
+          title: 'Numerical Ability',
+          slug: 'numerical-ability',
+          topics: [
+            {
+              title: 'Percentages',
+              slug: 'percentages',
+              publishedLessonCount: 11,
+            },
+          ],
+        },
+      ],
+    })
+    expect(JSON.stringify(body)).not.toContain('content_json')
+  })
+
+  it('accepts active enrollments and returns the first lesson for Continue Learning', async () => {
+    const email = 'active-enrollment@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+
+    const response = await app.request(
+      '/api/student/courses/cse-professional/progress',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const body = await response.json<CourseProgressBody>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.enrollment).toMatchObject({
+      status: 'active',
+      hasAccess: true,
+    })
+    expect(body.data.progressPercentage).toBe(0)
+    expect(body.data.totalRequiredLessons).toBe(11)
+    expect(body.data.continueLearning.lesson?.slug).toBe(
+      'introduction-to-percentages',
+    )
+  })
+
+  it.each([
+    {
+      name: 'expired',
+      status: 'active',
+      accessStartsAt: '2000-01-01T00:00:00.000Z',
+      accessExpiresAt: '2001-01-01T00:00:00.000Z',
+    },
+    {
+      name: 'revoked',
+      status: 'revoked',
+      accessStartsAt: '2000-01-01T00:00:00.000Z',
+      accessExpiresAt: null,
+    },
+    {
+      name: 'future access start',
+      status: 'active',
+      accessStartsAt: '2999-01-01T00:00:00.000Z',
+      accessExpiresAt: null,
+    },
+  ] satisfies ReadonlyArray<{
+    name: string
+    status: 'active' | 'revoked'
+    accessStartsAt: string
+    accessExpiresAt: string | null
+  }>)('denies progress for $name enrollments', async (enrollment) => {
+    const email = `${enrollment.name.replaceAll(' ', '-')}@example.com`
+    const { cookie } = await register(email)
+    await enrollUser(email, enrollment)
+
+    const response = await app.request(
+      '/api/student/courses/cse-professional/progress',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'COURSE_ACCESS_DENIED',
+      },
+    })
+  })
+
+  it('does not allow a student to read another student enrollment', async () => {
+    const enrolledEmail = 'owner-enrollment@example.com'
+    const otherEmail = 'other-student@example.com'
+    await register(enrolledEmail)
+    const { cookie: otherCookie } = await register(otherEmail)
+    await enrollUser(enrolledEmail)
+
+    const response = await app.request(
+      '/api/student/courses/cse-professional/progress',
+      { headers: { cookie: otherCookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(403)
+  })
+
+  it('calculates progress from completed required published lessons', async () => {
+    const email = 'progress-calculation@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+    await setLessonProgress(email, 'introduction-to-percentages', 'completed')
+    await setLessonProgress(email, 'understanding-percentages', 'completed')
+
+    const response = await app.request(
+      '/api/student/courses/cse-professional/progress',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const body = await response.json<CourseProgressBody>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.completedRequiredLessons).toBe(2)
+    expect(body.data.totalRequiredLessons).toBe(11)
+    expect(body.data.progressPercentage).toBe(18)
+    expect(body.data.continueLearning.lesson?.slug).toBe(
+      'fractions-decimals-and-percentages',
+    )
+  })
+
+  it('prioritizes an in-progress lesson for Continue Learning', async () => {
+    const email = 'in-progress-priority@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+    await setLessonProgress(email, 'finding-the-rate', 'in_progress')
+
+    const response = await app.request(
+      '/api/student/courses/cse-professional/progress',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const body = await response.json<CourseProgressBody>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.continueLearning.lesson?.slug).toBe('finding-the-rate')
+  })
+
+  it('returns completed course state when every required lesson is complete', async () => {
+    const email = 'completed-course@example.com'
+    const { cookie } = await register(email)
+    const lessonSlugs = [
+      'introduction-to-percentages',
+      'understanding-percentages',
+      'fractions-decimals-and-percentages',
+      'finding-the-percentage',
+      'finding-the-base',
+      'finding-the-rate',
+      'percentage-increase-and-decrease',
+      'discounts-and-markups',
+      'worked-examples',
+      'guided-practice',
+      'percentages-topic-quiz',
+    ]
+
+    await enrollUser(email)
+    await Promise.all(
+      lessonSlugs.map((lessonSlug) =>
+        setLessonProgress(email, lessonSlug, 'completed'),
+      ),
+    )
+
+    const response = await app.request(
+      '/api/student/courses/cse-professional/progress',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const body = await response.json<CourseProgressBody>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.progressPercentage).toBe(100)
+    expect(body.data.continueLearning).toEqual({
+      courseCompleted: true,
+      lesson: null,
+    })
+  })
+
+  it('returns an empty dashboard state for students with no enrollments', async () => {
+    const { cookie } = await register('empty-dashboard@example.com')
+
+    const response = await app.request(
+      '/api/student/dashboard',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const body = await response.json<DashboardBody>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.courses).toEqual([])
   })
 })
 

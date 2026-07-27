@@ -25,6 +25,31 @@ export const requireAuthentication = createMiddleware<AppEnv>(
   },
 )
 
+export const optionalAuthentication = createMiddleware<AppEnv>(
+  async (context, next) => {
+    const token = getCookie(context, AUTH_COOKIE_NAME)
+
+    if (token !== undefined && token.length > 0) {
+      try {
+        const principal = await authenticateSession(context.env.DB, token)
+        context.set('authUser', principal)
+      } catch (error: unknown) {
+        if (
+          error instanceof AppError &&
+          error.code === 'UNAUTHENTICATED'
+        ) {
+          await next()
+          return
+        }
+
+        throw error
+      }
+    }
+
+    await next()
+  },
+)
+
 export const requireAdmin = createMiddleware<AppEnv>(
   async (context, next) => {
     const principal = context.get('authUser')
