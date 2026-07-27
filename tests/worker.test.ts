@@ -2,6 +2,10 @@ import { env } from 'cloudflare:workers'
 import { describe, expect, it, vi } from 'vitest'
 
 import { app } from '../src/worker'
+import {
+  hashPassword,
+  verifyPassword,
+} from '../src/worker/auth/password'
 import { hashSessionToken } from '../src/worker/auth/session'
 import type { Bindings } from '../src/worker/types/bindings'
 
@@ -226,6 +230,52 @@ describe('Worker foundation', () => {
   })
 })
 
+describe('Password hashing', () => {
+  it('uses the Worker-supported PBKDF2 work factor and verifies it', async () => {
+    const storedHash = await hashPassword(validPassword)
+    const secondStoredHash = await hashPassword(validPassword)
+
+    expect(storedHash).toMatch(
+      /^pbkdf2-sha256\$v1\$100000\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$/u,
+    )
+    expect(secondStoredHash).not.toBe(storedHash)
+    await expect(
+      verifyPassword(validPassword, storedHash),
+    ).resolves.toBe(true)
+    await expect(
+      verifyPassword('WrongPassword123', storedHash),
+    ).resolves.toBe(false)
+  })
+
+  it('rejects malformed password records without throwing', async () => {
+    const malformedHashes = [
+      '',
+      'pbkdf2-sha256$v1$not-a-number$salt$hash',
+      'pbkdf2-sha256$v1$100000$salt',
+      'unknown$v1$100000$salt$hash',
+      'pbkdf2-sha256$v2$100000$salt$hash',
+    ]
+
+    for (const storedHash of malformedHashes) {
+      await expect(
+        verifyPassword(validPassword, storedHash),
+      ).resolves.toBe(false)
+    }
+  })
+
+  it('rejects excessive iteration values before deriving a hash', async () => {
+    const supportedHash = await hashPassword(validPassword)
+    const excessiveHash = supportedHash.replace(
+      '$100000$',
+      '$600000$',
+    )
+
+    await expect(
+      verifyPassword(validPassword, excessiveHash),
+    ).resolves.toBe(false)
+  })
+})
+
 describe('Authentication API', () => {
   it('normalizes a valid mixed-case email before storing it', async () => {
     const password = validPassword
@@ -257,7 +307,7 @@ describe('Authentication API', () => {
     expect(responseText).toContain('juandelacruz@example.com')
     expect(stored).not.toBeNull()
     expect(stored?.password_hash).toMatch(
-      /^pbkdf2-sha256\$v1\$600000\$/u,
+      /^pbkdf2-sha256\$v1\$100000\$/u,
     )
     expect(stored?.password_hash).not.toContain(password)
     expect(stored?.token_hash).toBe(expectedTokenHash)
@@ -268,6 +318,33 @@ describe('Authentication API', () => {
     expect(setCookie).toContain('Secure')
     expect(setCookie).toContain('SameSite=Lax')
     expect(setCookie).toContain('Path=/')
+  })
+
+  it('registers and logs in with a 100,000-iteration password record', async () => {
+    const email = 'worker-limit-login@example.com'
+    const { response: registrationResponse } = await register(email)
+    const stored = await env.DB.prepare(
+      'SELECT password_hash FROM users WHERE email = ?1',
+    )
+      .bind(email)
+      .first<{ password_hash: string }>()
+    const loginResponse = await app.request(
+      '/api/auth/login',
+      jsonRequest({
+        email,
+        password: validPassword,
+      }),
+      createBindings('production'),
+    )
+
+    expect(registrationResponse.status).toBe(201)
+    expect(stored?.password_hash).toMatch(
+      /^pbkdf2-sha256\$v1\$100000\$/u,
+    )
+    expect(loginResponse.status).toBe(200)
+    expect(loginResponse.headers.get('set-cookie')).toContain(
+      'cse_session=',
+    )
   })
 
   it('trims leading and trailing email spaces before storing it', async () => {

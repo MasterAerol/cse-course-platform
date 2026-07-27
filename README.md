@@ -28,7 +28,8 @@ Browser
 - SQL is isolated in repository modules and uses bound D1 prepared statements.
 - `ENVIRONMENT` controls development-only routes and production cookie
   security.
-- Passwords use versioned PBKDF2-HMAC-SHA-256 records with unique salts.
+- Passwords use versioned PBKDF2-HMAC-SHA-256 records with unique salts and a
+  Cloudflare Workers-compatible work factor.
 - Raw session tokens exist only in HttpOnly cookies; D1 stores SHA-256 token
   hashes and enforces expiration and revocation.
 
@@ -101,6 +102,20 @@ Git.
 Registration accepts `email`, `password`, `firstName`, and `lastName`. Email
 addresses are trimmed and lowercased. Passwords must be 12 to 128 characters
 and include an uppercase letter, lowercase letter, and number.
+
+Password hashes use the format
+`pbkdf2-sha256$v1$100000$<salt>$<hash>`. Cloudflare Workers rejects PBKDF2
+iteration counts above 100,000, so hashing and verification use that runtime
+maximum. Verification parses the algorithm, version, and work factor from the
+record and rejects malformed, unknown, lower-cost, or excessive values before
+deriving a hash. It never reinterprets an existing record at a weaker work
+factor. Each password has a unique cryptographically secure salt, and derived
+hashes are compared in constant time.
+
+The earlier 600,000-iteration configuration failed before account creation in
+the production runtime. Do not assume that unsupported records can be migrated
+automatically: if a database audit ever finds one, review it manually and use a
+controlled password-reset process.
 
 The session cookie is HttpOnly, `SameSite=Lax`, scoped to `/`, and marked
 `Secure` when `ENVIRONMENT=production`. Sessions expire on the server after
