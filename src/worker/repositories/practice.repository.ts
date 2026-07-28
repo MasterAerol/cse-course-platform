@@ -78,6 +78,8 @@ export interface PracticeSetGeneratorConfigRow {
 export interface PracticeAttemptAnswerRow {
   question_id: number
   selected_choice_id: number | null
+  selected_choice_text_snapshot: string | null
+  correct_choice_text_snapshot: string | null
   is_correct: 0 | 1 | null
   points_awarded: number
   answered_at: string | null
@@ -372,6 +374,8 @@ export async function findPracticeAttemptAnswers(
       `SELECT
         question_id,
         selected_choice_id,
+        selected_choice_text_snapshot,
+        correct_choice_text_snapshot,
         is_correct,
         points_awarded,
         answered_at
@@ -745,12 +749,26 @@ export async function savePracticeAttemptAnswer(
         attempt_id,
         question_id,
         selected_choice_id,
+        selected_choice_text_snapshot,
         is_correct,
         points_awarded,
         answered_at
-      ) VALUES (?1, ?2, ?3, NULL, 0, CURRENT_TIMESTAMP)
+      ) VALUES (
+        ?1,
+        ?2,
+        ?3,
+        (
+          SELECT choice_text
+          FROM practice_question_choices
+          WHERE id = ?3
+        ),
+        NULL,
+        0,
+        CURRENT_TIMESTAMP
+      )
       ON CONFLICT(attempt_id, question_id) DO UPDATE SET
         selected_choice_id = excluded.selected_choice_id,
+        selected_choice_text_snapshot = excluded.selected_choice_text_snapshot,
         is_correct = NULL,
         points_awarded = 0,
         answered_at = CURRENT_TIMESTAMP`,
@@ -781,14 +799,36 @@ export async function updatePracticeAttemptAnswerScores(
             attempt_id,
             question_id,
             selected_choice_id,
+            selected_choice_text_snapshot,
+            correct_choice_text_snapshot,
             is_correct,
             points_awarded,
             answered_at
-          ) VALUES (?1, ?2, ?3, ?4, ?5, CURRENT_TIMESTAMP)
+          ) VALUES (
+            ?1,
+            ?2,
+            ?3,
+            (
+              SELECT choice_text
+              FROM practice_question_choices
+              WHERE id = ?3
+            ),
+            (
+              SELECT choice_text
+              FROM practice_question_choices
+              WHERE question_id = ?2
+                AND is_correct = 1
+              LIMIT 1
+            ),
+            ?4,
+            ?5,
+            CURRENT_TIMESTAMP
+          )
           ON CONFLICT(attempt_id, question_id) DO UPDATE SET
             selected_choice_id = excluded.selected_choice_id,
             is_correct = excluded.is_correct,
             points_awarded = excluded.points_awarded,
+            correct_choice_text_snapshot = excluded.correct_choice_text_snapshot,
             answered_at = COALESCE(
               practice_attempt_answers.answered_at,
               excluded.answered_at

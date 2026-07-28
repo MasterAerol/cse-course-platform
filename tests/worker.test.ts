@@ -225,6 +225,17 @@ interface SeededQuizChoiceRow {
   choice_position: number
 }
 
+interface SeededPracticeChoiceRow {
+  lesson_slug: string
+  question_id: number
+  question_position: number
+  prompt: string
+  choice_id: number
+  choice_text: string
+  is_correct: 0 | 1
+  choice_position: number
+}
+
 interface StoredQuizAttemptAnswerRow {
   is_correct: 0 | 1 | null
   points_awarded: number
@@ -462,6 +473,7 @@ interface PracticeResultBody {
     questions: Array<{
       id: number
       prompt: string
+      position: number
       selectedChoice: PracticeChoiceBody | null
       correctChoice: PracticeChoiceBody
       isCorrect: boolean
@@ -566,6 +578,36 @@ const upgradedPercentagesContentExpectations = [
     minimumBlocks: 5,
     expectedText: 'Questions are original review questions, not official CSC material.',
   },
+] as const
+
+const expectedFixedPracticeChoices = {
+  'worked-examples': [
+    ['84', '35', '240', '8.4'],
+    ['180', '36', '1.8', '7.2'],
+    ['25%', '24%', '96%', '75%'],
+    ['20%', '16.67%', '30%', '120%'],
+    ['₱600', '₱200', '₱1,000', '₱775'],
+  ],
+  'guided-practice': [
+    ['81', '18', '450', '8.1'],
+    ['160', '64', '1.6', '25.6'],
+    ['30%', '27%', '90%', '70%'],
+    ['20%', '25%', '50%', '80%'],
+    ['₱575', '₱75', '₱425', '₱515'],
+  ],
+} as const
+
+const expectedQuizChoicesByPosition = [
+  ['60%', '35%', '53%', '0.6%'],
+  ['37.5%', '3.75%', '375%', '0.375%'],
+  ['45', '250', '18', '4.5'],
+  ['200', '30', '2', '15'],
+  ['15%', '12%', '85%', '0.15%'],
+  ['25%', '20%', '30%', '125%'],
+  ['15%', '17.65%', '75%', '85%'],
+  ['₱960', '₱240', '₱1,440', '₱1,180'],
+  ['₱1,000', '₱200', '₱600', '₱825'],
+  ['6', '10', '16', '24'],
 ] as const
 
 const passwordValidationCases = [
@@ -1083,6 +1125,35 @@ async function getSeededQuizChoices(): Promise<SeededQuizChoiceRow[]> {
   return rows.results
 }
 
+async function getSeededFixedPracticeChoices(): Promise<SeededPracticeChoiceRow[]> {
+  const rows = await env.DB.prepare(
+    `SELECT
+      lessons.slug AS lesson_slug,
+      practice_questions.id AS question_id,
+      practice_questions.position AS question_position,
+      practice_questions.prompt,
+      practice_question_choices.id AS choice_id,
+      practice_question_choices.choice_text,
+      practice_question_choices.is_correct,
+      practice_question_choices.position AS choice_position
+    FROM practice_questions
+    INNER JOIN practice_sets
+      ON practice_sets.id = practice_questions.practice_set_id
+    INNER JOIN lessons
+      ON lessons.id = practice_sets.lesson_id
+    INNER JOIN practice_question_choices
+      ON practice_question_choices.question_id = practice_questions.id
+    WHERE lessons.slug IN ('worked-examples', 'guided-practice')
+      AND practice_questions.status = 'active'
+    ORDER BY
+      lessons.slug,
+      practice_questions.position,
+      practice_question_choices.position`,
+  ).all<SeededPracticeChoiceRow>()
+
+  return rows.results
+}
+
 async function prepareUnlockedPracticeUser(
   email: string,
   lessonSlug: (typeof cseProfessionalLessonSlugs)[number] = 'finding-the-percentage',
@@ -1108,6 +1179,40 @@ async function startPractice(
     createBindings('production'),
   )
   const body = await response.json<PracticeAttemptBody>()
+
+  return { response, body }
+}
+
+async function savePracticeAttemptAnswer(input: {
+  cookie: string
+  attemptPublicId: string
+  questionId: number
+  selectedChoiceId: number
+}): Promise<Response> {
+  return app.request(
+    `/api/student/practice-attempts/${input.attemptPublicId}/answers/${input.questionId}`,
+    {
+      method: 'PUT',
+      headers: {
+        cookie: input.cookie,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ selectedChoiceId: input.selectedChoiceId }),
+    },
+    createBindings('production'),
+  )
+}
+
+async function submitPracticeAttemptForTest(
+  cookie: string,
+  attemptPublicId: string,
+): Promise<{ response: Response; body: PracticeResultBody }> {
+  const response = await app.request(
+    `/api/student/practice-attempts/${attemptPublicId}/submit`,
+    { method: 'POST', headers: { cookie } },
+    createBindings('production'),
+  )
+  const body = await response.json<PracticeResultBody>()
 
   return { response, body }
 }
@@ -1215,6 +1320,14 @@ function expectGeneratedQuestionValid(question: GeneratedQuestion): void {
   expect(numericIdentities.size).toBe(4)
   expect(Number.isFinite(expectedGeneratedAnswer(question))).toBe(true)
   expect(correctChoices[0]?.text).toBe(question.explanation.finalAnswer)
+  for (const choice of question.choices.filter((candidate) => !candidate.isCorrect)) {
+    expect(choice.mistakeType).not.toBeNull()
+    expect(choice.distractorType).toBe(choice.mistakeType)
+    expect(choice.derivation?.operation).toEqual(expect.any(String))
+    expect(choice.derivation?.inputs.length).toBeGreaterThan(0)
+    expect(choice.qualityScore).toBeGreaterThanOrEqual(35)
+    expect(choice.distractorType).not.toBe('nearby_value')
+  }
   expect(
     normalizedGeneratedNumber(correctChoices[0]?.numericValue ?? Number.NaN),
   ).toBe(expectedAnswer)
@@ -2876,7 +2989,7 @@ describe('Topic quiz APIs', () => {
     expect(choices.map((choice) => choice.choice_text)).toEqual([
       '6',
       '10',
-      '15',
+      '16',
       '24',
     ])
     expect(
@@ -2888,6 +3001,26 @@ describe('Topic quiz APIs', () => {
     expect([...visibleChoiceCounts.values()].every((count) => count === 1)).toBe(
       true,
     )
+  })
+
+  it('uses mistake-derived distractors for every Percentages Topic Quiz question', async () => {
+    const seededChoices = await getSeededQuizChoices()
+
+    for (const [index, expectedChoices] of expectedQuizChoicesByPosition.entries()) {
+      const questionPosition = index + 1
+      const choices = seededChoices.filter(
+        (choice) => choice.question_position === questionPosition,
+      )
+
+      expect(choices.map((choice) => choice.choice_text)).toEqual(
+        expectedChoices,
+      )
+      expect(choices.filter((choice) => choice.is_correct === 1)).toHaveLength(
+        1,
+      )
+      expect(choices[0]?.is_correct).toBe(1)
+      expect(new Set(choices.map((choice) => choice.choice_text)).size).toBe(4)
+    }
   })
 
   it('increments attempt numbers for repeated starts while attempts are unlimited', async () => {
@@ -3285,6 +3418,122 @@ describe('Topic quiz APIs', () => {
     }
   })
 
+  it('scores every seeded quiz distractor as incorrect with consistent result text', async () => {
+    const seededChoices = await getSeededQuizChoices()
+    const choicesByQuestionPosition = new Map<number, SeededQuizChoiceRow[]>()
+
+    for (const choice of seededChoices) {
+      const existing =
+        choicesByQuestionPosition.get(choice.question_position) ?? []
+      existing.push(choice)
+      choicesByQuestionPosition.set(choice.question_position, existing)
+    }
+
+    for (const [questionPosition, choices] of choicesByQuestionPosition) {
+      const correctChoice = choices.find((choice) => choice.is_correct === 1)
+
+      if (correctChoice === undefined) {
+        throw new Error(`Question ${questionPosition} has no correct choice.`)
+      }
+
+      for (const distractor of choices.filter((choice) => choice.is_correct === 0)) {
+        const email = `seeded-quiz-distractor-${questionPosition}-${distractor.choice_position}@example.com`
+        const { cookie, quizId } = await prepareUnlockedQuizUser(email)
+        const { body } = await startQuiz(cookie, quizId)
+        const attemptQuestion = body.data.questions.find(
+          (question) => question.position === questionPosition,
+        )
+        const attemptDistractor = attemptQuestion?.choices.find(
+          (choice) => choice.text === distractor.choice_text,
+        )
+
+        if (attemptQuestion === undefined || attemptDistractor === undefined) {
+          throw new Error(
+            `Question ${questionPosition} distractor ${distractor.choice_text} was not returned.`,
+          )
+        }
+
+        const saveResponse = await saveQuizAttemptAnswer({
+          cookie,
+          attemptPublicId: body.data.attempt.publicId,
+          questionId: attemptQuestion.id,
+          selectedChoiceId: attemptDistractor.id,
+        })
+        const { response, body: result } = await submitQuizAttemptForTest(
+          cookie,
+          body.data.attempt.publicId,
+        )
+        const questionResult = result.data.questions.find(
+          (question) => question.position === questionPosition,
+        )
+
+        expect(saveResponse.status).toBe(200)
+        expect(response.status).toBe(200)
+        expect(questionResult?.selectedChoice).toEqual(attemptDistractor)
+        expect(questionResult?.correctChoice.text).toBe(
+          correctChoice.choice_text,
+        )
+        expect(questionResult?.selectedChoice?.text).not.toBe(
+          questionResult?.correctChoice.text,
+        )
+        expect(questionResult?.isCorrect).toBe(false)
+        expect(questionResult?.pointsAwarded).toBe(0)
+      }
+    }
+  }, 20_000)
+
+  it('keeps submitted quiz result text stable when choice rows later change', async () => {
+    const { cookie } = await prepareUnlockedQuizUser(
+      'quiz-choice-snapshot@example.com',
+    )
+    const quizId = await createTestQuiz('published')
+    const { body } = await startQuiz(cookie, quizId)
+    const question = body.data.questions[0]
+    const correctChoice = question?.choices.find(
+      (choice) => choice.text === '10',
+    )
+
+    if (question === undefined || correctChoice === undefined) {
+      throw new Error('Seeded quiz question was not returned.')
+    }
+
+    await saveQuizAttemptAnswer({
+      cookie,
+      attemptPublicId: body.data.attempt.publicId,
+      questionId: question.id,
+      selectedChoiceId: correctChoice.id,
+    })
+    const submitted = await submitQuizAttemptForTest(
+      cookie,
+      body.data.attempt.publicId,
+    )
+
+    expect(submitted.response.status).toBe(200)
+
+    await env.DB.prepare(
+      `UPDATE question_choices
+      SET choice_text = 'changed after submit'
+      WHERE id = ?1`,
+    )
+      .bind(correctChoice.id)
+      .run()
+
+    const response = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/results`,
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const result = await response.json<QuizResultBody>()
+    const questionResult = result.data.questions.find(
+      (candidate) => candidate.position === question.position,
+    )
+
+    expect(response.status).toBe(200)
+    expect(questionResult?.selectedChoice?.text).toBe('10')
+    expect(questionResult?.correctChoice.text).toBe('10')
+    expect(questionResult?.isCorrect).toBe(true)
+  })
+
   it('passes at 70%, completes the quiz lesson, and returns explanations after submission', async () => {
     const email = 'passing-quiz@example.com'
     const { cookie, quizId } = await prepareUnlockedQuizUser(email)
@@ -3598,6 +3847,224 @@ describe('Practice activity APIs', () => {
     expect(responseText).not.toContain('isCorrect')
     expect(responseText).not.toContain('correctChoice')
     expect(responseText).not.toContain('explanation')
+  })
+
+  it('uses mistake-derived distractors for fixed Percentages practice sets', async () => {
+    const seededChoices = await getSeededFixedPracticeChoices()
+
+    for (const [lessonSlug, expectedQuestionChoices] of Object.entries(
+      expectedFixedPracticeChoices,
+    )) {
+      for (const [index, expectedChoices] of expectedQuestionChoices.entries()) {
+        const questionPosition = index + 1
+        const choices = seededChoices.filter(
+          (choice) =>
+            choice.lesson_slug === lessonSlug &&
+            choice.question_position === questionPosition,
+        )
+
+        expect(choices.map((choice) => choice.choice_text)).toEqual(
+          expectedChoices,
+        )
+        expect(
+          choices.filter((choice) => choice.is_correct === 1),
+        ).toHaveLength(1)
+        expect(choices[0]?.is_correct).toBe(1)
+        expect(new Set(choices.map((choice) => choice.choice_text)).size).toBe(
+          4,
+        )
+      }
+    }
+  })
+
+  it('scores every fixed Percentages practice correct choice consistently', async () => {
+    const seededChoices = await getSeededFixedPracticeChoices()
+
+    for (const lessonSlug of Object.keys(expectedFixedPracticeChoices)) {
+      const lessonChoices = seededChoices.filter(
+        (choice) => choice.lesson_slug === lessonSlug,
+      )
+      const questionPositions = [
+        ...new Set(lessonChoices.map((choice) => choice.question_position)),
+      ]
+
+      for (const questionPosition of questionPositions) {
+        const choices = lessonChoices.filter(
+          (choice) => choice.question_position === questionPosition,
+        )
+        const correctChoice = choices.find((choice) => choice.is_correct === 1)
+
+        if (correctChoice === undefined) {
+          throw new Error(
+            `${lessonSlug} question ${questionPosition} has no correct choice.`,
+          )
+        }
+
+        const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+          `fixed-practice-correct-${lessonSlug}-${questionPosition}@example.com`,
+          lessonSlug as (typeof cseProfessionalLessonSlugs)[number],
+        )
+        const { body } = await startPractice(cookie, practiceSetId)
+        const attemptQuestion = body.data.questions.find(
+          (question) => question.position === questionPosition,
+        )
+        const attemptChoice = attemptQuestion?.choices.find(
+          (choice) => choice.text === correctChoice.choice_text,
+        )
+
+        if (attemptQuestion === undefined || attemptChoice === undefined) {
+          throw new Error(
+            `${lessonSlug} question ${questionPosition} correct choice was not returned.`,
+          )
+        }
+
+        const saveResponse = await savePracticeAttemptAnswer({
+          cookie,
+          attemptPublicId: body.data.attempt.publicId,
+          questionId: attemptQuestion.id,
+          selectedChoiceId: attemptChoice.id,
+        })
+        const { response, body: result } = await submitPracticeAttemptForTest(
+          cookie,
+          body.data.attempt.publicId,
+        )
+        const questionResult = result.data.questions.find(
+          (question) => question.position === questionPosition,
+        )
+
+        expect(saveResponse.status).toBe(200)
+        expect(response.status).toBe(200)
+        expect(questionResult?.selectedChoice).toEqual(attemptChoice)
+        expect(questionResult?.correctChoice).toEqual(attemptChoice)
+        expect(questionResult?.isCorrect).toBe(true)
+        expect(questionResult?.pointsAwarded).toBe(1)
+      }
+    }
+  })
+
+  it('scores every fixed Percentages practice distractor as incorrect', async () => {
+    const seededChoices = await getSeededFixedPracticeChoices()
+
+    for (const lessonSlug of Object.keys(expectedFixedPracticeChoices)) {
+      const lessonChoices = seededChoices.filter(
+        (choice) => choice.lesson_slug === lessonSlug,
+      )
+      const questionPositions = [
+        ...new Set(lessonChoices.map((choice) => choice.question_position)),
+      ]
+
+      for (const questionPosition of questionPositions) {
+        const choices = lessonChoices.filter(
+          (choice) => choice.question_position === questionPosition,
+        )
+        const correctChoice = choices.find((choice) => choice.is_correct === 1)
+
+        if (correctChoice === undefined) {
+          throw new Error(
+            `${lessonSlug} question ${questionPosition} has no correct choice.`,
+          )
+        }
+
+        for (const distractor of choices.filter((choice) => choice.is_correct === 0)) {
+          const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+            `fixed-practice-distractor-${lessonSlug}-${questionPosition}-${distractor.choice_position}@example.com`,
+            lessonSlug as (typeof cseProfessionalLessonSlugs)[number],
+          )
+          const { body } = await startPractice(cookie, practiceSetId)
+          const attemptQuestion = body.data.questions.find(
+            (question) => question.position === questionPosition,
+          )
+          const attemptDistractor = attemptQuestion?.choices.find(
+            (choice) => choice.text === distractor.choice_text,
+          )
+
+          if (attemptQuestion === undefined || attemptDistractor === undefined) {
+            throw new Error(
+              `${lessonSlug} question ${questionPosition} distractor ${distractor.choice_text} was not returned.`,
+            )
+          }
+
+          const saveResponse = await savePracticeAttemptAnswer({
+            cookie,
+            attemptPublicId: body.data.attempt.publicId,
+            questionId: attemptQuestion.id,
+            selectedChoiceId: attemptDistractor.id,
+          })
+          const { response, body: result } =
+            await submitPracticeAttemptForTest(
+              cookie,
+              body.data.attempt.publicId,
+            )
+          const questionResult = result.data.questions.find(
+            (question) => question.position === questionPosition,
+          )
+
+          expect(saveResponse.status).toBe(200)
+          expect(response.status).toBe(200)
+          expect(questionResult?.selectedChoice).toEqual(attemptDistractor)
+          expect(questionResult?.correctChoice.text).toBe(
+            correctChoice.choice_text,
+          )
+          expect(questionResult?.selectedChoice?.text).not.toBe(
+            questionResult?.correctChoice.text,
+          )
+          expect(questionResult?.isCorrect).toBe(false)
+          expect(questionResult?.pointsAwarded).toBe(0)
+        }
+      }
+    }
+  }, 20_000)
+
+  it('keeps submitted practice result text stable when choice rows later change', async () => {
+    const { cookie } = await prepareUnlockedPracticeUser(
+      'practice-choice-snapshot@example.com',
+    )
+    const practiceSetId = await createTestPracticeSet('published')
+    const { body } = await startPractice(cookie, practiceSetId)
+    const question = body.data.questions[0]
+    const correctChoice = question?.choices.find(
+      (choice) => choice.text === '9',
+    )
+
+    if (question === undefined || correctChoice === undefined) {
+      throw new Error('Test practice question was not returned.')
+    }
+
+    await savePracticeAttemptAnswer({
+      cookie,
+      attemptPublicId: body.data.attempt.publicId,
+      questionId: question.id,
+      selectedChoiceId: correctChoice.id,
+    })
+    const submitted = await submitPracticeAttemptForTest(
+      cookie,
+      body.data.attempt.publicId,
+    )
+
+    expect(submitted.response.status).toBe(200)
+
+    await env.DB.prepare(
+      `UPDATE practice_question_choices
+      SET choice_text = 'changed after submit'
+      WHERE id = ?1`,
+    )
+      .bind(correctChoice.id)
+      .run()
+
+    const response = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/results`,
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const result = await response.json<PracticeResultBody>()
+    const questionResult = result.data.questions.find(
+      (candidate) => candidate.position === question.position,
+    )
+
+    expect(response.status).toBe(200)
+    expect(questionResult?.selectedChoice?.text).toBe('9')
+    expect(questionResult?.correctChoice.text).toBe('9')
+    expect(questionResult?.isCorrect).toBe(true)
   })
 
   it('creates immutable generated snapshots and reloads the same questions on refresh', async () => {

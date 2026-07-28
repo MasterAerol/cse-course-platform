@@ -3,6 +3,12 @@ import type {
   QuestionGenerator,
 } from '../generator.types'
 import {
+  createDistractorCandidate,
+} from '../../domain/distractor-quality'
+import type {
+  NumericChoiceValidationContext,
+} from '../../domain/distractor-models'
+import {
   createBaseRandom,
   formatGeneratedNumber,
   normalizeNumericValue,
@@ -75,18 +81,67 @@ export const findingPercentageGenerator: QuestionGenerator = {
         : wordingVariant === 'class-present'
           ? `A class has ${formatGeneratedNumber(base, 'count')} students. ${formatGeneratedNumber(ratePercent, 'percent')} are present. How many students are present?`
           : `What is ${formatGeneratedNumber(ratePercent, 'percent')} of ${formatGeneratedNumber(base, 'number')}?`
+    const decimalRate = ratePercent / 100
+    const context: NumericChoiceValidationContext = {
+      kind: answerKind,
+      correctValue: percentage,
+      countable: answerKind === 'count',
+    }
+    const candidates = [
+      createDistractorCandidate({
+        value: ratePercent,
+        mistakeType: 'used_rate_number_directly',
+        derivation: { operation: 'ratePercent', inputs: [ratePercent] },
+        context,
+      }),
+      createDistractorCandidate({
+        value: base,
+        mistakeType: 'used_base_as_answer',
+        derivation: { operation: 'base', inputs: [base] },
+        context,
+      }),
+      createDistractorCandidate({
+        value: base / decimalRate,
+        mistakeType: 'divided_instead_of_multiplied',
+        derivation: { operation: 'base / decimalRate', inputs: [base, decimalRate] },
+        context,
+      }),
+      createDistractorCandidate({
+        value: base / ratePercent,
+        mistakeType: 'divided_base_by_percent_number',
+        derivation: { operation: 'base / ratePercent', inputs: [base, ratePercent] },
+        context,
+      }),
+      createDistractorCandidate({
+        value: percentage / 10,
+        mistakeType: 'decimal_shift_left',
+        derivation: { operation: 'correct / 10', inputs: [percentage] },
+        context,
+      }),
+      createDistractorCandidate({
+        value: percentage * 10,
+        mistakeType: 'decimal_shift_right',
+        derivation: { operation: 'correct * 10', inputs: [percentage] },
+        context,
+      }),
+      createDistractorCandidate({
+        value: base * ratePercent,
+        mistakeType: 'forgot_percent_conversion',
+        derivation: { operation: 'base * ratePercent', inputs: [base, ratePercent] },
+        context,
+      }),
+      createDistractorCandidate({
+        value: base - ratePercent,
+        mistakeType: 'subtracted_rate_from_base',
+        derivation: { operation: 'base - ratePercent', inputs: [base, ratePercent] },
+        context,
+      }),
+    ].filter((candidate) => candidate !== null)
     const choices = shuffledChoices({
       correctValue: percentage,
       answerKind,
       random,
-      candidates: [
-        { value: base, distractorType: 'used_whole_base' },
-        { value: ratePercent, distractorType: 'used_rate_number' },
-        { value: percentage * 10, distractorType: 'decimal_shift' },
-        { value: percentage / 10, distractorType: 'decimal_shift' },
-        { value: base / (ratePercent / 100), distractorType: 'divided_instead_of_multiplied' },
-        { value: percentage + ratePercent, distractorType: 'added_rate' },
-      ],
+      candidates,
     })
     const finalAnswer = formatGeneratedNumber(percentage, answerKind)
 

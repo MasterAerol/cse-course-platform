@@ -280,6 +280,8 @@ function mapGeneratedAnswers(
   return answers.map((answer) => ({
     question_id: answer.snapshot_id,
     selected_choice_id: answer.selected_choice_id,
+    selected_choice_text_snapshot: null,
+    correct_choice_text_snapshot: null,
     is_correct: answer.is_correct,
     points_awarded: answer.points_awarded,
     answered_at: answer.answered_at,
@@ -597,6 +599,7 @@ async function getResultCompletionContext(
 function findChoice(
   question: PracticeQuestion,
   choiceId: number | null,
+  textSnapshot: string | null = null,
 ): SafePracticeChoice | null {
   if (choiceId === null) {
     return null
@@ -610,7 +613,7 @@ function findChoice(
 
   return {
     id: choice.id,
-    text: choice.text,
+    text: textSnapshot ?? choice.text,
     position: choice.position,
   }
 }
@@ -670,10 +673,13 @@ function buildPracticeResultPayload(
         selectedChoice: findChoice(
           question,
           answer?.selected_choice_id ?? null,
+          answer?.selected_choice_text_snapshot ?? null,
         ),
         correctChoice: {
           id: correctChoice.id,
-          text: correctChoice.text,
+          text:
+            answer?.correct_choice_text_snapshot ??
+            correctChoice.text,
           position: correctChoice.position,
         },
         isCorrect: answer?.is_correct === 1,

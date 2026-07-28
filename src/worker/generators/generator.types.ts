@@ -1,3 +1,8 @@
+import type {
+  DistractorDerivation,
+  DistractorMistakeType,
+} from '../domain/distractor-models'
+
 export type GeneratorDifficulty = 'easy' | 'medium' | 'hard'
 
 export type GeneratorSlug =
@@ -17,6 +22,9 @@ export interface GeneratedChoice {
   text: string
   isCorrect: boolean
   distractorType: string | null
+  mistakeType: DistractorMistakeType | null
+  derivation: DistractorDerivation | null
+  qualityScore: number
   numericValue: number
 }
 

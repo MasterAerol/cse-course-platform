@@ -369,6 +369,7 @@ async function getResultCompletionContext(
 function findChoice(
   question: QuizQuestion,
   choiceId: number | null,
+  textSnapshot: string | null = null,
 ): SafeQuizChoice | null {
   if (choiceId === null) {
     return null
@@ -382,7 +383,7 @@ function findChoice(
 
   return {
     id: choice.id,
-    text: choice.text,
+    text: textSnapshot ?? choice.text,
     position: choice.position,
   }
 }
@@ -442,10 +443,13 @@ function buildResultPayload(
         selectedChoice: findChoice(
           question,
           answer?.selected_choice_id ?? null,
+          answer?.selected_choice_text_snapshot ?? null,
         ),
         correctChoice: {
           id: correctChoice.id,
-          text: correctChoice.text,
+          text:
+            answer?.correct_choice_text_snapshot ??
+            correctChoice.text,
           position: correctChoice.position,
         },
         isCorrect: answer?.is_correct === 1,

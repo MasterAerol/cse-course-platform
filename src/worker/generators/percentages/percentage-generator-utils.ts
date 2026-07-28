@@ -1,4 +1,17 @@
 import {
+  selectBestDistractors,
+} from '../../domain/distractor-quality'
+import type {
+  DistractorCandidate,
+} from '../../domain/distractor-models'
+import {
+  formatNumericChoice,
+  hasSupportedPrecision,
+  isFiniteSafeNumber,
+  normalizeNumericValue,
+  numericIdentity,
+} from '../../domain/numeric-choice-validation'
+import {
   createSeededRandom,
   type SeededRandom,
 } from '../generator-random'
@@ -18,68 +31,16 @@ export interface PercentageScenario {
   countable: boolean
 }
 
-export interface ChoiceCandidate {
-  value: number
-  distractorType: string | null
-}
-
-export function isFiniteSafeNumber(value: number): boolean {
-  return Number.isFinite(value) && !Number.isNaN(value)
-}
-
-function roundTo(value: number, decimalPlaces: number): number {
-  const multiplier = 10 ** decimalPlaces
-
-  return Math.round((value + Number.EPSILON) * multiplier) / multiplier
-}
-
-export function normalizeNumericValue(value: number): number {
-  return roundTo(value, 4)
-}
-
-export function hasSupportedPrecision(value: number): boolean {
-  return Number.isInteger(roundTo(value, 4) * 10_000)
-}
-
-export function numericIdentity(value: number): string {
-  return normalizeNumericValue(value).toFixed(4)
-}
-
-function trimTrailingZeroes(text: string): string {
-  return text.replace(/(\.\d*?[1-9])0+$/u, '$1').replace(/\.0+$/u, '')
-}
-
-function addThousandsSeparators(text: string): string {
-  const [integerPart, decimalPart] = text.split('.')
-  const formattedInteger = (integerPart ?? '').replace(
-    /\B(?=(\d{3})+(?!\d))/gu,
-    ',',
-  )
-
-  return decimalPart === undefined
-    ? formattedInteger
-    : `${formattedInteger}.${decimalPart}`
-}
-
 export function formatGeneratedNumber(
   value: number,
   answerKind: AnswerKind,
 ): string {
-  const normalized = normalizeNumericValue(value)
+  return formatNumericChoice(value, answerKind)
+}
 
-  if (answerKind === 'percent') {
-    return `${addThousandsSeparators(trimTrailingZeroes(normalized.toFixed(2)))}%`
-  }
-
-  if (answerKind === 'money') {
-    return `₱${addThousandsSeparators(trimTrailingZeroes(normalized.toFixed(2)))}`
-  }
-
-  if (answerKind === 'count') {
-    return addThousandsSeparators(String(Math.round(normalized)))
-  }
-
-  return addThousandsSeparators(trimTrailingZeroes(normalized.toFixed(4)))
+export {
+  normalizeNumericValue,
+  numericIdentity,
 }
 
 export function createBaseRandom(input: {
@@ -96,55 +57,31 @@ export function createBaseRandom(input: {
 export function shuffledChoices(input: {
   correctValue: number
   answerKind: AnswerKind
-  candidates: readonly ChoiceCandidate[]
+  candidates: readonly DistractorCandidate[]
   random: SeededRandom
 }): GeneratedChoice[] {
-  const selected: GeneratedChoice[] = []
-  const usedIdentities = new Set<string>()
-
-  function addChoice(candidate: ChoiceCandidate, isCorrect: boolean): void {
-    if (!isFiniteSafeNumber(candidate.value) || candidate.value < 0) {
-      return
-    }
-
-    const normalized = normalizeNumericValue(candidate.value)
-    const identity = numericIdentity(normalized)
-
-    if (usedIdentities.has(identity)) {
-      return
-    }
-
-    usedIdentities.add(identity)
-    selected.push({
-      text: formatGeneratedNumber(normalized, input.answerKind),
-      isCorrect,
-      distractorType: candidate.distractorType,
-      numericValue: normalized,
-    })
-  }
-
-  addChoice({ value: input.correctValue, distractorType: null }, true)
-
-  for (const candidate of input.random.shuffle(input.candidates)) {
-    if (selected.length >= 4) {
-      break
-    }
-
-    addChoice(candidate, false)
-  }
-
-  let fallbackOffset = 1
-
-  while (selected.length < 4) {
-    addChoice(
-      {
-        value: input.correctValue + fallbackOffset * 3,
-        distractorType: 'nearby_value',
-      },
-      false,
-    )
-    fallbackOffset += 1
-  }
+  const normalizedCorrectValue = normalizeNumericValue(input.correctValue)
+  const distractors = selectBestDistractors(input.candidates)
+  const selected: GeneratedChoice[] = [
+    {
+      text: formatGeneratedNumber(normalizedCorrectValue, input.answerKind),
+      isCorrect: true,
+      distractorType: null,
+      mistakeType: null,
+      derivation: null,
+      qualityScore: 100,
+      numericValue: normalizedCorrectValue,
+    },
+    ...distractors.map((candidate) => ({
+      text: candidate.formattedText,
+      isCorrect: false,
+      distractorType: candidate.mistakeType,
+      mistakeType: candidate.mistakeType,
+      derivation: candidate.derivation,
+      qualityScore: candidate.qualityScore,
+      numericValue: candidate.value,
+    })),
+  ]
 
   return input.random.shuffle(selected)
 }
@@ -209,12 +146,24 @@ export function validateQuestionContract(
     if (!hasSupportedPrecision(choice.numericValue)) {
       return { valid: false, reason: 'Choice precision is unsupported.' }
     }
+
+    if (
+      !choice.isCorrect &&
+      (choice.mistakeType === null ||
+        choice.derivation === null ||
+        choice.qualityScore < 35)
+    ) {
+      return { valid: false, reason: 'Distractor is missing quality metadata.' }
+    }
   }
 
   const correctChoice = correctChoices[0] as GeneratedChoice
   const expectedAnswer = normalizeNumericValue(expected.recomputedAnswer)
 
-  if (numericIdentity(correctChoice.numericValue) !== numericIdentity(expectedAnswer)) {
+  if (
+    numericIdentity(correctChoice.numericValue) !==
+    numericIdentity(expectedAnswer)
+  ) {
     return { valid: false, reason: 'Correct choice does not match recomputed answer.' }
   }
 
