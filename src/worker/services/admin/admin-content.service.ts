@@ -1,4 +1,8 @@
-import { getRegisteredGenerators } from '../../generators/generator.registry'
+import {
+  getGenerator,
+  getRegisteredGenerators,
+} from '../../generators/generator.registry'
+import type { GeneratorSlug } from '../../generators/generator.types'
 import {
   createCourseRow,
   createLessonBlockRow,
@@ -265,10 +269,107 @@ function assertFresh(rowUpdatedAt: string, submittedUpdatedAt: string): void {
   }
 }
 
-function isSupportedGenerator(slug: string, version: number): boolean {
-  return getRegisteredGenerators().some(
-    (generator) => generator.slug === slug && generator.version === version,
+function getSupportedGenerator(slug: string, version: number) {
+  return getGenerator(slug as GeneratorSlug, version)
+}
+
+function assertGeneratedPracticeConfig(input: PracticeSetInput): void {
+  if (
+    input.generatorSlug === undefined ||
+    input.generatorVersion === undefined ||
+    input.difficulty === undefined
+  ) {
+    throw new AppError(
+      400,
+      'UNSUPPORTED_GENERATOR',
+      'Generated practice requires a supported registered generator.',
+    )
+  }
+
+  const generator = getSupportedGenerator(
+    input.generatorSlug,
+    input.generatorVersion,
   )
+
+  if (generator === null) {
+    throw new AppError(
+      400,
+      'UNSUPPORTED_GENERATOR',
+      'Generated practice requires a supported registered generator.',
+    )
+  }
+
+  for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+    if (
+      input.difficulty[difficulty] > 0 &&
+      !generator.supportedDifficulties.includes(difficulty)
+    ) {
+      throw new AppError(
+        400,
+        'UNSUPPORTED_GENERATOR',
+        `Generator ${generator.slug} does not support ${difficulty} questions.`,
+      )
+    }
+  }
+}
+
+function assertStoredGeneratedPracticeConfig(
+  practice: AdminPracticeSetRow,
+): void {
+  if (
+    practice.generator_slug === null ||
+    practice.generator_version === null ||
+    practice.easy_count === null ||
+    practice.medium_count === null ||
+    practice.hard_count === null
+  ) {
+    throw new AppError(
+      400,
+      'PUBLISH_VALIDATION_FAILED',
+      'Generated practice requires a supported registered generator.',
+    )
+  }
+
+  const generator = getSupportedGenerator(
+    practice.generator_slug,
+    practice.generator_version,
+  )
+
+  if (generator === null) {
+    throw new AppError(
+      400,
+      'PUBLISH_VALIDATION_FAILED',
+      'Generated practice requires a supported registered generator.',
+    )
+  }
+
+  if (
+    practice.easy_count + practice.medium_count + practice.hard_count !==
+    practice.question_count
+  ) {
+    throw new AppError(
+      400,
+      'PUBLISH_VALIDATION_FAILED',
+      'Generated practice difficulty counts must equal the total question count.',
+    )
+  }
+
+  for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+    const count =
+      difficulty === 'easy'
+        ? practice.easy_count
+        : difficulty === 'medium'
+          ? practice.medium_count
+          : practice.hard_count
+
+    if (count > 0 && !generator.supportedDifficulties.includes(difficulty)) {
+      throw new AppError(
+        400,
+        'PUBLISH_VALIDATION_FAILED',
+        `Generator ${generator.slug} does not support ${difficulty} questions.`,
+      )
+    }
+  }
 }
 
 function assertNoRawHtmlContent(value: unknown): void {
@@ -1365,21 +1466,7 @@ async function validatePracticePublishReady(
   practice: AdminPracticeSetRow,
 ): Promise<void> {
   if (practice.question_source === 'generated') {
-    if (
-      practice.generator_slug === null ||
-      practice.generator_version === null ||
-      !isSupportedGenerator(
-        practice.generator_slug,
-        practice.generator_version,
-      )
-    ) {
-      throw new AppError(
-        400,
-        'PUBLISH_VALIDATION_FAILED',
-        'Generated practice requires a supported registered generator.',
-      )
-    }
-
+    assertStoredGeneratedPracticeConfig(practice)
     return
   }
 
@@ -1458,18 +1545,7 @@ export async function saveAdminPracticeSet(
   }
 
   if (input.questionSource === 'generated') {
-    if (
-      input.generatorSlug === undefined ||
-      input.generatorVersion === undefined ||
-      input.difficulty === undefined ||
-      !isSupportedGenerator(input.generatorSlug, input.generatorVersion)
-    ) {
-      throw new AppError(
-        400,
-        'UNSUPPORTED_GENERATOR',
-        'Generated practice requires a supported registered generator.',
-      )
-    }
+    assertGeneratedPracticeConfig(input)
   }
 
   const requestedStatus = input.status

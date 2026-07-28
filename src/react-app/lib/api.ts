@@ -1394,6 +1394,20 @@ const adminPracticeSetResponseSchema = z.object({
   }),
 })
 
+const adminPracticeGeneratorSchema = z.object({
+  slug: z.string(),
+  version: z.number(),
+  title: z.string(),
+  supportedDifficulties: z.array(z.enum(['easy', 'medium', 'hard'])),
+})
+
+const adminPracticeGeneratorsResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    generators: z.array(adminPracticeGeneratorSchema),
+  }),
+})
+
 const adminPracticeSetMutationResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
@@ -1442,6 +1456,9 @@ export type AdminLesson = z.infer<typeof adminLessonSchema>
 export type AdminLessonBlock = z.infer<typeof adminLessonBlockSchema>
 export type AdminAuditLog = z.infer<typeof adminAuditLogSchema>
 export type AdminPracticeSet = z.infer<typeof adminPracticeSetSchema>
+export type AdminPracticeGenerator = z.infer<
+  typeof adminPracticeGeneratorSchema
+>
 export type AdminPracticeQuestion = z.infer<
   typeof adminPracticeQuestionSchema
 >
@@ -1787,6 +1804,16 @@ export function fetchAdminPracticeSet(
     practiceSet: response.data.practiceSet,
     questions: response.data.questions ?? [],
   }))
+}
+
+export function fetchAdminPracticeGenerators(
+  signal?: AbortSignal,
+): Promise<AdminPracticeGenerator[]> {
+  return adminRequest(
+    '/api/admin/practice-generators',
+    adminPracticeGeneratorsResponseSchema,
+    { signal },
+  ).then((response) => response.data.generators)
 }
 
 export function saveAdminPracticeSet(

@@ -18,6 +18,7 @@ import {
   deleteAdminLessonBlock,
   fetchAdminCourseDetail,
   fetchAdminLessonBlocks,
+  fetchAdminPracticeGenerators,
   fetchAdminPracticeSet,
   fetchAdminQuiz,
   moveAdminLesson,
@@ -38,6 +39,7 @@ import {
   type AdminFixedQuestionInput,
   type AdminLesson,
   type AdminLessonBlock,
+  type AdminPracticeGenerator,
   type AdminPracticeQuestion,
   type AdminPracticeSet,
   type AdminQuiz,
@@ -46,6 +48,10 @@ import {
   type AdminTopic,
   ApiClientError,
 } from '../../lib/api'
+import {
+  getPracticeEditorVisibility,
+  type PracticeQuestionSource,
+} from './practice-editor-visibility'
 
 type BuilderState =
   | { status: 'loading' }
@@ -541,6 +547,16 @@ function AdminActions({
   )
 }
 
+const defaultGeneratedPracticeSlugByLessonSlug: Record<string, string> = {
+  'equivalent-fractions': 'equivalent-fractions',
+  'simplifying-fractions': 'simplifying-fractions',
+  'comparing-and-ordering-fractions': 'comparing-fractions',
+  'adding-fractions': 'adding-fractions',
+  'subtracting-fractions': 'subtracting-fractions',
+  'multiplying-fractions': 'multiplying-fractions',
+  'dividing-fractions': 'dividing-fractions',
+}
+
 function LessonInspector({
   lesson,
   blocks,
@@ -585,6 +601,7 @@ function LessonInspector({
   if (lesson.lessonType === 'practice' && assessmentState.status === 'practice') {
     return (
       <PracticeEditor
+        key={`${lesson.id}-${assessmentState.practiceSet?.updatedAt ?? 'new'}`}
         lesson={lesson}
         practiceSet={assessmentState.practiceSet}
         questions={assessmentState.questions}
@@ -618,8 +635,218 @@ function PracticeEditor({
   questions: AdminPracticeQuestion[]
   onReload: () => Promise<void>
 }) {
+  const [generators, setGenerators] = useState<AdminPracticeGenerator[]>([])
+  const [generatorLoadError, setGeneratorLoadError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const [status, setStatus] = useState(practiceSet?.status ?? 'draft')
-  const [source, setSource] = useState(practiceSet?.questionSource ?? 'fixed')
+  const [source, setSource] = useState<PracticeQuestionSource>(
+    practiceSet?.questionSource ?? 'fixed',
+  )
+  const [instructions, setInstructions] = useState(
+    practiceSet?.instructions ??
+      'Answer five generated fraction questions. Review the explanation after each attempt.',
+  )
+  const [passingScore, setPassingScore] = useState(
+    String(practiceSet?.passingScore ?? 60),
+  )
+  const [questionCount, setQuestionCount] = useState(
+    String(practiceSet?.questionCount ?? 5),
+  )
+  const [maximumAttempts, setMaximumAttempts] = useState(
+    practiceSet?.maximumAttempts === null ||
+      practiceSet?.maximumAttempts === undefined
+      ? ''
+      : String(practiceSet.maximumAttempts),
+  )
+  const [showExplanations, setShowExplanations] = useState(
+    practiceSet?.showExplanations ?? true,
+  )
+  const defaultGeneratorSlug =
+    practiceSet?.generator?.slug ??
+    defaultGeneratedPracticeSlugByLessonSlug[lesson.slug] ??
+    'finding-percentage'
+  const [generatorSlug, setGeneratorSlug] = useState(defaultGeneratorSlug)
+  const [generatorVersion, setGeneratorVersion] = useState(
+    String(practiceSet?.generator?.version ?? 1),
+  )
+  const [easyCount, setEasyCount] = useState(
+    String(practiceSet?.generator?.difficulty.easy ?? 2),
+  )
+  const [mediumCount, setMediumCount] = useState(
+    String(practiceSet?.generator?.difficulty.medium ?? 2),
+  )
+  const [hardCount, setHardCount] = useState(
+    String(practiceSet?.generator?.difficulty.hard ?? 1),
+  )
+  const visibility = getPracticeEditorVisibility(source)
+  const matchingGenerators = generators.filter(
+    (generator) => generator.slug === generatorSlug,
+  )
+  const selectedGenerator = generators.find(
+    (generator) =>
+      generator.slug === generatorSlug &&
+      generator.version === Number(generatorVersion),
+  )
+  const generatedDifficultyTotal =
+    Number(easyCount) + Number(mediumCount) + Number(hardCount)
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    fetchAdminPracticeGenerators(controller.signal)
+      .then((items) => {
+        setGenerators(items)
+        setGeneratorLoadError(null)
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setGeneratorLoadError(
+            getErrorMessage(error, 'Generator registry could not be loaded.'),
+          )
+        }
+      })
+
+    return () => controller.abort()
+  }, [])
+
+  function handleSourceChange(nextSource: PracticeQuestionSource): void {
+    if (nextSource === source) {
+      return
+    }
+
+    if (
+      nextSource === 'generated' &&
+      questions.length > 0 &&
+      !window.confirm(
+        'Switching to generated questions will hide the fixed-question editor for this practice set. Existing fixed questions stay saved but become inactive while generated mode is selected.',
+      )
+    ) {
+      return
+    }
+
+    if (
+      nextSource === 'fixed' &&
+      practiceSet?.generator !== null &&
+      practiceSet?.generator !== undefined &&
+      !window.confirm(
+        'Switching to fixed questions will remove the active generated configuration when you save. Continue?',
+      )
+    ) {
+      return
+    }
+
+    setSource(nextSource)
+  }
+
+  function parseNonNegativeInteger(value: string, label: string): number {
+    if (!/^\d+$/u.test(value)) {
+      throw new Error(`${label} must be a nonnegative whole number.`)
+    }
+
+    return Number(value)
+  }
+
+  function parsePositiveInteger(value: string, label: string): number {
+    const parsed = parseNonNegativeInteger(value, label)
+
+    if (parsed < 1) {
+      throw new Error(`${label} must be at least 1.`)
+    }
+
+    return parsed
+  }
+
+  function parseNullablePositiveInteger(
+    value: string,
+    label: string,
+  ): number | null {
+    if (value.trim() === '') {
+      return null
+    }
+
+    return parsePositiveInteger(value, label)
+  }
+
+  async function handleSave(): Promise<void> {
+    setFormError(null)
+
+    try {
+      const parsedPassingScore = parseNonNegativeInteger(
+        passingScore,
+        'Passing score',
+      )
+      const parsedQuestionCount = parsePositiveInteger(
+        questionCount,
+        'Total question count',
+      )
+      const parsedMaximumAttempts = parseNullablePositiveInteger(
+        maximumAttempts,
+        'Maximum attempts',
+      )
+
+      if (parsedPassingScore > 100) {
+        throw new Error('Passing score must be between 0 and 100.')
+      }
+
+      if (source === 'generated') {
+        const parsedEasy = parseNonNegativeInteger(easyCount, 'Easy count')
+        const parsedMedium = parseNonNegativeInteger(
+          mediumCount,
+          'Medium count',
+        )
+        const parsedHard = parseNonNegativeInteger(hardCount, 'Hard count')
+        const parsedGeneratorVersion = parsePositiveInteger(
+          generatorVersion,
+          'Generator version',
+        )
+
+        if (parsedEasy + parsedMedium + parsedHard !== parsedQuestionCount) {
+          throw new Error(
+            'Easy, medium, and hard counts must equal the total question count.',
+          )
+        }
+
+        if (selectedGenerator === undefined) {
+          throw new Error('Choose a supported generator and version.')
+        }
+
+        await saveAdminPracticeSet(lesson.id, {
+          title: `${lesson.title} Practice`,
+          instructions: instructions.trim() === '' ? null : instructions,
+          passingScore: parsedPassingScore,
+          questionCount: parsedQuestionCount,
+          maximumAttempts: parsedMaximumAttempts,
+          showExplanations,
+          status,
+          questionSource: source,
+          generatorSlug,
+          generatorVersion: parsedGeneratorVersion,
+          difficulty: {
+            easy: parsedEasy,
+            medium: parsedMedium,
+            hard: parsedHard,
+          },
+          updatedAt: practiceSet?.updatedAt,
+        })
+      } else {
+        await saveAdminPracticeSet(lesson.id, {
+          title: `${lesson.title} Practice`,
+          instructions: instructions.trim() === '' ? null : instructions,
+          passingScore: parsedPassingScore,
+          questionCount: parsedQuestionCount,
+          maximumAttempts: parsedMaximumAttempts,
+          showExplanations,
+          status,
+          questionSource: source,
+          updatedAt: practiceSet?.updatedAt,
+        })
+      }
+
+      await onReload()
+    } catch (error) {
+      setFormError(getAdminMutationErrorMessage(error))
+    }
+  }
 
   return (
     <section className="admin-panel">
@@ -628,41 +855,20 @@ function PracticeEditor({
         className="admin-inline-form"
         onSubmit={(event) => {
           event.preventDefault()
-          void saveAdminPracticeSet(lesson.id, {
-            title: `${lesson.title} Practice`,
-            instructions: 'Answer each item carefully.',
-            passingScore: practiceSet?.passingScore ?? 70,
-            questionCount: practiceSet?.questionCount ?? 5,
-            maximumAttempts: practiceSet?.maximumAttempts ?? null,
-            showExplanations: true,
-            status,
-            questionSource: source,
-            generatorSlug:
-              source === 'generated'
-                ? practiceSet?.generator?.slug ?? 'percentages-v1'
-                : undefined,
-            generatorVersion:
-              source === 'generated'
-                ? practiceSet?.generator?.version ?? 1
-                : undefined,
-            difficulty:
-              source === 'generated'
-                ? practiceSet?.generator?.difficulty ?? {
-                    easy: 2,
-                    medium: 2,
-                    hard: 1,
-                  }
-                : undefined,
-            updatedAt: practiceSet?.updatedAt,
-          }).then(onReload)
+          void handleSave()
         }}
       >
+        {formError !== null && (
+          <p className="form-error" role="alert">
+            {formError}
+          </p>
+        )}
         <label>
           Question source
           <select
             value={source}
             onChange={(event) =>
-              setSource(event.target.value as 'fixed' | 'generated')
+              handleSourceChange(event.target.value as PracticeQuestionSource)
             }
           >
             <option value="fixed">Fixed questions</option>
@@ -682,11 +888,144 @@ function PracticeEditor({
             <option value="archived">Archived</option>
           </select>
         </label>
+        <label>
+          Instructions
+          <textarea
+            value={instructions}
+            onChange={(event) => setInstructions(event.target.value)}
+            rows={3}
+          />
+        </label>
+        <label>
+          Passing score
+          <input
+            inputMode="numeric"
+            value={passingScore}
+            onChange={(event) => setPassingScore(event.target.value)}
+          />
+        </label>
+        <label>
+          Maximum attempts
+          <input
+            inputMode="numeric"
+            placeholder="Blank means unlimited"
+            value={maximumAttempts}
+            onChange={(event) => setMaximumAttempts(event.target.value)}
+          />
+        </label>
+        <label className="admin-checkbox-label">
+          <input
+            type="checkbox"
+            checked={showExplanations}
+            onChange={(event) => setShowExplanations(event.target.checked)}
+          />
+          Show explanations after submission
+        </label>
+        {visibility.showGeneratedConfiguration && (
+          <section className="admin-preview-panel admin-generated-config">
+            <h4>Generated Practice Configuration</h4>
+            <p>
+              Generated practice sets create questions automatically at attempt
+              start. They do not require manually entered fixed questions.
+            </p>
+            {generatorLoadError !== null && (
+              <p className="form-error" role="alert">
+                {generatorLoadError}
+              </p>
+            )}
+            <label>
+              Generator slug
+              <select
+                value={generatorSlug}
+                onChange={(event) => {
+                  const nextSlug = event.target.value
+                  const nextGenerator = generators.find(
+                    (generator) => generator.slug === nextSlug,
+                  )
+
+                  setGeneratorSlug(nextSlug)
+                  setGeneratorVersion(String(nextGenerator?.version ?? 1))
+                }}
+              >
+                {generators.map((generator) => (
+                  <option
+                    key={`${generator.slug}-v${generator.version}`}
+                    value={generator.slug}
+                  >
+                    {generator.title} ({generator.slug})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Generator version
+              <select
+                value={generatorVersion}
+                onChange={(event) => setGeneratorVersion(event.target.value)}
+              >
+                {matchingGenerators.map((generator) => (
+                  <option
+                    key={`${generator.slug}-version-${generator.version}`}
+                    value={generator.version}
+                  >
+                    v{generator.version}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="admin-generated-grid">
+              <label>
+                Easy question count
+                <input
+                  inputMode="numeric"
+                  value={easyCount}
+                  onChange={(event) => setEasyCount(event.target.value)}
+                />
+              </label>
+              <label>
+                Medium question count
+                <input
+                  inputMode="numeric"
+                  value={mediumCount}
+                  onChange={(event) => setMediumCount(event.target.value)}
+                />
+              </label>
+              <label>
+                Hard question count
+                <input
+                  inputMode="numeric"
+                  value={hardCount}
+                  onChange={(event) => setHardCount(event.target.value)}
+                />
+              </label>
+              <label>
+                Total question count
+                <input
+                  inputMode="numeric"
+                  value={questionCount}
+                  onChange={(event) => setQuestionCount(event.target.value)}
+                />
+              </label>
+            </div>
+            <p>
+              Difficulty total: {Number.isFinite(generatedDifficultyTotal)
+                ? generatedDifficultyTotal
+                : 'Invalid'}{' '}
+              / configured total {questionCount}
+            </p>
+            {selectedGenerator !== undefined && (
+              <p>
+                Supported difficulties:{' '}
+                {selectedGenerator.supportedDifficulties.join(', ')}
+              </p>
+            )}
+          </section>
+        )}
         <button type="submit">Save practice set</button>
       </form>
-      {practiceSet === null ? (
+      {visibility.showFixedQuestionEditor && practiceSet === null ? (
         <p>Save the practice set before adding fixed questions.</p>
-      ) : (
+      ) : visibility.showFixedQuestionEditor && practiceSet !== null ? (
         <FixedQuestionManager
           label="practice"
           parentId={practiceSet.id}
@@ -696,6 +1035,14 @@ function PracticeEditor({
           updateQuestion={updateAdminPracticeQuestion}
           onReload={onReload}
         />
+      ) : (
+        <div className="admin-preview-panel">
+          <h4>Fixed practice questions hidden</h4>
+          <p>
+            This practice set uses generated questions. Manual fixed questions
+            are not required and are not shown while generated mode is active.
+          </p>
+        </div>
       )}
     </section>
   )

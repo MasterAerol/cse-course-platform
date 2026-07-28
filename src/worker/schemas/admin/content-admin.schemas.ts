@@ -76,6 +76,21 @@ export const practiceSetInputSchema = z
     difficulty: generatedDifficultyConfigSchema.optional(),
     updatedAt: adminUpdatedAtSchema.optional(),
   })
+  .superRefine((value, context) => {
+    if (
+      value.questionSource === 'generated' &&
+      value.difficulty !== undefined &&
+      value.difficulty.easy + value.difficulty.medium + value.difficulty.hard !==
+        value.questionCount
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['difficulty'],
+        message:
+          'Easy, medium, and hard counts must equal the total question count.',
+      })
+    }
+  })
   .strict()
 
 const fixedChoiceInputSchema = z

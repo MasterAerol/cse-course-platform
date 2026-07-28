@@ -1381,6 +1381,25 @@ input[aria-invalid="true"] {
   gap: 0.75rem;
 }
 
+.admin-generated-config {
+  border: 1px solid #bfdbfe;
+  border-radius: 0.9rem;
+  padding: 0.85rem;
+  background: #eff6ff;
+}
+
+.admin-generated-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+
+.admin-checkbox-label {
+  align-items: center;
+  flex-direction: row;
+  gap: 0.5rem;
+}
+
 .admin-status {
   display: inline-flex;
   width: fit-content;

@@ -13,6 +13,7 @@ import {
   generateValidatedQuestion,
   getRegisteredGenerators,
 } from '../src/worker/generators/generator.registry'
+import { getPracticeEditorVisibility } from '../src/react-app/pages/admin/practice-editor-visibility'
 import {
   addFractions,
   compareFractions,
@@ -6251,6 +6252,268 @@ describe('Admin Content Builder Lite API', () => {
 
     expect(response.status).toBe(200)
     expect(body.data.lesson.lessonType).toBe('practice')
+  })
+
+  it('shows generated configuration for generated practice editor mode', () => {
+    expect(getPracticeEditorVisibility('generated')).toEqual({
+      showFixedQuestionEditor: false,
+      showGeneratedConfiguration: true,
+    })
+  })
+
+  it('shows fixed-question editor for fixed practice editor mode', () => {
+    expect(getPracticeEditorVisibility('fixed')).toEqual({
+      showFixedQuestionEditor: true,
+      showGeneratedConfiguration: false,
+    })
+  })
+
+  it('returns registered practice generators including all Fractions generators', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-generator-list@example.com',
+    )
+    const response = await app.request(
+      '/api/admin/practice-generators',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const body = await response.json<{
+      success: true
+      data: {
+        generators: Array<{
+          slug: string
+          version: number
+          supportedDifficulties: string[]
+        }>
+      }
+    }>()
+    const slugs = body.data.generators.map((generator) => generator.slug)
+
+    expect(response.status).toBe(200)
+    expect(slugs).toEqual(expect.arrayContaining([
+      'equivalent-fractions',
+      'simplifying-fractions',
+      'comparing-fractions',
+      'adding-fractions',
+      'subtracting-fractions',
+      'multiplying-fractions',
+      'dividing-fractions',
+    ]))
+    expect(
+      body.data.generators.find(
+        (generator) => generator.slug === 'equivalent-fractions',
+      ),
+    ).toMatchObject({
+      version: 1,
+      supportedDifficulties: ['easy', 'medium', 'hard'],
+    })
+  })
+
+  it('publishes a valid generated practice set without fixed questions', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-generated-publish@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'practice')
+    const response = await app.request(
+      `/api/admin/lessons/${lesson.lessonId}/practice-set`,
+      adminJsonRequest(
+        {
+          title: 'Generated Equivalent Fractions',
+          instructions: 'Generated questions do not need fixed rows.',
+          passingScore: 60,
+          questionCount: 5,
+          maximumAttempts: null,
+          showExplanations: true,
+          status: 'published',
+          questionSource: 'generated',
+          generatorSlug: 'equivalent-fractions',
+          generatorVersion: 1,
+          difficulty: { easy: 2, medium: 2, hard: 1 },
+        },
+        cookie,
+        'PUT',
+      ),
+      createBindings('production'),
+    )
+    const body = await response.json<{
+      success: true
+      data: {
+        practiceSet: {
+          status: 'published'
+          questionSource: 'generated'
+          questionCount: number
+          generator: {
+            slug: string
+            version: number
+            difficulty: { easy: number; medium: number; hard: number }
+          } | null
+        }
+      }
+    }>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.practiceSet).toMatchObject({
+      status: 'published',
+      questionSource: 'generated',
+      questionCount: 5,
+      generator: {
+        slug: 'equivalent-fractions',
+        version: 1,
+        difficulty: { easy: 2, medium: 2, hard: 1 },
+      },
+    })
+  })
+
+  it('rejects generated practice without a generator', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-generated-missing@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'practice')
+    const response = await app.request(
+      `/api/admin/lessons/${lesson.lessonId}/practice-set`,
+      adminJsonRequest(
+        {
+          title: 'Missing Generator',
+          instructions: null,
+          passingScore: 60,
+          questionCount: 5,
+          maximumAttempts: null,
+          showExplanations: true,
+          status: 'draft',
+          questionSource: 'generated',
+        },
+        cookie,
+        'PUT',
+      ),
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'UNSUPPORTED_GENERATOR',
+      },
+    })
+  })
+
+  it('rejects generated practice when difficulty counts do not equal total', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-generated-total@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'practice')
+    const response = await app.request(
+      `/api/admin/lessons/${lesson.lessonId}/practice-set`,
+      adminJsonRequest(
+        {
+          title: 'Bad Difficulty Total',
+          instructions: null,
+          passingScore: 60,
+          questionCount: 5,
+          maximumAttempts: null,
+          showExplanations: true,
+          status: 'draft',
+          questionSource: 'generated',
+          generatorSlug: 'equivalent-fractions',
+          generatorVersion: 1,
+          difficulty: { easy: 1, medium: 1, hard: 1 },
+        },
+        cookie,
+        'PUT',
+      ),
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        details: {
+          fieldErrors: {
+            difficulty: [
+              'Easy, medium, and hard counts must equal the total question count.',
+            ],
+          },
+        },
+      },
+    })
+  })
+
+  it('rejects unsupported generated practice generators', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-generated-unsupported@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'practice')
+    const response = await app.request(
+      `/api/admin/lessons/${lesson.lessonId}/practice-set`,
+      adminJsonRequest(
+        {
+          title: 'Unsupported Generator',
+          instructions: null,
+          passingScore: 60,
+          questionCount: 5,
+          maximumAttempts: null,
+          showExplanations: true,
+          status: 'draft',
+          questionSource: 'generated',
+          generatorSlug: 'not-a-generator',
+          generatorVersion: 1,
+          difficulty: { easy: 2, medium: 2, hard: 1 },
+        },
+        cookie,
+        'PUT',
+      ),
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'UNSUPPORTED_GENERATOR',
+      },
+    })
+  })
+
+  it('does not require generated configuration for fixed practice mode', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-fixed-no-generator@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'practice')
+    const response = await app.request(
+      `/api/admin/lessons/${lesson.lessonId}/practice-set`,
+      adminJsonRequest(
+        {
+          title: 'Fixed Practice',
+          instructions: null,
+          passingScore: 60,
+          questionCount: 1,
+          maximumAttempts: null,
+          showExplanations: true,
+          status: 'draft',
+          questionSource: 'fixed',
+        },
+        cookie,
+        'PUT',
+      ),
+      createBindings('production'),
+    )
+    const body = await response.json<{
+      success: true
+      data: {
+        practiceSet: {
+          questionSource: 'fixed'
+          generator: null
+        }
+      }
+    }>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.practiceSet).toMatchObject({
+      questionSource: 'fixed',
+      generator: null,
+    })
   })
 
   it('validates fixed practice and quiz choices safely', async () => {
