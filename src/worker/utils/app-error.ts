@@ -9,6 +9,7 @@ export type ValidationField =
   | 'attemptPublicId'
   | 'questionId'
   | 'quizId'
+  | 'practiceSetId'
   | 'lessonPublicId'
   | 'password'
   | 'selectedChoiceId'

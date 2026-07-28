@@ -26,6 +26,7 @@ interface ApiErrorBody {
           | 'attemptPublicId'
           | 'questionId'
           | 'quizId'
+          | 'practiceSetId'
           | 'selectedChoiceId',
           string[]
         >
@@ -331,6 +332,117 @@ interface QuizResultBody {
   }
 }
 
+interface PracticeSummaryBody {
+  success: true
+  data: {
+    practice: {
+      id: number
+      title: string
+      passingScore: number
+      questionCount: number
+      maximumAttempts: number | null
+      attemptsRemaining: number | null
+    }
+    lessonCompleted: boolean
+    inProgressAttempt: {
+      attemptPublicId: string
+      status: string
+    } | null
+    attempts: Array<{
+      attemptPublicId: string
+      attemptNumber: number
+      status: string
+      scorePercent: number | null
+      passed: boolean | null
+    }>
+  }
+}
+
+interface PracticeChoiceBody {
+  id: number
+  text: string
+  position: number
+}
+
+interface PracticeQuestionBody {
+  id: number
+  prompt: string
+  points: number
+  position: number
+  selectedChoiceId: number | null
+  choices: PracticeChoiceBody[]
+}
+
+interface PracticeAttemptBody {
+  success: true
+  data: {
+    attempt: {
+      publicId: string
+      status: string
+      attemptNumber: number
+    }
+    practice: {
+      id: number
+      title: string
+      passingScore: number
+      questionCount: number
+    }
+    questions: PracticeQuestionBody[]
+    answeredCount: number
+    totalCount: number
+  }
+}
+
+interface PracticeAttemptFetchBody {
+  success: true
+  data:
+    | PracticeAttemptBody['data']
+    | {
+        attempt: {
+          publicId: string
+          status: string
+          attemptNumber: number
+        }
+        resultAvailable: true
+      }
+}
+
+interface PracticeResultBody {
+  success: true
+  data: {
+    practice: {
+      id: number
+      title: string
+      passingScore: number
+    }
+    attempt: {
+      publicId: string
+      status: string
+      attemptNumber: number
+    }
+    totalPoints: number
+    earnedPoints: number
+    scorePercent: number
+    passed: boolean
+    questions: Array<{
+      id: number
+      prompt: string
+      selectedChoice: PracticeChoiceBody | null
+      correctChoice: PracticeChoiceBody
+      isCorrect: boolean
+      pointsAwarded: number
+      explanation: string | null
+      choices: PracticeChoiceBody[]
+    }>
+    newlyUnlockedNextLesson: {
+      publicId: string
+      title: string
+      isLocked: boolean
+    } | null
+    courseProgress: DashboardCourseBody
+  }
+}
+
 const validPassword = 'SecurePassword123'
 
 const cseProfessionalLessonSlugs = [
@@ -606,6 +718,133 @@ async function createTestQuiz(
   return quiz.id
 }
 
+async function getPracticeSetId(lessonSlug: string): Promise<number> {
+  const practiceSet = await env.DB.prepare(
+    `SELECT practice_sets.id
+    FROM practice_sets
+    INNER JOIN lessons ON lessons.id = practice_sets.lesson_id
+    WHERE lessons.slug = ?1
+    LIMIT 1`,
+  )
+    .bind(lessonSlug)
+    .first<{ id: number }>()
+
+  if (practiceSet === null) {
+    throw new Error(`Practice set was not found for ${lessonSlug}.`)
+  }
+
+  return practiceSet.id
+}
+
+async function createTestPracticeSet(
+  status: 'draft' | 'published',
+  maximumAttempts: number | null = null,
+): Promise<number> {
+  const topicId = await env.DB.prepare(
+    `SELECT topics.id
+    FROM topics
+    WHERE topics.slug = 'percentages'
+    LIMIT 1`,
+  )
+    .first<{ id: number }>()
+  const unique = crypto.randomUUID()
+  const position = Math.floor(Date.now() % 1_000_000)
+
+  if (topicId === null) {
+    throw new Error('Percentages topic was not found.')
+  }
+
+  const maxPosition = await env.DB.prepare(
+    'SELECT COALESCE(MAX(position), 0) AS max_position FROM lessons WHERE topic_id = ?1',
+  )
+    .bind(topicId.id)
+    .first<{ max_position: number }>()
+  const lesson = await env.DB.prepare(
+    `INSERT INTO lessons (
+      topic_id,
+      public_id,
+      title,
+      slug,
+      lesson_type,
+      position,
+      is_preview,
+      requires_previous,
+      status
+    ) VALUES (?1, ?2, 'Test Practice Lesson', ?3, 'practice', ?4, 1, 0, 'published')
+    RETURNING id`,
+  )
+    .bind(
+      topicId.id,
+      `lesson-test-practice-${unique}`,
+      `test-practice-${unique}`,
+      (maxPosition?.max_position ?? position) + 1,
+    )
+    .first<{ id: number }>()
+
+  if (lesson === null) {
+    throw new Error('Test practice lesson could not be created.')
+  }
+
+  const practiceSet = await env.DB.prepare(
+    `INSERT INTO practice_sets (
+      lesson_id,
+      title,
+      instructions,
+      passing_score,
+      question_count,
+      maximum_attempts,
+      show_explanations,
+      status
+    ) VALUES (?1, 'Test Practice', 'Throwaway practice used by tests.', 60, 1, ?2, 1, ?3)
+    RETURNING id`,
+  )
+    .bind(lesson.id, maximumAttempts, status)
+    .first<{ id: number }>()
+
+  if (practiceSet === null) {
+    throw new Error('Test practice set could not be created.')
+  }
+
+  const question = await env.DB.prepare(
+    `INSERT INTO practice_questions (
+      practice_set_id,
+      prompt,
+      explanation,
+      points,
+      position,
+      status
+    ) VALUES (?1, 'What is 10% of 90?', '10% of 90 is 9.', 1, 1, 'active')
+    RETURNING id`,
+  )
+    .bind(practiceSet.id)
+    .first<{ id: number }>()
+
+  if (question === null) {
+    throw new Error('Test practice question could not be created.')
+  }
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO practice_question_choices (
+        question_id,
+        choice_text,
+        is_correct,
+        position
+      ) VALUES (?1, '9', 1, 1)`,
+    ).bind(question.id),
+    env.DB.prepare(
+      `INSERT INTO practice_question_choices (
+        question_id,
+        choice_text,
+        is_correct,
+        position
+      ) VALUES (?1, '19', 0, 2)`,
+    ).bind(question.id),
+  ])
+
+  return practiceSet.id
+}
+
 async function enrollUser(
   email: string,
   options: {
@@ -668,6 +907,35 @@ async function startQuiz(
     createBindings('production'),
   )
   const body = await response.json<QuizAttemptBody>()
+
+  return { response, body }
+}
+
+async function prepareUnlockedPracticeUser(
+  email: string,
+  lessonSlug: (typeof cseProfessionalLessonSlugs)[number] = 'finding-the-percentage',
+  enrollmentOptions: Parameters<typeof enrollUser>[1] = {},
+): Promise<{ cookie: string; practiceSetId: number }> {
+  const { cookie } = await register(email)
+  await enrollUser(email, enrollmentOptions)
+  await completeLessonsBefore(email, lessonSlug)
+
+  return {
+    cookie,
+    practiceSetId: await getPracticeSetId(lessonSlug),
+  }
+}
+
+async function startPractice(
+  cookie: string,
+  practiceSetId: number,
+): Promise<{ response: Response; body: PracticeAttemptBody }> {
+  const response = await app.request(
+    `/api/student/practice-sets/${practiceSetId}/attempts`,
+    { method: 'POST', headers: { cookie } },
+    createBindings('production'),
+  )
+  const body = await response.json<PracticeAttemptBody>()
 
   return { response, body }
 }
@@ -2553,6 +2821,627 @@ describe('Topic quiz APIs', () => {
     )
     const secondResponse = await app.request(
       `/api/student/quizzes/${limitedQuizId}/attempts`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(firstResponse.status).toBe(201)
+    expect(secondResponse.status).toBe(409)
+    await expect(secondResponse.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'MAXIMUM_ATTEMPTS_REACHED',
+      },
+    })
+  })
+})
+
+describe('Practice activity APIs', () => {
+  it('returns all five seeded practice lessons with linked practice sets', async () => {
+    const email = 'practice-linked@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+    await completeLessonsBefore(email, 'percentages-topic-quiz')
+
+    for (const lessonSlug of [
+      'finding-the-percentage',
+      'finding-the-base',
+      'finding-the-rate',
+      'worked-examples',
+      'guided-practice',
+    ] as const) {
+      const response = await app.request(
+        `/api/student/lessons/lesson-${lessonSlug}/practice`,
+        { headers: { cookie } },
+        createBindings('production'),
+      )
+      const body = await response.json<PracticeSummaryBody>()
+
+      expect(response.status).toBe(200)
+      expect(body.data.practice).toMatchObject({
+        passingScore: 60,
+        questionCount: 5,
+        maximumAttempts: null,
+        attemptsRemaining: null,
+      })
+    }
+  })
+
+  it('starts an accessible practice without exposing answers or explanations', async () => {
+    const email = 'practice-start@example.com'
+    const { cookie, practiceSetId } =
+      await prepareUnlockedPracticeUser(email)
+
+    const { response, body } = await startPractice(cookie, practiceSetId)
+    const responseText = JSON.stringify(body)
+    const progress = await getLessonProgress(email, 'finding-the-percentage')
+
+    expect(response.status).toBe(201)
+    expect(body.data.attempt).toMatchObject({
+      status: 'in_progress',
+      attemptNumber: 1,
+    })
+    expect(body.data.practice).toMatchObject({
+      passingScore: 60,
+      questionCount: 5,
+    })
+    expect(body.data.questions).toHaveLength(5)
+    expect(body.data.questions[0]?.choices).toHaveLength(4)
+    expect(body.data.answeredCount).toBe(0)
+    expect(body.data.totalCount).toBe(5)
+    expect(progress?.status).toBe('in_progress')
+    expect(responseText).not.toContain('is_correct')
+    expect(responseText).not.toContain('isCorrect')
+    expect(responseText).not.toContain('correctChoice')
+    expect(responseText).not.toContain('explanation')
+  })
+
+  it('rejects locked practice access with LESSON_LOCKED', async () => {
+    const email = 'locked-practice@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+    const practiceSetId = await getPracticeSetId('finding-the-percentage')
+
+    const response = await app.request(
+      `/api/student/practice-sets/${practiceSetId}/attempts`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'LESSON_LOCKED',
+      },
+    })
+  })
+
+  it.each([
+    {
+      name: 'unenrolled',
+      setup: () => Promise.resolve(),
+      code: 'ENROLLMENT_REQUIRED',
+    },
+    {
+      name: 'expired',
+      setup: (email: string) =>
+        enrollUser(email, {
+          accessExpiresAt: '2001-01-01T00:00:00.000Z',
+        }),
+      code: 'COURSE_ACCESS_EXPIRED',
+    },
+    {
+      name: 'revoked',
+      setup: (email: string) =>
+        enrollUser(email, {
+          status: 'revoked',
+        }),
+      code: 'COURSE_ACCESS_EXPIRED',
+    },
+    {
+      name: 'future',
+      setup: (email: string) =>
+        enrollUser(email, {
+          accessStartsAt: '2999-01-01T00:00:00.000Z',
+        }),
+      code: 'COURSE_ACCESS_EXPIRED',
+    },
+  ] satisfies ReadonlyArray<{
+    name: string
+    setup: (email: string) => Promise<void>
+    code: string
+  }>)('denies practice start for $name enrollment state', async ({ name, setup, code }) => {
+    const email = `practice-denied-${name}@example.com`
+    const { cookie } = await register(email)
+    await setup(email)
+    await completeLessonsBefore(email, 'finding-the-percentage')
+    const practiceSetId = await getPracticeSetId('finding-the-percentage')
+
+    const response = await app.request(
+      `/api/student/practice-sets/${practiceSetId}/attempts`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: { code },
+    })
+  })
+
+  it('does not start draft practice sets', async () => {
+    const email = 'draft-practice@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+    const draftPracticeSetId = await createTestPracticeSet('draft')
+
+    const response = await app.request(
+      `/api/student/practice-sets/${draftPracticeSetId}/attempts`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'PRACTICE_NOT_PUBLISHED',
+      },
+    })
+  })
+
+  it('increments practice attempt numbers', async () => {
+    const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+      'practice-attempt-number@example.com',
+    )
+
+    const firstAttempt = await startPractice(cookie, practiceSetId)
+    const secondAttempt = await startPractice(cookie, practiceSetId)
+
+    expect(firstAttempt.body.data.attempt.attemptNumber).toBe(1)
+    expect(secondAttempt.body.data.attempt.attemptNumber).toBe(2)
+  })
+
+  it('lets the owner retrieve an in-progress attempt with saved answers', async () => {
+    const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+      'practice-owner-read@example.com',
+    )
+    const { body } = await startPractice(cookie, practiceSetId)
+    const question = body.data.questions[0]
+    const choiceId = question?.choices[0]?.id
+
+    if (question === undefined || choiceId === undefined) {
+      throw new Error('Practice question or choice was not returned.')
+    }
+
+    await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/answers/${question.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ selectedChoiceId: choiceId }),
+      },
+      createBindings('production'),
+    )
+    const response = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}`,
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const responseBody = await response.json<PracticeAttemptFetchBody>()
+
+    expect(response.status).toBe(200)
+    expect('questions' in responseBody.data).toBe(true)
+    if ('questions' in responseBody.data) {
+      expect(responseBody.data.answeredCount).toBe(1)
+      expect(responseBody.data.questions[0]?.selectedChoiceId).toBe(choiceId)
+    }
+  })
+
+  it('keeps practice attempts private to the owner', async () => {
+    const { cookie: ownerCookie, practiceSetId } =
+      await prepareUnlockedPracticeUser('practice-private-owner@example.com')
+    const { cookie: otherCookie } =
+      await prepareUnlockedPracticeUser('practice-private-other@example.com')
+    const { body } = await startPractice(ownerCookie, practiceSetId)
+
+    const response = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}`,
+      { headers: { cookie: otherCookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(403)
+  })
+
+  it('saves and replaces practice answers idempotently', async () => {
+    const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+      'practice-save-replace@example.com',
+    )
+    const { body } = await startPractice(cookie, practiceSetId)
+    const question = body.data.questions[0]
+
+    if (question === undefined) {
+      throw new Error('Practice question was not returned.')
+    }
+
+    const firstChoiceId = question.choices[0]?.id
+    const replacementChoiceId = question.choices[1]?.id
+
+    if (firstChoiceId === undefined || replacementChoiceId === undefined) {
+      throw new Error('Practice choices were not returned.')
+    }
+
+    const firstSave = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/answers/${question.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ selectedChoiceId: firstChoiceId }),
+      },
+      createBindings('production'),
+    )
+    const replacementSave = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/answers/${question.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ selectedChoiceId: replacementChoiceId }),
+      },
+      createBindings('production'),
+    )
+    const reloadResponse = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}`,
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const reloadBody = await reloadResponse.json<PracticeAttemptFetchBody>()
+
+    expect(firstSave.status).toBe(200)
+    expect(replacementSave.status).toBe(200)
+    if ('questions' in reloadBody.data) {
+      expect(reloadBody.data.questions[0]?.selectedChoiceId).toBe(
+        replacementChoiceId,
+      )
+    }
+  })
+
+  it('rejects invalid practice questions and choices', async () => {
+    const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+      'practice-invalid-question-choice@example.com',
+    )
+    const { body } = await startPractice(cookie, practiceSetId)
+    const firstQuestion = body.data.questions[0]
+    const secondQuestion = body.data.questions[1]
+
+    if (firstQuestion === undefined || secondQuestion === undefined) {
+      throw new Error('Practice questions were not returned.')
+    }
+
+    const wrongChoiceId = secondQuestion.choices[0]?.id
+    const otherPracticeSetId = await createTestPracticeSet('published')
+    const otherQuestion = await env.DB.prepare(
+      `SELECT practice_questions.id
+      FROM practice_questions
+      WHERE practice_questions.practice_set_id = ?1
+      LIMIT 1`,
+    )
+      .bind(otherPracticeSetId)
+      .first<{ id: number }>()
+
+    if (wrongChoiceId === undefined || otherQuestion === null) {
+      throw new Error('Test practice question or choice was not found.')
+    }
+
+    const wrongChoiceResponse = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/answers/${firstQuestion.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ selectedChoiceId: wrongChoiceId }),
+      },
+      createBindings('production'),
+    )
+    const wrongQuestionResponse = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/answers/${otherQuestion.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ selectedChoiceId: wrongChoiceId }),
+      },
+      createBindings('production'),
+    )
+
+    expect(wrongChoiceResponse.status).toBe(400)
+    await expect(wrongChoiceResponse.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'CHOICE_NOT_IN_QUESTION',
+      },
+    })
+    expect(wrongQuestionResponse.status).toBe(400)
+    await expect(wrongQuestionResponse.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'QUESTION_NOT_IN_PRACTICE',
+      },
+    })
+  })
+
+  it('returns validation errors for malformed practice answer bodies', async () => {
+    const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+      'practice-validation@example.com',
+    )
+    const { body } = await startPractice(cookie, practiceSetId)
+    const question = body.data.questions[0]
+
+    if (question === undefined) {
+      throw new Error('Practice question was not returned.')
+    }
+
+    const response = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/answers/${question.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      },
+      createBindings('production'),
+    )
+    const responseBody = await response.json<ApiErrorBody>()
+
+    expect(response.status).toBe(400)
+    expect(responseBody.error.code).toBe('VALIDATION_ERROR')
+    expect(
+      responseBody.error.details?.fieldErrors.selectedChoiceId,
+    ).toBeDefined()
+  })
+
+  it('scores unanswered practice questions as zero and keeps a failed lesson incomplete', async () => {
+    const email = 'practice-failed-unanswered@example.com'
+    const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(email)
+    const { body } = await startPractice(cookie, practiceSetId)
+
+    const response = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/submit`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const result = await response.json<PracticeResultBody>()
+    const progress = await getLessonProgress(email, 'finding-the-percentage')
+
+    expect(response.status).toBe(200)
+    expect(result.data).toMatchObject({
+      earnedPoints: 0,
+      totalPoints: 5,
+      scorePercent: 0,
+      passed: false,
+    })
+    expect(progress?.status).toBe('in_progress')
+  })
+
+  it('fails below 60%, passes at 60%, completes the lesson, and is idempotent', async () => {
+    const failEmail = 'practice-below-sixty@example.com'
+    const { cookie: failCookie, practiceSetId: failPracticeSetId } =
+      await prepareUnlockedPracticeUser(failEmail)
+    const failedAttempt = await startPractice(failCookie, failPracticeSetId)
+
+    for (const question of failedAttempt.body.data.questions.slice(0, 2)) {
+      const choiceId = question.choices[0]?.id
+
+      if (choiceId === undefined) {
+        throw new Error('Practice correct choice was not returned.')
+      }
+
+      await app.request(
+        `/api/student/practice-attempts/${failedAttempt.body.data.attempt.publicId}/answers/${question.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            cookie: failCookie,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ selectedChoiceId: choiceId }),
+        },
+        createBindings('production'),
+      )
+    }
+
+    const failResponse = await app.request(
+      `/api/student/practice-attempts/${failedAttempt.body.data.attempt.publicId}/submit`,
+      { method: 'POST', headers: { cookie: failCookie } },
+      createBindings('production'),
+    )
+    const failResult = await failResponse.json<PracticeResultBody>()
+    const failProgress = await getLessonProgress(
+      failEmail,
+      'finding-the-percentage',
+    )
+
+    expect(failResponse.status).toBe(200)
+    expect(failResult.data.scorePercent).toBe(40)
+    expect(failResult.data.passed).toBe(false)
+    expect(failProgress?.status).toBe('in_progress')
+
+    const passEmail = 'practice-at-sixty@example.com'
+    const { cookie: passCookie, practiceSetId: passPracticeSetId } =
+      await prepareUnlockedPracticeUser(passEmail)
+    const passingAttempt = await startPractice(passCookie, passPracticeSetId)
+
+    for (const question of passingAttempt.body.data.questions.slice(0, 3)) {
+      const choiceId = question.choices[0]?.id
+
+      if (choiceId === undefined) {
+        throw new Error('Practice correct choice was not returned.')
+      }
+
+      await app.request(
+        `/api/student/practice-attempts/${passingAttempt.body.data.attempt.publicId}/answers/${question.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            cookie: passCookie,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ selectedChoiceId: choiceId }),
+        },
+        createBindings('production'),
+      )
+    }
+
+    const firstSubmit = await app.request(
+      `/api/student/practice-attempts/${passingAttempt.body.data.attempt.publicId}/submit`,
+      { method: 'POST', headers: { cookie: passCookie } },
+      createBindings('production'),
+    )
+    const secondSubmit = await app.request(
+      `/api/student/practice-attempts/${passingAttempt.body.data.attempt.publicId}/submit`,
+      { method: 'POST', headers: { cookie: passCookie } },
+      createBindings('production'),
+    )
+    const result = await firstSubmit.json<PracticeResultBody>()
+    const idempotentResult = await secondSubmit.json<PracticeResultBody>()
+    const progress = await getLessonProgress(
+      passEmail,
+      'finding-the-percentage',
+    )
+    const attemptReload = await app.request(
+      `/api/student/practice-attempts/${passingAttempt.body.data.attempt.publicId}`,
+      { headers: { cookie: passCookie } },
+      createBindings('production'),
+    )
+    const attemptReloadBody =
+      await attemptReload.json<PracticeAttemptFetchBody>()
+
+    expect(firstSubmit.status).toBe(200)
+    expect(secondSubmit.status).toBe(200)
+    expect(result.data).toMatchObject({
+      earnedPoints: 3,
+      totalPoints: 5,
+      scorePercent: 60,
+      passed: true,
+    })
+    expect(idempotentResult.data.scorePercent).toBe(60)
+    expect(result.data.questions[0]?.correctChoice).toBeDefined()
+    expect(result.data.questions[0]?.explanation).not.toBeNull()
+    expect(progress?.status).toBe('completed')
+    expect(result.data.newlyUnlockedNextLesson?.publicId).toBe(
+      'lesson-finding-the-base',
+    )
+    expect(result.data.courseProgress.continueLearning.lesson?.publicId).toBe(
+      'lesson-finding-the-base',
+    )
+    expect(attemptReloadBody.data).toMatchObject({
+      attempt: {
+        publicId: passingAttempt.body.data.attempt.publicId,
+        status: 'submitted',
+      },
+      resultAvailable: true,
+    })
+  })
+
+  it('does not expose practice results before submission and restricts results to the owner', async () => {
+    const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+      'practice-result-hidden@example.com',
+    )
+    const { cookie: otherCookie } = await prepareUnlockedPracticeUser(
+      'practice-result-other@example.com',
+    )
+    const { body } = await startPractice(cookie, practiceSetId)
+
+    const beforeSubmit = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/results`,
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const otherResponse = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/results`,
+      { headers: { cookie: otherCookie } },
+      createBindings('production'),
+    )
+
+    expect(beforeSubmit.status).toBe(409)
+    await expect(beforeSubmit.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'PRACTICE_NOT_SUBMITTED',
+      },
+    })
+    expect(otherResponse.status).toBe(403)
+  })
+
+  it('rejects edits after a practice attempt is submitted', async () => {
+    const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+      'practice-submitted-edit@example.com',
+    )
+    const { body } = await startPractice(cookie, practiceSetId)
+    const question = body.data.questions[0]
+    const choiceId = question?.choices[0]?.id
+
+    if (question === undefined || choiceId === undefined) {
+      throw new Error('Practice question or choice was not returned.')
+    }
+
+    await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/submit`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const response = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/answers/${question.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ selectedChoiceId: choiceId }),
+      },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'ATTEMPT_ALREADY_SUBMITTED',
+      },
+    })
+  })
+
+  it('enforces maximum attempts when configured', async () => {
+    const email = 'practice-max-attempt@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+    const limitedPracticeSetId = await createTestPracticeSet('published', 1)
+
+    const firstResponse = await app.request(
+      `/api/student/practice-sets/${limitedPracticeSetId}/attempts`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const secondResponse = await app.request(
+      `/api/student/practice-sets/${limitedPracticeSetId}/attempts`,
       { method: 'POST', headers: { cookie } },
       createBindings('production'),
     )

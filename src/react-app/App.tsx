@@ -10,6 +10,8 @@ import { DashboardPage } from './pages/DashboardPage'
 import { HomePage } from './pages/HomePage'
 import { LessonPage } from './pages/LessonPage'
 import { LoginPage } from './pages/LoginPage'
+import { PracticeAttemptPage } from './pages/PracticeAttemptPage'
+import { PracticeResultPage } from './pages/PracticeResultPage'
 import { QuizAttemptPage } from './pages/QuizAttemptPage'
 import { QuizResultPage } from './pages/QuizResultPage'
 import { RegistrationPage } from './pages/RegistrationPage'
@@ -31,6 +33,14 @@ export function App() {
         <Route
           path="courses/:courseSlug/lessons/:lessonPublicId"
           element={<LessonPage />}
+        />
+        <Route
+          path="practice-attempts/:attemptPublicId"
+          element={<PracticeAttemptPage />}
+        />
+        <Route
+          path="practice-attempts/:attemptPublicId/results"
+          element={<PracticeResultPage />}
         />
         <Route
           path="quiz-attempts/:attemptPublicId"

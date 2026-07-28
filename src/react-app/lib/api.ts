@@ -441,6 +441,128 @@ const quizAttemptResultResponseSchema = z.object({
   }),
 })
 
+const practiceChoiceSchema = z.object({
+  id: z.number(),
+  text: z.string(),
+  position: z.number(),
+})
+
+const practiceQuestionSchema = z.object({
+  id: z.number(),
+  prompt: z.string(),
+  points: z.number(),
+  position: z.number(),
+  selectedChoiceId: z.number().nullable(),
+  choices: z.array(practiceChoiceSchema),
+})
+
+const practiceAttemptHistorySchema = z.object({
+  attemptPublicId: z.string(),
+  attemptNumber: z.number(),
+  status: z.string(),
+  earnedPoints: z.number(),
+  totalPoints: z.number(),
+  scorePercent: z.number().nullable(),
+  passed: z.boolean().nullable(),
+  startedAt: z.string(),
+  submittedAt: z.string().nullable(),
+})
+
+const lessonPracticeSummaryResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    practice: z.object({
+      id: z.number(),
+      title: z.string(),
+      instructions: z.string().nullable(),
+      passingScore: z.number(),
+      questionCount: z.number(),
+      maximumAttempts: z.number().nullable(),
+      attemptsRemaining: z.number().nullable(),
+    }),
+    lessonCompleted: z.boolean(),
+    inProgressAttempt: practiceAttemptHistorySchema.nullable(),
+    attempts: z.array(practiceAttemptHistorySchema),
+  }),
+})
+
+const practiceAttemptPayloadSchema = z.object({
+  attempt: z.object({
+    publicId: z.string(),
+    status: z.string(),
+    attemptNumber: z.number(),
+    startedAt: z.string(),
+  }),
+  practice: z.object({
+    id: z.number(),
+    title: z.string(),
+    passingScore: z.number(),
+    questionCount: z.number(),
+  }),
+  questions: z.array(practiceQuestionSchema),
+  answeredCount: z.number(),
+  totalCount: z.number(),
+})
+
+const practiceAttemptResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.union([
+    practiceAttemptPayloadSchema,
+    z.object({
+      attempt: practiceAttemptPayloadSchema.shape.attempt,
+      resultAvailable: z.literal(true),
+    }),
+  ]),
+})
+
+const savePracticeAnswerResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    saved: z.literal(true),
+    answeredCount: z.number(),
+    totalCount: z.number(),
+  }),
+})
+
+const practiceAttemptResultResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    practice: z.object({
+      id: z.number(),
+      title: z.string(),
+      passingScore: z.number(),
+    }),
+    attempt: z.object({
+      publicId: z.string(),
+      attemptNumber: z.number(),
+      status: z.string(),
+      startedAt: z.string(),
+      submittedAt: z.string(),
+    }),
+    totalPoints: z.number(),
+    earnedPoints: z.number(),
+    scorePercent: z.number(),
+    passed: z.boolean(),
+    questions: z.array(
+      z.object({
+        id: z.number(),
+        prompt: z.string(),
+        points: z.number(),
+        position: z.number(),
+        selectedChoice: practiceChoiceSchema.nullable(),
+        correctChoice: practiceChoiceSchema,
+        isCorrect: z.boolean(),
+        pointsAwarded: z.number(),
+        explanation: z.string().nullable(),
+        choices: z.array(practiceChoiceSchema),
+      }),
+    ),
+    newlyUnlockedNextLesson: lessonNavigationItemSchema.nullable(),
+    topicProgress: topicProgressSchema,
+    courseProgress: courseProgressSchema,
+  }),
+})
+
 const validationFieldErrorsSchema = z
   .object({
     accessExpiresAt: z.array(z.string()).optional(),
@@ -453,6 +575,7 @@ const validationFieldErrorsSchema = z
     attemptPublicId: z.array(z.string()).optional(),
     questionId: z.array(z.string()).optional(),
     quizId: z.array(z.string()).optional(),
+    practiceSetId: z.array(z.string()).optional(),
     selectedChoiceId: z.array(z.string()).optional(),
   })
   .strict()
@@ -504,6 +627,21 @@ export type SaveQuizAnswerResult = z.infer<
 >['data']
 export type QuizAttemptResult = z.infer<
   typeof quizAttemptResultResponseSchema
+>['data']
+export type LessonPracticeSummary = z.infer<
+  typeof lessonPracticeSummaryResponseSchema
+>['data']
+export type PracticeAttemptPayload = z.infer<
+  typeof practiceAttemptPayloadSchema
+>
+export type PracticeAttemptResponse = z.infer<
+  typeof practiceAttemptResponseSchema
+>['data']
+export type SavePracticeAnswerResult = z.infer<
+  typeof savePracticeAnswerResponseSchema
+>['data']
+export type PracticeAttemptResult = z.infer<
+  typeof practiceAttemptResultResponseSchema
 >['data']
 export type ValidationFieldErrors = z.infer<
   typeof validationFieldErrorsSchema
@@ -852,6 +990,103 @@ export async function fetchQuizAttemptResult(
   const response = await request(
     `/api/student/quiz-attempts/${encodeURIComponent(attemptPublicId)}/results`,
     quizAttemptResultResponseSchema,
+    { signal },
+  )
+
+  return response.data
+}
+
+export async function fetchLessonPracticeSummary(
+  lessonPublicId: string,
+  signal?: AbortSignal,
+): Promise<LessonPracticeSummary> {
+  const response = await request(
+    `/api/student/lessons/${encodeURIComponent(lessonPublicId)}/practice`,
+    lessonPracticeSummaryResponseSchema,
+    { signal },
+  )
+
+  return response.data
+}
+
+export async function startPracticeAttempt(
+  practiceSetId: number,
+): Promise<PracticeAttemptPayload> {
+  const response = await request(
+    `/api/student/practice-sets/${encodeURIComponent(
+      String(practiceSetId),
+    )}/attempts`,
+    practiceAttemptResponseSchema,
+    { method: 'POST' },
+  )
+
+  if ('resultAvailable' in response.data) {
+    throw new ApiClientError(
+      'The practice attempt was already submitted.',
+      'ATTEMPT_ALREADY_SUBMITTED',
+      409,
+      null,
+    )
+  }
+
+  return response.data
+}
+
+export async function fetchPracticeAttempt(
+  attemptPublicId: string,
+  signal?: AbortSignal,
+): Promise<PracticeAttemptResponse> {
+  const response = await request(
+    `/api/student/practice-attempts/${encodeURIComponent(attemptPublicId)}`,
+    practiceAttemptResponseSchema,
+    { signal },
+  )
+
+  return response.data
+}
+
+export async function savePracticeAnswer(
+  attemptPublicId: string,
+  questionId: number,
+  selectedChoiceId: number,
+): Promise<SavePracticeAnswerResult> {
+  const response = await request(
+    `/api/student/practice-attempts/${encodeURIComponent(
+      attemptPublicId,
+    )}/answers/${encodeURIComponent(String(questionId))}`,
+    savePracticeAnswerResponseSchema,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ selectedChoiceId }),
+    },
+  )
+
+  return response.data
+}
+
+export async function submitPracticeAttempt(
+  attemptPublicId: string,
+): Promise<PracticeAttemptResult> {
+  const response = await request(
+    `/api/student/practice-attempts/${encodeURIComponent(
+      attemptPublicId,
+    )}/submit`,
+    practiceAttemptResultResponseSchema,
+    { method: 'POST' },
+  )
+
+  return response.data
+}
+
+export async function fetchPracticeAttemptResult(
+  attemptPublicId: string,
+  signal?: AbortSignal,
+): Promise<PracticeAttemptResult> {
+  const response = await request(
+    `/api/student/practice-attempts/${encodeURIComponent(
+      attemptPublicId,
+    )}/results`,
+    practiceAttemptResultResponseSchema,
     { signal },
   )
 

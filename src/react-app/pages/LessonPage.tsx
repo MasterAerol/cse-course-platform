@@ -5,6 +5,7 @@ import { CourseCurriculumSidebar } from '../components/CourseCurriculumSidebar'
 import { LessonBlockRenderer } from '../components/LessonBlockRenderer'
 import { LessonNavigation } from '../components/LessonNavigation'
 import { MobileCurriculumDrawer } from '../components/MobileCurriculumDrawer'
+import { PracticeLessonPanel } from '../components/PracticeLessonPanel'
 import { QuizLessonPanel } from '../components/QuizLessonPanel'
 import {
   ApiClientError,
@@ -269,6 +270,11 @@ export function LessonPage() {
                   </button>
                 ) : state.lesson.lessonType === 'quiz' ? (
                   <QuizLessonPanel
+                    key={state.lesson.publicId}
+                    lessonPublicId={state.lesson.publicId}
+                  />
+                ) : state.lesson.lessonType === 'practice' ? (
+                  <PracticeLessonPanel
                     key={state.lesson.publicId}
                     lessonPublicId={state.lesson.publicId}
                   />

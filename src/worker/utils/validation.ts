@@ -17,6 +17,7 @@ const validationFields = new Set<ValidationField>([
   'attemptPublicId',
   'questionId',
   'quizId',
+  'practiceSetId',
   'lessonPublicId',
   'password',
   'selectedChoiceId',
