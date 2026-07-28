@@ -49,8 +49,24 @@ const lessonAccessibilitySchema = z.object({
   reason: z.enum([
     'active_enrollment',
     'preview',
+    'not_required',
     'enrollment_required',
+    'previous_required_lesson_incomplete',
   ]),
+})
+
+const lessonProgressStatusSchema = z.enum([
+  'not_started',
+  'in_progress',
+  'completed',
+])
+
+const lessonProgressSchema = z.object({
+  status: lessonProgressStatusSchema,
+  startedAt: z.string().nullable(),
+  completedAt: z.string().nullable(),
+  lastViewedAt: z.string().nullable(),
+  progressPercent: z.number(),
 })
 
 const curriculumLessonSchema = z.object({
@@ -61,6 +77,12 @@ const curriculumLessonSchema = z.object({
   position: z.number(),
   estimatedMinutes: z.number().nullable(),
   isPreview: z.boolean(),
+  isRequired: z.boolean(),
+  progressStatus: lessonProgressStatusSchema,
+  completedAt: z.string().nullable(),
+  isAccessible: z.boolean(),
+  isLocked: z.boolean(),
+  lockReason: z.string().nullable(),
   accessibility: lessonAccessibilitySchema,
 })
 
@@ -102,6 +124,7 @@ const continueLearningSchema = z.object({
       slug: z.string(),
       lessonType: z.string(),
       summary: z.string().nullable(),
+      isLocked: z.boolean(),
     })
     .nullable(),
 })
@@ -228,6 +251,9 @@ const lessonNavigationItemSchema = z.object({
   slug: z.string(),
   lessonType: z.string(),
   estimatedMinutes: z.number().nullable(),
+  isAccessible: z.boolean(),
+  isLocked: z.boolean(),
+  lockReason: z.string().nullable(),
 })
 
 const lessonDetailSchema = z.object({
@@ -254,6 +280,8 @@ const lessonDetailSchema = z.object({
   }),
   blocks: z.array(lessonBlockSchema),
   malformedBlockCount: z.number(),
+  progress: lessonProgressSchema,
+  manualCompletionAllowed: z.boolean(),
   previousLesson: lessonNavigationItemSchema.nullable(),
   nextLesson: lessonNavigationItemSchema.nullable(),
   navigation: z.object({
@@ -267,6 +295,27 @@ const lessonDetailSchema = z.object({
 const lessonDetailResponseSchema = z.object({
   success: z.literal(true),
   data: lessonDetailSchema,
+})
+
+const topicProgressSchema = z.object({
+  topicSlug: z.string(),
+  completedRequiredLessons: z.number(),
+  totalRequiredLessons: z.number(),
+  progressPercentage: z.number(),
+})
+
+const lessonCompletionResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    completedLesson: z.object({
+      publicId: z.string(),
+      title: z.string(),
+      progress: lessonProgressSchema,
+    }),
+    newlyUnlockedNextLesson: lessonNavigationItemSchema.nullable(),
+    topicProgress: topicProgressSchema,
+    courseProgress: courseProgressSchema,
+  }),
 })
 
 const validationFieldErrorsSchema = z
@@ -313,6 +362,9 @@ export type CourseProgress = z.infer<typeof courseProgressSchema>
 export type CurriculumLesson = z.infer<typeof curriculumLessonSchema>
 export type LessonBlock = z.infer<typeof lessonBlockSchema>
 export type LessonDetail = z.infer<typeof lessonDetailSchema>
+export type LessonCompletionResult = z.infer<
+  typeof lessonCompletionResponseSchema
+>['data']
 export type ValidationFieldErrors = z.infer<
   typeof validationFieldErrorsSchema
 >
@@ -544,6 +596,30 @@ export async function fetchLessonDetail(
     `/api/student/lessons/${encodeURIComponent(lessonPublicId)}`,
     lessonDetailResponseSchema,
     { signal },
+  )
+
+  return response.data
+}
+
+export async function startLesson(
+  lessonPublicId: string,
+): Promise<LessonDetail> {
+  const response = await request(
+    `/api/student/lessons/${encodeURIComponent(lessonPublicId)}/start`,
+    lessonDetailResponseSchema,
+    { method: 'POST' },
+  )
+
+  return response.data
+}
+
+export async function completeLesson(
+  lessonPublicId: string,
+): Promise<LessonCompletionResult> {
+  const response = await request(
+    `/api/student/lessons/${encodeURIComponent(lessonPublicId)}/complete`,
+    lessonCompletionResponseSchema,
+    { method: 'POST' },
   )
 
   return response.data

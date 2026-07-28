@@ -7,6 +7,7 @@ import { LessonNavigation } from '../components/LessonNavigation'
 import { MobileCurriculumDrawer } from '../components/MobileCurriculumDrawer'
 import {
   ApiClientError,
+  completeLesson,
   fetchLessonDetail,
   fetchStudentCourseCurriculum,
   type LessonDetail,
@@ -32,8 +33,24 @@ function getLessonErrorMessage(error: unknown): string {
       return 'This course could not be found.'
     }
 
-    if (error.code === 'COURSE_ACCESS_DENIED') {
+    if (
+      error.code === 'COURSE_ACCESS_DENIED' ||
+      error.code === 'ENROLLMENT_REQUIRED' ||
+      error.code === 'COURSE_ACCESS_EXPIRED'
+    ) {
       return 'You need an active enrollment to open this lesson.'
+    }
+
+    if (error.code === 'LESSON_LOCKED') {
+      return 'Complete the previous required lesson to unlock this lesson.'
+    }
+
+    if (error.code === 'LESSON_NOT_STARTED') {
+      return 'Start the lesson before marking it complete.'
+    }
+
+    if (error.code === 'COMPLETION_REQUIRES_ACTIVITY') {
+      return 'This activity cannot be completed manually yet.'
     }
 
     if (error.code === 'UNAUTHENTICATED') {
@@ -52,6 +69,12 @@ export function LessonPage() {
     status: 'loading',
   })
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [completionStatus, setCompletionStatus] = useState<
+    | { type: 'idle' }
+    | { type: 'submitting' }
+    | { type: 'success'; message: string }
+    | { type: 'error'; message: string }
+  >({ type: 'idle' })
 
   useEffect(() => {
     const controller = new AbortController()
@@ -79,6 +102,7 @@ export function LessonPage() {
           return
         }
 
+        setCompletionStatus({ type: 'idle' })
         setState({ status: 'loaded', lesson, curriculum })
       } catch (error: unknown) {
         if (!controller.signal.aborted) {
@@ -96,6 +120,44 @@ export function LessonPage() {
       controller.abort()
     }
   }, [courseSlug, lessonPublicId])
+
+  async function handleCompleteLesson(): Promise<void> {
+    if (
+      state.status !== 'loaded' ||
+      courseSlug === undefined ||
+      lessonPublicId === undefined
+    ) {
+      return
+    }
+
+    setCompletionStatus({ type: 'submitting' })
+
+    try {
+      const completion = await completeLesson(lessonPublicId)
+      const [lesson, curriculum] = await Promise.all([
+        fetchLessonDetail(lessonPublicId),
+        fetchStudentCourseCurriculum(courseSlug),
+      ])
+      const nextTitle =
+        completion.newlyUnlockedNextLesson === null
+          ? null
+          : completion.newlyUnlockedNextLesson.title
+
+      setState({ status: 'loaded', lesson, curriculum })
+      setCompletionStatus({
+        type: 'success',
+        message:
+          nextTitle === null
+            ? 'Lesson complete.'
+            : `Lesson complete. ${nextTitle} is now unlocked.`,
+      })
+    } catch (error: unknown) {
+      setCompletionStatus({
+        type: 'error',
+        message: getLessonErrorMessage(error),
+      })
+    }
+  }
 
   return (
     <main className="lesson-page">
@@ -165,6 +227,14 @@ export function LessonPage() {
                     ? `${state.lesson.estimatedMinutes} min read`
                     : 'Estimated time coming soon'}
                 </p>
+                <p className="lesson-progress-status">
+                  Status:{' '}
+                  {state.lesson.progress.status === 'completed'
+                    ? 'completed'
+                    : state.lesson.progress.status === 'in_progress'
+                      ? 'in progress'
+                      : 'not started'}
+                </p>
               </header>
 
               {state.lesson.malformedBlockCount > 0 && (
@@ -178,6 +248,39 @@ export function LessonPage() {
                   <LessonBlockRenderer key={block.id} block={block} />
                 ))}
               </div>
+
+              <section className="lesson-completion" aria-live="polite">
+                {state.lesson.manualCompletionAllowed ? (
+                  <button
+                    className="button-link"
+                    type="button"
+                    disabled={
+                      state.lesson.progress.status === 'completed' ||
+                      completionStatus.type === 'submitting'
+                    }
+                    onClick={() => void handleCompleteLesson()}
+                  >
+                    {state.lesson.progress.status === 'completed'
+                      ? 'Completed'
+                      : completionStatus.type === 'submitting'
+                        ? 'Marking complete...'
+                        : 'Mark complete'}
+                  </button>
+                ) : (
+                  <p>
+                    This activity will be completed through its activity in a
+                    later milestone.
+                  </p>
+                )}
+                {completionStatus.type === 'success' && (
+                  <p className="form-success">{completionStatus.message}</p>
+                )}
+                {completionStatus.type === 'error' && (
+                  <p className="form-error" role="alert">
+                    {completionStatus.message}
+                  </p>
+                )}
+              </section>
 
               <LessonNavigation
                 courseSlug={state.lesson.course.slug}

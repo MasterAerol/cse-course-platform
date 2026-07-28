@@ -16,20 +16,27 @@ export function CurriculumLessonItem({
   compact = false,
 }: CurriculumLessonItemProps) {
   const isCurrent = lesson.publicId === currentLessonPublicId
+  const progressLabel =
+    lesson.progressStatus === 'completed'
+      ? 'Completed'
+      : lesson.progressStatus === 'in_progress'
+        ? 'In progress'
+        : null
   const content = (
     <>
       <span className="lesson-item__title">{lesson.title}</span>
       <span className="lesson-item__meta">
         {lesson.lessonType}
         {lesson.estimatedMinutes !== null
-          ? ` • ${lesson.estimatedMinutes} min`
+          ? ` - ${lesson.estimatedMinutes} min`
           : ''}
-        {lesson.isPreview ? ' • Preview' : ''}
+        {lesson.isPreview ? ' - Preview' : ''}
+        {!lesson.isRequired ? ' - Optional' : ''}
       </span>
     </>
   )
 
-  if (!lesson.accessibility.canAccess) {
+  if (lesson.isLocked) {
     return (
       <li
         className={`lesson-item lesson-item--locked ${
@@ -37,7 +44,10 @@ export function CurriculumLessonItem({
         }`}
       >
         {content}
-        <span className="lesson-item__state">Enrollment required</span>
+        <span className="lesson-item__state">
+          Locked
+          {lesson.lockReason === null ? '' : ` - ${lesson.lockReason}`}
+        </span>
       </li>
     )
   }
@@ -54,6 +64,9 @@ export function CurriculumLessonItem({
       >
         {content}
       </Link>
+      {progressLabel !== null && (
+        <span className="lesson-item__state">{progressLabel}</span>
+      )}
     </li>
   )
 }

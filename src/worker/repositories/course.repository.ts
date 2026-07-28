@@ -56,6 +56,9 @@ export interface CurriculumLessonRow {
   lesson_position: number
   estimated_minutes: number | null
   is_preview: 0 | 1
+  requires_previous: 0 | 1
+  progress_status: LessonProgressStatus | null
+  completed_at: string | null
 }
 
 export interface EnrollmentCourseRow {
@@ -80,10 +83,14 @@ export interface RequiredLessonProgressRow {
   lesson_slug: string
   lesson_type: string
   summary: string | null
+  topic_id: number
+  topic_slug: string
   subject_position: number
   topic_position: number
   lesson_position: number
+  requires_previous: 0 | 1
   progress_status: LessonProgressStatus | null
+  completed_at: string | null
 }
 
 export interface UserIdRow {
@@ -111,6 +118,7 @@ export interface PublishedLessonDetailRow {
   estimated_minutes: number | null
   lesson_position: number
   is_preview: 0 | 1
+  requires_previous: 0 | 1
   topic_id: number
   topic_title: string
   topic_slug: string
@@ -137,9 +145,21 @@ export interface NavigationLessonRow {
   lesson_slug: string
   lesson_type: string
   estimated_minutes: number | null
+  is_preview: 0 | 1
+  requires_previous: 0 | 1
+  progress_status: LessonProgressStatus | null
+  completed_at: string | null
   subject_position: number
   topic_position: number
   lesson_position: number
+}
+
+export interface LessonProgressRow {
+  status: LessonProgressStatus
+  started_at: string | null
+  completed_at: string | null
+  last_viewed_at: string | null
+  progress_percent: number
 }
 
 const publishedCourseSelect = `courses.id,
@@ -283,6 +303,7 @@ export async function findPublishedCurriculumSummary(
 export async function findPublishedCurriculumLessons(
   database: D1Database,
   courseId: number,
+  userId: number | null,
 ): Promise<CurriculumLessonRow[]> {
   const result = await database
     .prepare(
@@ -302,7 +323,10 @@ export async function findPublishedCurriculumLessons(
         lessons.lesson_type,
         lessons.position AS lesson_position,
         lessons.estimated_minutes,
-        lessons.is_preview
+        lessons.is_preview,
+        lessons.requires_previous,
+        lesson_progress.status AS progress_status,
+        lesson_progress.completed_at
       FROM subjects
       INNER JOIN topics
         ON topics.subject_id = subjects.id
@@ -310,11 +334,14 @@ export async function findPublishedCurriculumLessons(
       INNER JOIN lessons
         ON lessons.topic_id = topics.id
         AND lessons.status = 'published'
+      LEFT JOIN lesson_progress
+        ON lesson_progress.lesson_id = lessons.id
+        AND lesson_progress.user_id = ?2
       WHERE subjects.course_id = ?1
         AND subjects.status = 'published'
       ORDER BY subjects.position, topics.position, lessons.position`,
     )
-    .bind(courseId)
+    .bind(courseId, userId)
     .all<CurriculumLessonRow>()
 
   return result.results
@@ -409,6 +436,7 @@ export async function findPublishedLessonByPublicId(
         lessons.summary AS lesson_summary,
         lessons.estimated_minutes,
         lessons.position AS lesson_position,
+        lessons.requires_previous,
         lessons.is_preview,
         topics.id AS topic_id,
         topics.title AS topic_title,
@@ -463,6 +491,7 @@ export async function findLessonBlocks(
 export async function findPublishedNavigationLessons(
   database: D1Database,
   courseId: number,
+  userId: number,
 ): Promise<NavigationLessonRow[]> {
   const result = await database
     .prepare(
@@ -472,6 +501,10 @@ export async function findPublishedNavigationLessons(
         lessons.slug AS lesson_slug,
         lessons.lesson_type,
         lessons.estimated_minutes,
+        lessons.is_preview,
+        lessons.requires_previous,
+        lesson_progress.status AS progress_status,
+        lesson_progress.completed_at,
         subjects.position AS subject_position,
         topics.position AS topic_position,
         lessons.position AS lesson_position
@@ -482,11 +515,14 @@ export async function findPublishedNavigationLessons(
       INNER JOIN subjects
         ON subjects.id = topics.subject_id
         AND subjects.status = 'published'
+      LEFT JOIN lesson_progress
+        ON lesson_progress.lesson_id = lessons.id
+        AND lesson_progress.user_id = ?2
       WHERE subjects.course_id = ?1
         AND lessons.status = 'published'
       ORDER BY subjects.position, topics.position, lessons.position`,
     )
-    .bind(courseId)
+    .bind(courseId, userId)
     .all<NavigationLessonRow>()
 
   return result.results
@@ -506,10 +542,14 @@ export async function findRequiredLessonProgressRows(
         lessons.slug AS lesson_slug,
         lessons.lesson_type,
         lessons.summary,
+        topics.id AS topic_id,
+        topics.slug AS topic_slug,
         subjects.position AS subject_position,
         topics.position AS topic_position,
         lessons.position AS lesson_position,
-        lesson_progress.status AS progress_status
+        lessons.requires_previous,
+        lesson_progress.status AS progress_status,
+        lesson_progress.completed_at
       FROM lessons
       INNER JOIN topics
         ON topics.id = lessons.topic_id
@@ -529,6 +569,83 @@ export async function findRequiredLessonProgressRows(
     .all<RequiredLessonProgressRow>()
 
   return result.results
+}
+
+export async function findLessonProgress(
+  database: D1Database,
+  userId: number,
+  lessonId: number,
+): Promise<LessonProgressRow | null> {
+  return database
+    .prepare(
+      `SELECT
+        status,
+        started_at,
+        completed_at,
+        last_viewed_at,
+        progress_percent
+      FROM lesson_progress
+      WHERE user_id = ?1
+        AND lesson_id = ?2
+      LIMIT 1`,
+    )
+    .bind(userId, lessonId)
+    .first<LessonProgressRow>()
+}
+
+export async function startLessonProgress(
+  database: D1Database,
+  userId: number,
+  lessonId: number,
+): Promise<LessonProgressRow | null> {
+  await database
+    .prepare(
+      `INSERT INTO lesson_progress (
+        user_id,
+        lesson_id,
+        status,
+        started_at,
+        last_viewed_at,
+        progress_percent
+      ) VALUES (?1, ?2, 'in_progress', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+      ON CONFLICT(user_id, lesson_id) DO UPDATE SET
+        status = CASE
+          WHEN lesson_progress.status = 'completed' THEN lesson_progress.status
+          ELSE 'in_progress'
+        END,
+        started_at = COALESCE(lesson_progress.started_at, excluded.started_at),
+        last_viewed_at = CURRENT_TIMESTAMP,
+        progress_percent = CASE
+          WHEN lesson_progress.status = 'completed' THEN lesson_progress.progress_percent
+          ELSE lesson_progress.progress_percent
+        END`,
+    )
+    .bind(userId, lessonId)
+    .run()
+
+  return findLessonProgress(database, userId, lessonId)
+}
+
+export async function completeLessonProgress(
+  database: D1Database,
+  userId: number,
+  lessonId: number,
+): Promise<LessonProgressRow | null> {
+  await database
+    .prepare(
+      `UPDATE lesson_progress
+      SET
+        status = 'completed',
+        completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP),
+        last_viewed_at = CURRENT_TIMESTAMP,
+        progress_percent = 100
+      WHERE user_id = ?1
+        AND lesson_id = ?2`,
+    )
+    .bind(userId, lessonId)
+    .run()
+
+  return findLessonProgress(database, userId, lessonId)
 }
 
 export async function findUserIdByEmail(

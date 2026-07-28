@@ -47,6 +47,12 @@ button:disabled {
   opacity: 0.68;
 }
 
+.button-link--disabled {
+  background: #dbe3ef;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 button:focus-visible,
 input:focus-visible,
 a:focus-visible {
@@ -684,9 +690,34 @@ input[aria-invalid="true"] {
   font-size: clamp(2rem, 5vw, 3.5rem);
 }
 
+.lesson-progress-status {
+  display: inline-flex;
+  width: fit-content;
+  margin: 0.5rem 0 0;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #225dd8;
+  font-weight: 750;
+}
+
 .lesson-blocks {
   display: grid;
   gap: 1.25rem;
+}
+
+.lesson-completion {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid #dce5f0;
+  border-radius: 0.8rem;
+  background: #fff;
+}
+
+.lesson-completion .button-link {
+  justify-self: start;
 }
 
 .lesson-heading-block {

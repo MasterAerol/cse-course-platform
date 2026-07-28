@@ -1,22 +1,25 @@
 import {
   findCourseEnrollmentById,
+  completeLessonProgress,
   findCourseIdBySlug,
   findLessonBlocks,
+  findLessonProgress,
   findPublishedCourseBySlug,
   findPublishedCourseEnrollment,
   findPublishedCourses,
   findPublishedCurriculumLessons,
   findPublishedLessonByPublicId,
-  findPublishedNavigationLessons,
   findRequiredLessonProgressRows,
   findStudentPublishedEnrollments,
   findUserIdByEmail,
+  startLessonProgress,
   upsertActiveEnrollment,
   type CourseDetailRow,
   type CourseListRow,
   type CurriculumLessonRow,
   type EnrollmentCourseRow,
-  type NavigationLessonRow,
+  type LessonProgressRow,
+  type PublishedLessonDetailRow,
   type RequiredLessonProgressRow,
 } from '../repositories/course.repository'
 import {
@@ -68,6 +71,7 @@ export interface ContinueLesson {
   slug: string
   lessonType: string
   summary: string | null
+  isLocked: boolean
 }
 
 export interface ContinueLearningState {
@@ -94,8 +98,18 @@ export interface StudentDashboard {
 
 export interface LessonAccessibility {
   canAccess: boolean
-  reason: 'active_enrollment' | 'preview' | 'enrollment_required'
+  reason:
+    | 'active_enrollment'
+    | 'preview'
+    | 'not_required'
+    | 'enrollment_required'
+    | 'previous_required_lesson_incomplete'
 }
+
+export type PublicLessonProgressStatus =
+  | 'not_started'
+  | 'in_progress'
+  | 'completed'
 
 export interface CurriculumLessonSummary {
   publicId: string
@@ -105,6 +119,12 @@ export interface CurriculumLessonSummary {
   position: number
   estimatedMinutes: number | null
   isPreview: boolean
+  isRequired: boolean
+  progressStatus: PublicLessonProgressStatus
+  completedAt: string | null
+  isAccessible: boolean
+  isLocked: boolean
+  lockReason: string | null
   accessibility: LessonAccessibility
 }
 
@@ -119,6 +139,9 @@ export interface LessonNavigationItem {
   slug: string
   lessonType: string
   estimatedMinutes: number | null
+  isAccessible: boolean
+  isLocked: boolean
+  lockReason: string | null
 }
 
 export interface LessonDetail {
@@ -145,6 +168,14 @@ export interface LessonDetail {
   }
   blocks: LessonBlock[]
   malformedBlockCount: number
+  progress: {
+    status: PublicLessonProgressStatus
+    startedAt: string | null
+    completedAt: string | null
+    lastViewedAt: string | null
+    progressPercent: number
+  }
+  manualCompletionAllowed: boolean
   previousLesson: LessonNavigationItem | null
   nextLesson: LessonNavigationItem | null
   navigation: {
@@ -153,6 +184,24 @@ export interface LessonDetail {
     topicPosition: number
     lessonPosition: number
   }
+}
+
+export interface TopicProgress {
+  topicSlug: string
+  completedRequiredLessons: number
+  totalRequiredLessons: number
+  progressPercentage: number
+}
+
+export interface LessonCompletionResult {
+  completedLesson: {
+    publicId: string
+    title: string
+    progress: LessonDetail['progress']
+  }
+  newlyUnlockedNextLesson: LessonNavigationItem | null
+  topicProgress: TopicProgress
+  courseProgress: CourseProgressState
 }
 
 function mapEnrollment(row: {
@@ -204,19 +253,110 @@ function isActiveEnrollment(enrollment: EnrollmentState | null): boolean {
   return enrollment?.hasAccess === true
 }
 
-function getLessonAccessibility(
+function isRequiredLesson(
   row: Pick<CurriculumLessonRow, 'is_preview'>,
-  enrollment: EnrollmentState | null,
-): LessonAccessibility {
-  if (isActiveEnrollment(enrollment)) {
-    return { canAccess: true, reason: 'active_enrollment' }
+): boolean {
+  return row.is_preview === 0
+}
+
+function normalizeProgressStatus(
+  status: string | null,
+): PublicLessonProgressStatus {
+  if (status === 'in_progress' || status === 'completed') {
+    return status
   }
 
+  return 'not_started'
+}
+
+function mapProgress(
+  progress: LessonProgressRow | null,
+): LessonDetail['progress'] {
+  return {
+    status: normalizeProgressStatus(progress?.status ?? null),
+    startedAt: progress?.started_at ?? null,
+    completedAt: progress?.completed_at ?? null,
+    lastViewedAt: progress?.last_viewed_at ?? null,
+    progressPercent: progress?.progress_percent ?? 0,
+  }
+}
+
+function getEnrollmentError(enrollment: EnrollmentState | null): AppError {
+  if (enrollment === null) {
+    return new AppError(
+      403,
+      'ENROLLMENT_REQUIRED',
+      'An active enrollment is required for this course.',
+    )
+  }
+
+  return new AppError(
+    403,
+    'COURSE_ACCESS_EXPIRED',
+    'This enrollment does not currently grant course access.',
+  )
+}
+
+function getLockReason(accessibility: LessonAccessibility): string | null {
+  if (accessibility.canAccess) {
+    return null
+  }
+
+  if (accessibility.reason === 'enrollment_required') {
+    return 'Active enrollment is required.'
+  }
+
+  return 'Complete the previous required lesson to unlock this lesson.'
+}
+
+function getLessonAccessibilityFromOrderedRows(
+  row: CurriculumLessonRow,
+  orderedRows: CurriculumLessonRow[],
+  enrollment: EnrollmentState | null,
+): LessonAccessibility {
   if (row.is_preview === 1) {
     return { canAccess: true, reason: 'preview' }
   }
 
-  return { canAccess: false, reason: 'enrollment_required' }
+  if (!isActiveEnrollment(enrollment)) {
+    return { canAccess: false, reason: 'enrollment_required' }
+  }
+
+  if (!isRequiredLesson(row)) {
+    return { canAccess: true, reason: 'not_required' }
+  }
+
+  if (row.requires_previous === 0) {
+    return { canAccess: true, reason: 'active_enrollment' }
+  }
+
+  const requiredRows = orderedRows.filter(isRequiredLesson)
+  const currentIndex = requiredRows.findIndex(
+    (candidate) => candidate.lesson_public_id === row.lesson_public_id,
+  )
+
+  if (currentIndex <= 0) {
+    return { canAccess: true, reason: 'active_enrollment' }
+  }
+
+  const previousRequiredLesson = requiredRows[currentIndex - 1]
+
+  if (previousRequiredLesson?.progress_status === 'completed') {
+    return { canAccess: true, reason: 'active_enrollment' }
+  }
+
+  return {
+    canAccess: false,
+    reason: 'previous_required_lesson_incomplete',
+  }
+}
+
+function getLessonAccessibility(
+  row: CurriculumLessonRow,
+  orderedRows: CurriculumLessonRow[],
+  enrollment: EnrollmentState | null,
+): LessonAccessibility {
+  return getLessonAccessibilityFromOrderedRows(row, orderedRows, enrollment)
 }
 
 function mapCurriculum(
@@ -263,7 +403,13 @@ function mapCurriculum(
       position: row.lesson_position,
       estimatedMinutes: row.estimated_minutes,
       isPreview: row.is_preview === 1,
-      accessibility: getLessonAccessibility(row, enrollment),
+      isRequired: isRequiredLesson(row),
+      progressStatus: normalizeProgressStatus(row.progress_status),
+      completedAt: row.completed_at,
+      isAccessible: getLessonAccessibility(row, rows, enrollment).canAccess,
+      isLocked: !getLessonAccessibility(row, rows, enrollment).canAccess,
+      lockReason: getLockReason(getLessonAccessibility(row, rows, enrollment)),
+      accessibility: getLessonAccessibility(row, rows, enrollment),
     })
     topic.publishedLessonCount = topic.lessons.length
 
@@ -288,12 +434,13 @@ function calculateProgress(
   const completedRequiredLessons = rows.filter(
     (row) => row.progress_status === 'completed',
   ).length
-  const inProgressLesson = rows.find(
+  const accessibleRows = getAccessibleRequiredProgressRows(rows)
+  const inProgressLesson = accessibleRows.find(
     (row) => row.progress_status === 'in_progress',
   )
   const nextIncompleteLesson =
     inProgressLesson ??
-    rows.find((row) => row.progress_status !== 'completed')
+    accessibleRows.find((row) => row.progress_status !== 'completed')
   const courseCompleted =
     totalRequiredLessons > 0 &&
     completedRequiredLessons === totalRequiredLessons
@@ -318,8 +465,44 @@ function calculateProgress(
               slug: nextIncompleteLesson.lesson_slug,
               lessonType: nextIncompleteLesson.lesson_type,
               summary: nextIncompleteLesson.summary,
+              isLocked: false,
             },
     },
+  }
+}
+
+function getAccessibleRequiredProgressRows(
+  rows: RequiredLessonProgressRow[],
+): RequiredLessonProgressRow[] {
+  return rows.filter((row, index) => {
+    if (row.requires_previous === 0 || index === 0) {
+      return true
+    }
+
+    return rows[index - 1]?.progress_status === 'completed'
+  })
+}
+
+function calculateTopicProgress(
+  rows: RequiredLessonProgressRow[],
+  topicSlug: string,
+): TopicProgress {
+  const topicRows = rows.filter((row) => row.topic_slug === topicSlug)
+  const totalRequiredLessons = topicRows.length
+  const completedRequiredLessons = topicRows.filter(
+    (row) => row.progress_status === 'completed',
+  ).length
+
+  return {
+    topicSlug,
+    totalRequiredLessons,
+    completedRequiredLessons,
+    progressPercentage:
+      totalRequiredLessons === 0
+        ? 0
+        : Math.round(
+            (completedRequiredLessons / totalRequiredLessons) * 100,
+          ),
   }
 }
 
@@ -332,11 +515,18 @@ function accessDeniedError(): AppError {
 }
 
 function mapNavigationLesson(
-  row: NavigationLessonRow | undefined,
+  row: CurriculumLessonRow | undefined,
+  orderedRows: CurriculumLessonRow[],
+  enrollment: EnrollmentState | null,
 ): LessonNavigationItem | null {
   if (row === undefined) {
     return null
   }
+  const accessibility = getLessonAccessibilityFromOrderedRows(
+    row,
+    orderedRows,
+    enrollment,
+  )
 
   return {
     publicId: row.lesson_public_id,
@@ -344,18 +534,173 @@ function mapNavigationLesson(
     slug: row.lesson_slug,
     lessonType: row.lesson_type,
     estimatedMinutes: row.estimated_minutes,
+    isAccessible: accessibility.canAccess,
+    isLocked: !accessibility.canAccess,
+    lockReason: getLockReason(accessibility),
   }
 }
 
-function assertLessonAccess(
-  enrollment: EnrollmentState | null,
-  isPreview: boolean,
-): void {
-  if (isActiveEnrollment(enrollment) || isPreview) {
-    return
+async function getAccessibleLessonContext(
+  database: D1Database,
+  userId: number,
+  lessonPublicId: string,
+): Promise<{
+  lesson: PublishedLessonDetailRow
+  enrollment: EnrollmentState | null
+  curriculumRows: CurriculumLessonRow[]
+  currentLesson: CurriculumLessonRow
+}> {
+  const lesson = await findPublishedLessonByPublicId(
+    database,
+    lessonPublicId,
+  )
+
+  if (lesson === null) {
+    throw new AppError(
+      404,
+      'LESSON_NOT_FOUND',
+      'The requested lesson was not found.',
+    )
   }
 
-  throw accessDeniedError()
+  const enrollmentRow = await findCourseEnrollmentById(
+    database,
+    userId,
+    lesson.course_id,
+  )
+  const enrollment =
+    enrollmentRow === null ? null : mapEnrollment(enrollmentRow)
+
+  if (!isActiveEnrollment(enrollment) && lesson.is_preview !== 1) {
+    throw getEnrollmentError(enrollment)
+  }
+
+  const curriculumRows = await findPublishedCurriculumLessons(
+    database,
+    lesson.course_id,
+    userId,
+  )
+  const currentLesson = curriculumRows.find(
+    (row) => row.lesson_public_id === lessonPublicId,
+  )
+
+  if (currentLesson === undefined) {
+    throw new AppError(
+      404,
+      'LESSON_NOT_FOUND',
+      'The requested lesson was not found.',
+    )
+  }
+
+  const accessibility = getLessonAccessibilityFromOrderedRows(
+    currentLesson,
+    curriculumRows,
+    enrollment,
+  )
+
+  if (!accessibility.canAccess) {
+    throw new AppError(
+      403,
+      'LESSON_LOCKED',
+      'Complete the previous required lesson to unlock this lesson.',
+    )
+  }
+
+  return {
+    lesson,
+    enrollment,
+    curriculumRows,
+    currentLesson,
+  }
+}
+
+async function buildStudentLessonDetail(
+  database: D1Database,
+  context: {
+    lesson: PublishedLessonDetailRow
+    enrollment: EnrollmentState | null
+    curriculumRows: CurriculumLessonRow[]
+  },
+  progress: LessonProgressRow | null,
+): Promise<LessonDetail> {
+  const { lesson, enrollment, curriculumRows } = context
+  const blockRows = await findLessonBlocks(database, lesson.lesson_id)
+  const blocks: LessonBlock[] = []
+  let malformedBlockCount = 0
+
+  for (const row of blockRows) {
+    const result = parseLessonBlock({
+      id: row.id,
+      blockType: row.block_type,
+      contentJson: row.content_json,
+      position: row.position,
+    })
+
+    if (result.block === null) {
+      malformedBlockCount += 1
+      console.warn(
+        JSON.stringify({
+          message: 'Skipping malformed lesson block',
+          lessonPublicId: lesson.lesson_public_id,
+          blockId: row.id,
+          blockType: row.block_type,
+        }),
+      )
+      continue
+    }
+
+    blocks.push(result.block)
+  }
+
+  const currentIndex = curriculumRows.findIndex(
+    (row) => row.lesson_public_id === lesson.lesson_public_id,
+  )
+  const previousLesson = mapNavigationLesson(
+    curriculumRows[currentIndex - 1],
+    curriculumRows,
+    enrollment,
+  )
+  const nextLesson = mapNavigationLesson(
+    curriculumRows[currentIndex + 1],
+    curriculumRows,
+    enrollment,
+  )
+
+  return {
+    publicId: lesson.lesson_public_id,
+    title: lesson.lesson_title,
+    slug: lesson.lesson_slug,
+    summary: lesson.lesson_summary,
+    lessonType: lesson.lesson_type,
+    estimatedMinutes: lesson.estimated_minutes,
+    isPreview: lesson.is_preview === 1,
+    course: {
+      title: lesson.course_title,
+      slug: lesson.course_slug,
+    },
+    subject: {
+      title: lesson.subject_title,
+      slug: lesson.subject_slug,
+      position: lesson.subject_position,
+    },
+    topic: {
+      title: lesson.topic_title,
+      slug: lesson.topic_slug,
+      position: lesson.topic_position,
+    },
+    blocks,
+    malformedBlockCount,
+    progress: mapProgress(progress),
+    manualCompletionAllowed: lesson.lesson_type === 'reading',
+    previousLesson,
+    nextLesson,
+    navigation: {
+      currentLessonPublicId: lesson.lesson_public_id,
+      subjectPosition: lesson.subject_position,
+      topicPosition: lesson.topic_position,
+      lessonPosition: lesson.lesson_position,
+    },
+  }
 }
 
 export async function listCourses(
@@ -392,6 +737,7 @@ export async function getCourseDetail(
   const curriculumRows = await findPublishedCurriculumLessons(
     database,
     course.id,
+    userId,
   )
 
   return {
@@ -424,6 +770,7 @@ export async function getStudentCourseCurriculum(
   const curriculumRows = await findPublishedCurriculumLessons(
     database,
     course.id,
+    userId,
   )
   const subjects = mapCurriculum(curriculumRows, enrollment)
 
@@ -481,95 +828,139 @@ export async function getStudentLessonDetail(
   userId: number,
   lessonPublicId: string,
 ): Promise<LessonDetail> {
-  const lesson = await findPublishedLessonByPublicId(
+  const context = await getAccessibleLessonContext(
     database,
+    userId,
+    lessonPublicId,
+  )
+  const progress = isActiveEnrollment(context.enrollment)
+    ? await startLessonProgress(database, userId, context.lesson.lesson_id)
+    : await findLessonProgress(database, userId, context.lesson.lesson_id)
+
+  return buildStudentLessonDetail(database, context, progress)
+}
+
+export async function startStudentLesson(
+  database: D1Database,
+  userId: number,
+  lessonPublicId: string,
+): Promise<LessonDetail> {
+  const context = await getAccessibleLessonContext(
+    database,
+    userId,
     lessonPublicId,
   )
 
-  if (lesson === null) {
+  if (context.enrollment === null || !context.enrollment.hasAccess) {
+    throw getEnrollmentError(context.enrollment)
+  }
+
+  const progress = await startLessonProgress(
+    database,
+    userId,
+    context.lesson.lesson_id,
+  )
+
+  return buildStudentLessonDetail(database, context, progress)
+}
+
+export async function completeStudentLesson(
+  database: D1Database,
+  userId: number,
+  lessonPublicId: string,
+): Promise<LessonCompletionResult> {
+  const context = await getAccessibleLessonContext(
+    database,
+    userId,
+    lessonPublicId,
+  )
+
+  if (context.enrollment === null || !context.enrollment.hasAccess) {
+    throw getEnrollmentError(context.enrollment)
+  }
+  const activeEnrollment = context.enrollment
+
+  if (context.lesson.lesson_type !== 'reading') {
     throw new AppError(
-      404,
-      'LESSON_NOT_FOUND',
-      'The requested lesson was not found.',
+      409,
+      'COMPLETION_REQUIRES_ACTIVITY',
+      'This lesson type cannot be completed manually.',
     )
   }
 
-  const enrollmentRow = await findCourseEnrollmentById(
+  const existingProgress = await findLessonProgress(
     database,
     userId,
-    lesson.course_id,
+    context.lesson.lesson_id,
   )
-  const enrollment =
-    enrollmentRow === null ? null : mapEnrollment(enrollmentRow)
 
-  assertLessonAccess(enrollment, lesson.is_preview === 1)
-
-  const [blockRows, navigationRows] = await Promise.all([
-    findLessonBlocks(database, lesson.lesson_id),
-    findPublishedNavigationLessons(database, lesson.course_id),
-  ])
-  const blocks: LessonBlock[] = []
-  let malformedBlockCount = 0
-
-  for (const row of blockRows) {
-    const result = parseLessonBlock({
-      id: row.id,
-      blockType: row.block_type,
-      contentJson: row.content_json,
-      position: row.position,
-    })
-
-    if (result.block === null) {
-      malformedBlockCount += 1
-      console.warn(
-        JSON.stringify({
-          message: 'Skipping malformed lesson block',
-          lessonPublicId,
-          blockId: row.id,
-          blockType: row.block_type,
-        }),
-      )
-      continue
-    }
-
-    blocks.push(result.block)
+  if (existingProgress === null) {
+    throw new AppError(
+      409,
+      'LESSON_NOT_STARTED',
+      'Start the lesson before marking it complete.',
+    )
   }
 
-  const currentIndex = navigationRows.findIndex(
-    (row) => row.lesson_public_id === lessonPublicId,
+  const completedProgress = await completeLessonProgress(
+    database,
+    userId,
+    context.lesson.lesson_id,
   )
 
+  if (completedProgress === null) {
+    throw new AppError(
+      409,
+      'LESSON_NOT_STARTED',
+      'Start the lesson before marking it complete.',
+    )
+  }
+
+  const [progressRows, curriculumRows] = await Promise.all([
+    findRequiredLessonProgressRows(
+      database,
+      userId,
+      context.lesson.course_id,
+    ),
+    findPublishedCurriculumLessons(
+      database,
+      context.lesson.course_id,
+      userId,
+    ),
+  ])
+  const currentIndex = curriculumRows.findIndex(
+    (row) => row.lesson_public_id === lessonPublicId,
+  )
+  const nextLesson = mapNavigationLesson(
+    curriculumRows[currentIndex + 1],
+    curriculumRows,
+    context.enrollment,
+  )
+  const progress = calculateProgress(progressRows)
+
   return {
-    publicId: lesson.lesson_public_id,
-    title: lesson.lesson_title,
-    slug: lesson.lesson_slug,
-    summary: lesson.lesson_summary,
-    lessonType: lesson.lesson_type,
-    estimatedMinutes: lesson.estimated_minutes,
-    isPreview: lesson.is_preview === 1,
-    course: {
-      title: lesson.course_title,
-      slug: lesson.course_slug,
+    completedLesson: {
+      publicId: context.lesson.lesson_public_id,
+      title: context.lesson.lesson_title,
+      progress: mapProgress(completedProgress),
     },
-    subject: {
-      title: lesson.subject_title,
-      slug: lesson.subject_slug,
-      position: lesson.subject_position,
-    },
-    topic: {
-      title: lesson.topic_title,
-      slug: lesson.topic_slug,
-      position: lesson.topic_position,
-    },
-    blocks,
-    malformedBlockCount,
-    previousLesson: mapNavigationLesson(navigationRows[currentIndex - 1]),
-    nextLesson: mapNavigationLesson(navigationRows[currentIndex + 1]),
-    navigation: {
-      currentLessonPublicId: lesson.lesson_public_id,
-      subjectPosition: lesson.subject_position,
-      topicPosition: lesson.topic_position,
-      lessonPosition: lesson.lesson_position,
+    newlyUnlockedNextLesson:
+      nextLesson === null || nextLesson.isLocked ? null : nextLesson,
+    topicProgress: calculateTopicProgress(
+      progressRows,
+      context.lesson.topic_slug,
+    ),
+    courseProgress: {
+      course: {
+        title: context.lesson.course_title,
+        slug: context.lesson.course_slug,
+        shortDescription: null,
+        level: null,
+        thumbnailKey: null,
+        enrollment: activeEnrollment,
+      },
+      enrollment: activeEnrollment,
+      ...progress,
     },
   }
 }

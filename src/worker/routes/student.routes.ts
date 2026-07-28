@@ -10,6 +10,8 @@ import {
   getStudentCourseProgress,
   getStudentDashboard,
   getStudentLessonDetail,
+  startStudentLesson,
+  completeStudentLesson,
 } from '../services/course.service'
 import type { AppEnv } from '../types/app'
 import { successResponse } from '../utils/responses'
@@ -65,6 +67,36 @@ studentRoutes.get('/lessons/:lessonPublicId', async (context) => {
     }),
   )
   const result = await getStudentLessonDetail(
+    context.env.DB,
+    context.get('authUser').internalUserId,
+    params.lessonPublicId,
+  )
+
+  return successResponse(context, result)
+})
+
+studentRoutes.post('/lessons/:lessonPublicId/start', async (context) => {
+  const params = parseValidatedInput(
+    lessonPublicIdSchema.safeParse({
+      lessonPublicId: context.req.param('lessonPublicId'),
+    }),
+  )
+  const result = await startStudentLesson(
+    context.env.DB,
+    context.get('authUser').internalUserId,
+    params.lessonPublicId,
+  )
+
+  return successResponse(context, result)
+})
+
+studentRoutes.post('/lessons/:lessonPublicId/complete', async (context) => {
+  const params = parseValidatedInput(
+    lessonPublicIdSchema.safeParse({
+      lessonPublicId: context.req.param('lessonPublicId'),
+    }),
+  )
+  const result = await completeStudentLesson(
     context.env.DB,
     context.get('authUser').internalUserId,
     params.lessonPublicId,

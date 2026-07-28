@@ -97,7 +97,8 @@ interface DashboardCourseBody {
       title: string
       slug: string
       lessonType: string
-      summary: string | null
+        summary: string | null
+        isLocked: boolean
     } | null
   }
 }
@@ -133,6 +134,12 @@ interface StudentCurriculumBody {
           position: number
           estimatedMinutes: number | null
           isPreview: boolean
+          isRequired: boolean
+          progressStatus: 'not_started' | 'in_progress' | 'completed'
+          completedAt: string | null
+          isAccessible: boolean
+          isLocked: boolean
+          lockReason: string | null
           accessibility: {
             canAccess: boolean
             reason: string
@@ -159,11 +166,21 @@ interface LessonDetailBody {
     previousLesson: {
       publicId: string
       title: string
+      isLocked: boolean
     } | null
     nextLesson: {
       publicId: string
       title: string
+      isLocked: boolean
     } | null
+    progress: {
+      status: 'not_started' | 'in_progress' | 'completed'
+      startedAt: string | null
+      completedAt: string | null
+      lastViewedAt: string | null
+      progressPercent: number
+    }
+    manualCompletionAllowed: boolean
     navigation: {
       subjectPosition: number
       topicPosition: number
@@ -172,7 +189,47 @@ interface LessonDetailBody {
   }
 }
 
+interface LessonCompletionBody {
+  success: true
+  data: {
+    completedLesson: {
+      publicId: string
+      title: string
+      progress: {
+        status: 'completed'
+        completedAt: string | null
+      }
+    }
+    newlyUnlockedNextLesson: {
+      publicId: string
+      title: string
+      isLocked: boolean
+    } | null
+    topicProgress: {
+      topicSlug: string
+      completedRequiredLessons: number
+      totalRequiredLessons: number
+      progressPercentage: number
+    }
+    courseProgress: DashboardCourseBody
+  }
+}
+
 const validPassword = 'SecurePassword123'
+
+const cseProfessionalLessonSlugs = [
+  'introduction-to-percentages',
+  'understanding-percentages',
+  'fractions-decimals-and-percentages',
+  'finding-the-percentage',
+  'finding-the-base',
+  'finding-the-rate',
+  'percentage-increase-and-decrease',
+  'discounts-and-markups',
+  'worked-examples',
+  'guided-practice',
+  'percentages-topic-quiz',
+] as const
 
 const passwordValidationCases = [
   {
@@ -415,6 +472,89 @@ async function setLessonProgress(
       status === 'completed' ? now : null,
       status === 'completed' ? 100 : 40,
     )
+    .run()
+}
+
+async function completeLessonsBefore(
+  email: string,
+  lessonSlug: (typeof cseProfessionalLessonSlugs)[number],
+): Promise<void> {
+  const targetIndex = cseProfessionalLessonSlugs.indexOf(lessonSlug)
+
+  if (targetIndex < 0) {
+    throw new Error(`Unknown lesson slug: ${lessonSlug}`)
+  }
+
+  await Promise.all(
+    cseProfessionalLessonSlugs
+      .slice(0, targetIndex)
+      .map((slug) => setLessonProgress(email, slug, 'completed')),
+  )
+}
+
+async function getLessonProgress(
+  email: string,
+  lessonSlug: string,
+): Promise<{
+  status: 'in_progress' | 'completed'
+  started_at: string
+  completed_at: string | null
+  progress_percent: number
+} | null> {
+  const [userId, lessonId] = await Promise.all([
+    getUserId(email),
+    getLessonId(lessonSlug),
+  ])
+
+  return env.DB.prepare(
+    `SELECT status, started_at, completed_at, progress_percent
+    FROM lesson_progress
+    WHERE user_id = ?1
+      AND lesson_id = ?2
+    LIMIT 1`,
+  )
+    .bind(userId, lessonId)
+    .first<{
+      status: 'in_progress' | 'completed'
+      started_at: string
+      completed_at: string | null
+      progress_percent: number
+    }>()
+}
+
+async function completeAllPublishedRequiredLessons(
+  email: string,
+): Promise<void> {
+  const userId = await getUserId(email)
+  const now = new Date().toISOString()
+
+  await env.DB.prepare(
+    `INSERT INTO lesson_progress (
+      user_id,
+      lesson_id,
+      status,
+      started_at,
+      completed_at,
+      last_viewed_at,
+      progress_percent
+    )
+    SELECT ?1, lessons.id, 'completed', ?2, ?2, ?2, 100
+    FROM lessons
+    INNER JOIN topics ON topics.id = lessons.topic_id
+    INNER JOIN subjects ON subjects.id = topics.subject_id
+    INNER JOIN courses ON courses.id = subjects.course_id
+    WHERE courses.slug = 'cse-professional'
+      AND subjects.status = 'published'
+      AND topics.status = 'published'
+      AND lessons.status = 'published'
+      AND lessons.is_preview = 0
+    ON CONFLICT(user_id, lesson_id) DO UPDATE SET
+      status = 'completed',
+      completed_at = COALESCE(lesson_progress.completed_at, excluded.completed_at),
+      last_viewed_at = excluded.last_viewed_at,
+      progress_percent = 100`,
+  )
+    .bind(userId, now)
     .run()
 }
 
@@ -663,6 +803,7 @@ describe('Course catalog and student learning APIs', () => {
     const email = 'in-progress-priority@example.com'
     const { cookie } = await register(email)
     await enrollUser(email)
+    await completeLessonsBefore(email, 'finding-the-rate')
     await setLessonProgress(email, 'finding-the-rate', 'in_progress')
 
     const response = await app.request(
@@ -679,23 +820,10 @@ describe('Course catalog and student learning APIs', () => {
   it('returns completed course state when every required lesson is complete', async () => {
     const email = 'completed-course@example.com'
     const { cookie } = await register(email)
-    const lessonSlugs = [
-      'introduction-to-percentages',
-      'understanding-percentages',
-      'fractions-decimals-and-percentages',
-      'finding-the-percentage',
-      'finding-the-base',
-      'finding-the-rate',
-      'percentage-increase-and-decrease',
-      'discounts-and-markups',
-      'worked-examples',
-      'guided-practice',
-      'percentages-topic-quiz',
-    ]
 
     await enrollUser(email)
     await Promise.all(
-      lessonSlugs.map((lessonSlug) =>
+      cseProfessionalLessonSlugs.map((lessonSlug) =>
         setLessonProgress(email, lessonSlug, 'completed'),
       ),
     )
@@ -760,7 +888,9 @@ describe('Course catalog and student learning APIs', () => {
       'Guided Practice',
       'Percentages Topic Quiz',
     ])
-    expect(lessons?.every((lesson) => lesson.accessibility.canAccess)).toBe(
+    expect(lessons?.[0]?.isAccessible).toBe(true)
+    expect(lessons?.[0]?.isLocked).toBe(false)
+    expect(lessons?.slice(1).every((lesson) => lesson.isLocked)).toBe(
       true,
     )
     expect(JSON.stringify(body)).not.toContain('content_json')
@@ -882,6 +1012,9 @@ describe('Course catalog and student learning APIs', () => {
 
     expect(response.status).toBe(200)
     expect(body.data.title).toBe('Introduction to Percentages')
+    expect(body.data.progress.status).toBe('in_progress')
+    expect(body.data.progress.startedAt).not.toBeNull()
+    expect(body.data.manualCompletionAllowed).toBe(true)
     expect(body.data.blocks.map((block) => block.type)).toEqual([
       'heading',
       'paragraph',
@@ -943,7 +1076,10 @@ describe('Course catalog and student learning APIs', () => {
     await expect(response.json()).resolves.toMatchObject({
       success: false,
       error: {
-        code: 'COURSE_ACCESS_DENIED',
+        code:
+          name === 'unenrolled'
+            ? 'ENROLLMENT_REQUIRED'
+            : 'COURSE_ACCESS_EXPIRED',
       },
     })
   })
@@ -972,6 +1108,7 @@ describe('Course catalog and student learning APIs', () => {
     const email = 'lesson-edges@example.com'
     const { cookie } = await register(email)
     await enrollUser(email)
+    await completeLessonsBefore(email, 'percentages-topic-quiz')
 
     const firstResponse = await app.request(
       '/api/student/lessons/lesson-introduction-to-percentages',
@@ -986,6 +1123,8 @@ describe('Course catalog and student learning APIs', () => {
     const firstBody = await firstResponse.json<LessonDetailBody>()
     const lastBody = await lastResponse.json<LessonDetailBody>()
 
+    expect(firstResponse.status).toBe(200)
+    expect(lastResponse.status).toBe(200)
     expect(firstBody.data.previousLesson).toBeNull()
     expect(firstBody.data.nextLesson?.publicId).toBe(
       'lesson-understanding-percentages',
@@ -1048,6 +1187,11 @@ describe('Course catalog and student learning APIs', () => {
       .bind(topicSlug, lessonPublicId, `ratio-basics-${crypto.randomUUID()}`)
       .run()
     await enrollUser(email)
+    await Promise.all(
+      cseProfessionalLessonSlugs.map((lessonSlug) =>
+        setLessonProgress(email, lessonSlug, 'completed'),
+      ),
+    )
 
     const response = await app.request(
       `/api/student/lessons/${lessonPublicId}`,
@@ -1125,6 +1269,454 @@ describe('Course catalog and student learning APIs', () => {
     expect(body.data.continueLearning.lesson?.publicId).toBe(
       'lesson-introduction-to-percentages',
     )
+  })
+
+  it('starts an accessible lesson as in progress and preserves the original start time', async () => {
+    const email = 'lesson-start@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+
+    const firstResponse = await app.request(
+      '/api/student/lessons/lesson-introduction-to-percentages/start',
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const firstProgress = await getLessonProgress(
+      email,
+      'introduction-to-percentages',
+    )
+    const secondResponse = await app.request(
+      '/api/student/lessons/lesson-introduction-to-percentages/start',
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const secondProgress = await getLessonProgress(
+      email,
+      'introduction-to-percentages',
+    )
+
+    expect(firstResponse.status).toBe(200)
+    expect(secondResponse.status).toBe(200)
+    expect(firstProgress?.status).toBe('in_progress')
+    expect(secondProgress?.status).toBe('in_progress')
+    expect(secondProgress?.started_at).toBe(firstProgress?.started_at)
+  })
+
+  it('does not downgrade completed lesson progress when starting again', async () => {
+    const email = 'start-completed-preserve@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+    await setLessonProgress(
+      email,
+      'introduction-to-percentages',
+      'completed',
+    )
+    const before = await getLessonProgress(
+      email,
+      'introduction-to-percentages',
+    )
+
+    const response = await app.request(
+      '/api/student/lessons/lesson-introduction-to-percentages/start',
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const after = await getLessonProgress(
+      email,
+      'introduction-to-percentages',
+    )
+
+    expect(response.status).toBe(200)
+    expect(after?.status).toBe('completed')
+    expect(after?.completed_at).toBe(before?.completed_at)
+    expect(after?.progress_percent).toBe(100)
+  })
+
+  it('rejects direct access to a locked required lesson URL', async () => {
+    const email = 'locked-direct-url@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+
+    const response = await app.request(
+      '/api/student/lessons/lesson-understanding-percentages',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'LESSON_LOCKED',
+      },
+    })
+  })
+
+  it('completes a started reading lesson and returns the next unlocked lesson', async () => {
+    const email = 'complete-reading@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+
+    await app.request(
+      '/api/student/lessons/lesson-introduction-to-percentages/start',
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const response = await app.request(
+      '/api/student/lessons/lesson-introduction-to-percentages/complete',
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const body = await response.json<LessonCompletionBody>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.completedLesson.publicId).toBe(
+      'lesson-introduction-to-percentages',
+    )
+    expect(body.data.completedLesson.progress.status).toBe('completed')
+    expect(body.data.newlyUnlockedNextLesson?.publicId).toBe(
+      'lesson-understanding-percentages',
+    )
+    expect(body.data.newlyUnlockedNextLesson?.isLocked).toBe(false)
+    expect(body.data.topicProgress).toMatchObject({
+      topicSlug: 'percentages',
+      completedRequiredLessons: 1,
+      totalRequiredLessons: 11,
+      progressPercentage: 9,
+    })
+    expect(body.data.courseProgress.continueLearning.lesson?.publicId).toBe(
+      'lesson-understanding-percentages',
+    )
+  })
+
+  it('keeps reading lesson completion idempotent', async () => {
+    const email = 'complete-idempotent@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+
+    await app.request(
+      '/api/student/lessons/lesson-introduction-to-percentages/start',
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    await app.request(
+      '/api/student/lessons/lesson-introduction-to-percentages/complete',
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const afterFirst = await getLessonProgress(
+      email,
+      'introduction-to-percentages',
+    )
+    const response = await app.request(
+      '/api/student/lessons/lesson-introduction-to-percentages/complete',
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const afterSecond = await getLessonProgress(
+      email,
+      'introduction-to-percentages',
+    )
+
+    expect(response.status).toBe(200)
+    expect(afterSecond?.status).toBe('completed')
+    expect(afterSecond?.completed_at).toBe(afterFirst?.completed_at)
+  })
+
+  it('requires a lesson to be started before manual completion', async () => {
+    const email = 'complete-without-start@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+
+    const response = await app.request(
+      '/api/student/lessons/lesson-introduction-to-percentages/complete',
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'LESSON_NOT_STARTED',
+      },
+    })
+  })
+
+  it.each([
+    {
+      publicId: 'lesson-finding-the-percentage',
+      slug: 'finding-the-percentage',
+      label: 'practice',
+    },
+    {
+      publicId: 'lesson-percentages-topic-quiz',
+      slug: 'percentages-topic-quiz',
+      label: 'quiz',
+    },
+  ] satisfies ReadonlyArray<{
+    publicId: string
+    slug: (typeof cseProfessionalLessonSlugs)[number]
+    label: string
+  }>)('rejects manual completion for $label lessons', async ({ publicId, slug }) => {
+    const email = `manual-${slug}@example.com`
+    const { cookie } = await register(email)
+    await enrollUser(email)
+    await completeLessonsBefore(email, slug)
+
+    await app.request(
+      `/api/student/lessons/${publicId}/start`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const response = await app.request(
+      `/api/student/lessons/${publicId}/complete`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'COMPLETION_REQUIRES_ACTIVITY',
+      },
+    })
+  })
+
+  it.each([
+    {
+      name: 'expired',
+      setup: (email: string) =>
+        enrollUser(email, {
+          accessExpiresAt: '2001-01-01T00:00:00.000Z',
+        }),
+    },
+    {
+      name: 'revoked',
+      setup: (email: string) =>
+        enrollUser(email, {
+          status: 'revoked',
+        }),
+    },
+    {
+      name: 'future',
+      setup: (email: string) =>
+        enrollUser(email, {
+          accessStartsAt: '2999-01-01T00:00:00.000Z',
+        }),
+    },
+  ] satisfies ReadonlyArray<{
+    name: string
+    setup: (email: string) => Promise<void>
+  }>)('denies start and completion for $name enrollments', async ({ name, setup }) => {
+    const email = `progress-write-${name}@example.com`
+    const { cookie } = await register(email)
+    await setup(email)
+
+    const startResponse = await app.request(
+      '/api/student/lessons/lesson-introduction-to-percentages/start',
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const completeResponse = await app.request(
+      '/api/student/lessons/lesson-introduction-to-percentages/complete',
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(startResponse.status).toBe(403)
+    expect(completeResponse.status).toBe(403)
+  })
+
+  it('does not use another student progress to unlock curriculum', async () => {
+    const ownerEmail = 'owner-progress@example.com'
+    const otherEmail = 'other-progress@example.com'
+    const { cookie: otherCookie } = await register(otherEmail)
+    await register(ownerEmail)
+    await enrollUser(ownerEmail)
+    await enrollUser(otherEmail)
+    await setLessonProgress(
+      ownerEmail,
+      'introduction-to-percentages',
+      'completed',
+    )
+
+    const response = await app.request(
+      '/api/student/courses/cse-professional/curriculum',
+      { headers: { cookie: otherCookie } },
+      createBindings('production'),
+    )
+    const body = await response.json<StudentCurriculumBody>()
+    const secondLesson = body.data.subjects[0]?.topics[0]?.lessons[1]
+
+    expect(response.status).toBe(200)
+    expect(secondLesson?.publicId).toBe('lesson-understanding-percentages')
+    expect(secondLesson?.isLocked).toBe(true)
+    expect(secondLesson?.progressStatus).toBe('not_started')
+  })
+
+  it('skips draft lessons when unlocking the next published lesson', async () => {
+    const email = 'draft-skip-unlock@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+
+    await env.DB.prepare(
+      `INSERT INTO lessons (
+        topic_id,
+        public_id,
+        title,
+        slug,
+        lesson_type,
+        position,
+        status
+      ) VALUES (
+        (SELECT topics.id FROM topics WHERE topics.slug = 'percentages'),
+        ?1,
+        'Draft Gate',
+        ?2,
+        'reading',
+        12,
+        'draft'
+      )`,
+    )
+      .bind(
+        `lesson-draft-gate-${crypto.randomUUID()}`,
+        `draft-gate-${crypto.randomUUID()}`,
+      )
+      .run()
+    await setLessonProgress(
+      email,
+      'introduction-to-percentages',
+      'completed',
+    )
+
+    const response = await app.request(
+      '/api/student/lessons/lesson-understanding-percentages',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(200)
+  })
+
+  it('allows a published lesson with requires_previous disabled', async () => {
+    const email = 'requires-previous-off@example.com'
+    const { cookie } = await register(email)
+    const lessonPublicId = `lesson-open-sequence-${crypto.randomUUID()}`
+    await enrollUser(email)
+    await env.DB.prepare(
+      `INSERT INTO lessons (
+        topic_id,
+        public_id,
+        title,
+        slug,
+        lesson_type,
+        summary,
+        estimated_minutes,
+        position,
+        requires_previous,
+        status
+      ) VALUES (
+        (SELECT topics.id FROM topics WHERE topics.slug = 'percentages'),
+        ?1,
+        'Open Sequence Lesson',
+        ?2,
+        'reading',
+        'Accessible without the previous required lesson.',
+        5,
+        50,
+        0,
+        'published'
+      )`,
+    )
+      .bind(lessonPublicId, `open-sequence-${crypto.randomUUID()}`)
+      .run()
+
+    const response = await app.request(
+      `/api/student/lessons/${lessonPublicId}`,
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(200)
+  })
+
+  it('unlocks required lessons across subject boundaries', async () => {
+    const email = 'subject-boundary@example.com'
+    const { cookie } = await register(email)
+    const courseId = await getCourseId()
+    const subjectSlug = `algebra-${crypto.randomUUID()}`
+    const lessonPublicId = `lesson-algebra-basics-${crypto.randomUUID()}`
+    await enrollUser(email)
+    await completeAllPublishedRequiredLessons(email)
+    await env.DB.prepare(
+      `INSERT INTO subjects (
+        course_id,
+        title,
+        slug,
+        position,
+        status
+      ) VALUES (?1, 'Algebra', ?2, 2, 'published')`,
+    )
+      .bind(courseId, subjectSlug)
+      .run()
+    await env.DB.prepare(
+      `INSERT INTO topics (
+        subject_id,
+        title,
+        slug,
+        position,
+        status
+      ) VALUES (
+        (SELECT subjects.id FROM subjects WHERE subjects.slug = ?1),
+        'Linear Equations',
+        ?2,
+        1,
+        'published'
+      )`,
+    )
+      .bind(subjectSlug, `linear-equations-${crypto.randomUUID()}`)
+      .run()
+    await env.DB.prepare(
+      `INSERT INTO lessons (
+        topic_id,
+        public_id,
+        title,
+        slug,
+        lesson_type,
+        summary,
+        estimated_minutes,
+        position,
+        status
+      ) VALUES (
+        (SELECT topics.id FROM topics WHERE topics.subject_id = (
+          SELECT subjects.id FROM subjects WHERE subjects.slug = ?1
+        )),
+        ?2,
+        'Algebra Basics',
+        ?3,
+        'reading',
+        'Placeholder algebra lesson.',
+        7,
+        1,
+        'published'
+      )`,
+    )
+      .bind(subjectSlug, lessonPublicId, `algebra-basics-${crypto.randomUUID()}`)
+      .run()
+
+    const response = await app.request(
+      `/api/student/lessons/${lessonPublicId}`,
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const body = await response.json<LessonDetailBody>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.previousLesson).not.toBeNull()
+    expect(body.data.previousLesson?.isLocked).toBe(false)
+    expect(body.data.navigation.subjectPosition).toBe(2)
   })
 })
 
