@@ -6,8 +6,12 @@ export type ValidationField =
   | 'firstName'
   | 'lastName'
   | 'email'
+  | 'attemptPublicId'
+  | 'questionId'
+  | 'quizId'
   | 'lessonPublicId'
   | 'password'
+  | 'selectedChoiceId'
 
 export type ValidationFieldErrors = Partial<
   Record<ValidationField, string[]>

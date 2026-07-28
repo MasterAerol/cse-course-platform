@@ -5,6 +5,7 @@ import { CourseCurriculumSidebar } from '../components/CourseCurriculumSidebar'
 import { LessonBlockRenderer } from '../components/LessonBlockRenderer'
 import { LessonNavigation } from '../components/LessonNavigation'
 import { MobileCurriculumDrawer } from '../components/MobileCurriculumDrawer'
+import { QuizLessonPanel } from '../components/QuizLessonPanel'
 import {
   ApiClientError,
   completeLesson,
@@ -266,6 +267,11 @@ export function LessonPage() {
                         ? 'Marking complete...'
                         : 'Mark complete'}
                   </button>
+                ) : state.lesson.lessonType === 'quiz' ? (
+                  <QuizLessonPanel
+                    key={state.lesson.publicId}
+                    lessonPublicId={state.lesson.publicId}
+                  />
                 ) : (
                   <p>
                     This activity will be completed through its activity in a

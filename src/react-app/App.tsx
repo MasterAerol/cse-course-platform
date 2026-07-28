@@ -10,6 +10,8 @@ import { DashboardPage } from './pages/DashboardPage'
 import { HomePage } from './pages/HomePage'
 import { LessonPage } from './pages/LessonPage'
 import { LoginPage } from './pages/LoginPage'
+import { QuizAttemptPage } from './pages/QuizAttemptPage'
+import { QuizResultPage } from './pages/QuizResultPage'
 import { RegistrationPage } from './pages/RegistrationPage'
 
 export function App() {
@@ -29,6 +31,14 @@ export function App() {
         <Route
           path="courses/:courseSlug/lessons/:lessonPublicId"
           element={<LessonPage />}
+        />
+        <Route
+          path="quiz-attempts/:attemptPublicId"
+          element={<QuizAttemptPage />}
+        />
+        <Route
+          path="quiz-attempts/:attemptPublicId/results"
+          element={<QuizResultPage />}
         />
         <Route element={<AdminRoute />}>
           <Route path="admin" element={<AdminPage />} />

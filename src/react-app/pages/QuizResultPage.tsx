@@ -1,0 +1,244 @@
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router'
+
+import {
+  ApiClientError,
+  fetchQuizAttemptResult,
+  startQuizAttempt,
+  type QuizAttemptResult,
+} from '../lib/api'
+
+type ResultPageState =
+  | { status: 'loading' }
+  | { status: 'loaded'; result: QuizAttemptResult }
+  | { status: 'error'; message: string }
+
+function getResultErrorMessage(error: unknown): string {
+  if (error instanceof ApiClientError) {
+    if (error.code === 'QUIZ_NOT_SUBMITTED') {
+      return 'Submit the quiz before viewing results.'
+    }
+
+    if (error.code === 'ATTEMPT_FORBIDDEN') {
+      return 'This quiz attempt belongs to another user.'
+    }
+
+    if (error.code === 'UNAUTHENTICATED') {
+      return 'Please sign in to view quiz results.'
+    }
+
+    return error.message
+  }
+
+  return error instanceof Error
+    ? error.message
+    : 'The quiz result could not be loaded.'
+}
+
+export function QuizResultPage() {
+  const { attemptPublicId } = useParams()
+  const navigate = useNavigate()
+  const [state, setState] = useState<ResultPageState>({
+    status: 'loading',
+  })
+  const [retryStatus, setRetryStatus] = useState<
+    | { type: 'idle' }
+    | { type: 'submitting' }
+    | { type: 'error'; message: string }
+  >({ type: 'idle' })
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function loadResult(): Promise<void> {
+      if (attemptPublicId === undefined) {
+        setState({
+          status: 'error',
+          message: 'The quiz result URL is incomplete.',
+        })
+        return
+      }
+
+      try {
+        const result = await fetchQuizAttemptResult(
+          attemptPublicId,
+          controller.signal,
+        )
+
+        setState({ status: 'loaded', result })
+      } catch (error: unknown) {
+        if (!controller.signal.aborted) {
+          setState({
+            status: 'error',
+            message: getResultErrorMessage(error),
+          })
+        }
+      }
+    }
+
+    void loadResult()
+
+    return () => {
+      controller.abort()
+    }
+  }, [attemptPublicId])
+
+  async function handleRetry(quizId: number): Promise<void> {
+    setRetryStatus({ type: 'submitting' })
+
+    try {
+      const attempt = await startQuizAttempt(quizId)
+      void navigate(`/quiz-attempts/${attempt.attempt.publicId}`)
+    } catch (error: unknown) {
+      setRetryStatus({
+        type: 'error',
+        message: getResultErrorMessage(error),
+      })
+    }
+  }
+
+  return (
+    <main className="page-shell quiz-page">
+      <header className="topbar">
+        <Link className="brand-link" to="/">
+          CSE Course Platform
+        </Link>
+        <div className="topbar-actions">
+          <Link className="button-link button-link--secondary" to="/dashboard">
+            Dashboard
+          </Link>
+        </div>
+      </header>
+
+      {state.status === 'loading' && (
+        <section className="message-card" aria-live="polite">
+          <p>Loading quiz results...</p>
+        </section>
+      )}
+
+      {state.status === 'error' && (
+        <section className="message-card" role="alert">
+          <h1>Results unavailable</h1>
+          <p>{state.message}</p>
+          <Link className="button-link" to="/dashboard">
+            Return to dashboard
+          </Link>
+        </section>
+      )}
+
+      {state.status === 'loaded' && (
+        <section className="quiz-result-card">
+          <p className="eyebrow">Quiz results</p>
+          <h1>{state.result.quiz.title}</h1>
+          <div
+            className={
+              state.result.passed
+                ? 'quiz-score quiz-score--passed'
+                : 'quiz-score quiz-score--failed'
+            }
+          >
+            <span>
+              {state.result.passed ? 'Passed' : 'Needs improvement'}
+            </span>
+            <strong>{state.result.scorePercent}%</strong>
+            <span>
+              {state.result.earnedPoints} of {state.result.totalPoints} points
+            </span>
+          </div>
+
+          <div className="progress" aria-label="Course progress">
+            <div
+              className="progress__bar"
+              style={{
+                width: `${state.result.courseProgress.progressPercentage}%`,
+              }}
+            />
+          </div>
+          <p className="meta-copy">
+            Course progress:{' '}
+            {state.result.courseProgress.completedRequiredLessons} of{' '}
+            {state.result.courseProgress.totalRequiredLessons} required lessons
+            completed.
+          </p>
+
+          {state.result.passed ? (
+            state.result.courseProgress.continueLearning.courseCompleted ? (
+              <p className="form-success">
+                Course completed. Great finish.
+              </p>
+            ) : state.result.newlyUnlockedNextLesson !== null ? (
+              <p className="form-success">
+                Passed. {state.result.newlyUnlockedNextLesson.title} is now
+                unlocked.
+              </p>
+            ) : (
+              <p className="form-success">Passed.</p>
+            )
+          ) : (
+            <p className="form-error">
+              Score at least {state.result.quiz.passingScore}% to complete this
+              quiz lesson.
+            </p>
+          )}
+
+          <div className="button-row">
+            {!state.result.passed && (
+              <button
+                type="button"
+                disabled={retryStatus.type === 'submitting'}
+                onClick={() => void handleRetry(state.result.quiz.id)}
+              >
+                {retryStatus.type === 'submitting'
+                  ? 'Starting...'
+                  : 'Retry quiz'}
+              </button>
+            )}
+            {state.result.newlyUnlockedNextLesson !== null && (
+              <Link
+                className="button-link"
+                to={`/courses/${
+                  state.result.courseProgress.course.slug
+                }/lessons/${state.result.newlyUnlockedNextLesson.publicId}`}
+              >
+                Continue learning
+              </Link>
+            )}
+            <Link
+              className="button-link button-link--secondary"
+              to={`/courses/${state.result.courseProgress.course.slug}`}
+            >
+              Back to course
+            </Link>
+          </div>
+          {retryStatus.type === 'error' && (
+            <p className="form-error" role="alert">
+              {retryStatus.message}
+            </p>
+          )}
+
+          <div className="quiz-review-list">
+            {state.result.questions.map((question) => (
+              <article className="quiz-review-card" key={question.id}>
+                <h2>
+                  Question {question.position}:{' '}
+                  {question.isCorrect ? 'Correct' : 'Incorrect'}
+                </h2>
+                <p>{question.prompt}</p>
+                <p>
+                  Your answer:{' '}
+                  {question.selectedChoice === null
+                    ? 'No answer'
+                    : question.selectedChoice.text}
+                </p>
+                <p>Correct answer: {question.correctChoice.text}</p>
+                {question.explanation !== null && (
+                  <p className="meta-copy">{question.explanation}</p>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+    </main>
+  )
+}

@@ -5,6 +5,7 @@ import { authRoutes } from './routes/auth.routes'
 import { courseRoutes } from './routes/course.routes'
 import { devRoutes } from './routes/dev.routes'
 import { healthRoutes } from './routes/health.routes'
+import { quizRoutes } from './routes/quiz.routes'
 import { studentRoutes } from './routes/student.routes'
 import type { AppEnv } from './types/app'
 import { AppError } from './utils/app-error'
@@ -24,6 +25,7 @@ app.route('/api/auth', authRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/courses', courseRoutes)
 app.route('/api/student', studentRoutes)
+app.route('/api/student', quizRoutes)
 app.route('/api/dev', devRoutes)
 
 app.notFound((context) =>

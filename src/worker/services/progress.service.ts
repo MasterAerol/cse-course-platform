@@ -31,6 +31,7 @@ import {
 } from './enrollment.service'
 import {
   assertManualCompletionAllowed,
+  type AccessibleLessonContext,
   getAccessibleLessonContext,
 } from './lesson-access.service'
 
@@ -109,6 +110,15 @@ export async function startStudentLesson(
   return buildStudentLessonDetail(database, context, progress)
 }
 
+export async function startActivityLesson(
+  database: D1Database,
+  userId: number,
+  context: AccessibleLessonContext,
+): Promise<void> {
+  assertActiveEnrollment(context.enrollment)
+  await startLessonProgress(database, userId, context.lesson.lesson_id)
+}
+
 export async function completeStudentLesson(
   database: D1Database,
   userId: number,
@@ -121,7 +131,6 @@ export async function completeStudentLesson(
   )
 
   assertActiveEnrollment(context.enrollment)
-  const activeEnrollment = context.enrollment
   assertManualCompletionAllowed(context.lesson)
 
   const existingProgress = await findLessonProgress(
@@ -152,6 +161,68 @@ export async function completeStudentLesson(
     )
   }
 
+  const completion = await buildActivityCompletionState(
+    database,
+    userId,
+    context,
+    lessonPublicId,
+  )
+
+  return {
+    completedLesson: {
+      publicId: context.lesson.lesson_public_id,
+      title: context.lesson.lesson_title,
+      progress: mapProgress(completedProgress),
+    },
+    ...completion,
+  }
+}
+
+export async function completeActivityLesson(
+  database: D1Database,
+  userId: number,
+  context: AccessibleLessonContext,
+): Promise<LessonCompletionResult> {
+  assertActiveEnrollment(context.enrollment)
+  const completedProgress = await completeLessonProgress(
+    database,
+    userId,
+    context.lesson.lesson_id,
+  )
+
+  if (completedProgress === null) {
+    throw new AppError(
+      409,
+      'LESSON_NOT_STARTED',
+      'Start the lesson before marking it complete.',
+    )
+  }
+
+  const completion = await buildActivityCompletionState(
+    database,
+    userId,
+    context,
+    context.lesson.lesson_public_id,
+  )
+
+  return {
+    completedLesson: {
+      publicId: context.lesson.lesson_public_id,
+      title: context.lesson.lesson_title,
+      progress: mapProgress(completedProgress),
+    },
+    ...completion,
+  }
+}
+
+async function buildActivityCompletionState(
+  database: D1Database,
+  userId: number,
+  context: AccessibleLessonContext,
+  lessonPublicId: string,
+): Promise<Omit<LessonCompletionResult, 'completedLesson'>> {
+  assertActiveEnrollment(context.enrollment)
+  const activeEnrollment = context.enrollment
   const [progressRows, curriculumRows] = await Promise.all([
     findRequiredLessonProgressRows(
       database,
@@ -175,11 +246,6 @@ export async function completeStudentLesson(
   const progress = calculateProgress(progressRows)
 
   return {
-    completedLesson: {
-      publicId: context.lesson.lesson_public_id,
-      title: context.lesson.lesson_title,
-      progress: mapProgress(completedProgress),
-    },
     newlyUnlockedNextLesson:
       nextLesson === null || nextLesson.isLocked ? null : nextLesson,
     topicProgress: calculateTopicProgress(

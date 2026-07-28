@@ -19,7 +19,14 @@ interface ApiErrorBody {
     details: {
       fieldErrors: Partial<
         Record<
-          'firstName' | 'lastName' | 'email' | 'password',
+          | 'firstName'
+          | 'lastName'
+          | 'email'
+          | 'password'
+          | 'attemptPublicId'
+          | 'questionId'
+          | 'quizId'
+          | 'selectedChoiceId',
           string[]
         >
       >
@@ -215,6 +222,115 @@ interface LessonCompletionBody {
   }
 }
 
+interface QuizChoiceBody {
+  id: number
+  text: string
+  position: number
+}
+
+interface QuizQuestionBody {
+  id: number
+  prompt: string
+  points: number
+  position: number
+  selectedChoiceId: number | null
+  choices: QuizChoiceBody[]
+}
+
+interface QuizSummaryBody {
+  success: true
+  data: {
+    quiz: {
+      id: number
+      title: string
+      passingScore: number
+      questionCount: number
+      timeLimitMinutes: number | null
+      maximumAttempts: number | null
+      attemptsRemaining: number | null
+    }
+    inProgressAttempt: {
+      attemptPublicId: string
+      status: string
+    } | null
+    attempts: Array<{
+      attemptPublicId: string
+      attemptNumber: number
+      status: string
+      scorePercent: number | null
+      passed: boolean | null
+    }>
+  }
+}
+
+interface QuizAttemptBody {
+  success: true
+  data: {
+    attempt: {
+      publicId: string
+      status: string
+      attemptNumber: number
+    }
+    quiz: {
+      id: number
+      title: string
+      passingScore: number
+      questionCount: number
+    }
+    questions: QuizQuestionBody[]
+  }
+}
+
+interface QuizAttemptFetchBody {
+  success: true
+  data:
+    | QuizAttemptBody['data']
+    | {
+        attempt: {
+          publicId: string
+          status: string
+          attemptNumber: number
+        }
+        resultAvailable: true
+      }
+}
+
+interface QuizResultBody {
+  success: true
+  data: {
+    quiz: {
+      id: number
+      title: string
+      passingScore: number
+    }
+    attempt: {
+      publicId: string
+      status: string
+      attemptNumber: number
+    }
+    totalPoints: number
+    earnedPoints: number
+    scorePercent: number
+    passed: boolean
+    questions: Array<{
+      id: number
+      prompt: string
+      selectedChoice: QuizChoiceBody | null
+      correctChoice: QuizChoiceBody
+      isCorrect: boolean
+      pointsAwarded: number
+      explanation: string | null
+      choices: QuizChoiceBody[]
+    }>
+    newlyUnlockedNextLesson: {
+      publicId: string
+      title: string
+      isLocked: boolean
+    } | null
+    courseProgress: DashboardCourseBody
+  }
+}
+
 const validPassword = 'SecurePassword123'
 
 const cseProfessionalLessonSlugs = [
@@ -398,6 +514,98 @@ async function getLessonId(lessonSlug: string): Promise<number> {
   return lesson.id
 }
 
+async function getPercentagesQuizId(): Promise<number> {
+  const quiz = await env.DB.prepare(
+    `SELECT quizzes.id
+    FROM quizzes
+    INNER JOIN lessons ON lessons.id = quizzes.lesson_id
+    WHERE lessons.slug = 'percentages-topic-quiz'
+      AND quizzes.title = 'Percentages Topic Quiz'
+    LIMIT 1`,
+  )
+    .first<{ id: number }>()
+
+  if (quiz === null) {
+    throw new Error('Seeded percentages quiz was not found.')
+  }
+
+  return quiz.id
+}
+
+async function createTestQuiz(
+  status: 'draft' | 'published',
+  maximumAttempts: number | null = null,
+): Promise<number> {
+  const quiz = await env.DB.prepare(
+    `INSERT INTO quizzes (
+      lesson_id,
+      topic_id,
+      title,
+      description,
+      quiz_type,
+      passing_score,
+      maximum_attempts,
+      status
+    ) VALUES (
+      (SELECT lessons.id FROM lessons WHERE lessons.slug = 'percentages-topic-quiz'),
+      (SELECT lessons.topic_id FROM lessons WHERE lessons.slug = 'percentages-topic-quiz'),
+      ?1,
+      'Throwaway quiz used by the Worker test suite.',
+      'topic',
+      70,
+      ?2,
+      ?3
+    )
+    RETURNING id`,
+  )
+    .bind(`Test Quiz ${crypto.randomUUID()}`, maximumAttempts, status)
+    .first<{ id: number }>()
+
+  if (quiz === null) {
+    throw new Error('Test quiz could not be created.')
+  }
+
+  const question = await env.DB.prepare(
+    `INSERT INTO questions (
+      quiz_id,
+      question_type,
+      prompt,
+      explanation,
+      points,
+      position,
+      status
+    ) VALUES (?1, 'multiple_choice', 'What is 50% of 20?', '50% is one half.', 1, 1, 'active')
+    RETURNING id`,
+  )
+    .bind(quiz.id)
+    .first<{ id: number }>()
+
+  if (question === null) {
+    throw new Error('Test quiz question could not be created.')
+  }
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO question_choices (
+        question_id,
+        choice_text,
+        is_correct,
+        position
+      ) VALUES (?1, '10', 1, 1)`,
+    ).bind(question.id),
+    env.DB.prepare(
+      `INSERT INTO question_choices (
+        question_id,
+        choice_text,
+        is_correct,
+        position
+      ) VALUES (?1, '20', 0, 2)`,
+    ).bind(question.id),
+  ])
+
+  return quiz.id
+}
+
 async function enrollUser(
   email: string,
   options: {
@@ -434,6 +642,34 @@ async function enrollUser(
       options.accessExpiresAt ?? null,
     )
     .run()
+}
+
+async function prepareUnlockedQuizUser(
+  email: string,
+  enrollmentOptions: Parameters<typeof enrollUser>[1] = {},
+): Promise<{ cookie: string; quizId: number }> {
+  const { cookie } = await register(email)
+  await enrollUser(email, enrollmentOptions)
+  await completeLessonsBefore(email, 'percentages-topic-quiz')
+
+  return {
+    cookie,
+    quizId: await getPercentagesQuizId(),
+  }
+}
+
+async function startQuiz(
+  cookie: string,
+  quizId: number,
+): Promise<{ response: Response; body: QuizAttemptBody }> {
+  const response = await app.request(
+    `/api/student/quizzes/${quizId}/attempts`,
+    { method: 'POST', headers: { cookie } },
+    createBindings('production'),
+  )
+  const body = await response.json<QuizAttemptBody>()
+
+  return { response, body }
 }
 
 async function setLessonProgress(
@@ -555,6 +791,44 @@ async function completeAllPublishedRequiredLessons(
       progress_percent = 100`,
   )
     .bind(userId, now)
+    .run()
+}
+
+async function completeAllPublishedRequiredLessonsExcept(
+  email: string,
+  excludedLessonSlug: string,
+): Promise<void> {
+  const userId = await getUserId(email)
+  const now = new Date().toISOString()
+
+  await env.DB.prepare(
+    `INSERT INTO lesson_progress (
+      user_id,
+      lesson_id,
+      status,
+      started_at,
+      completed_at,
+      last_viewed_at,
+      progress_percent
+    )
+    SELECT ?1, lessons.id, 'completed', ?2, ?2, ?2, 100
+    FROM lessons
+    INNER JOIN topics ON topics.id = lessons.topic_id
+    INNER JOIN subjects ON subjects.id = topics.subject_id
+    INNER JOIN courses ON courses.id = subjects.course_id
+    WHERE courses.slug = 'cse-professional'
+      AND subjects.status = 'published'
+      AND topics.status = 'published'
+      AND lessons.status = 'published'
+      AND lessons.is_preview = 0
+      AND lessons.slug <> ?3
+    ON CONFLICT(user_id, lesson_id) DO UPDATE SET
+      status = 'completed',
+      completed_at = COALESCE(lesson_progress.completed_at, excluded.completed_at),
+      last_viewed_at = excluded.last_viewed_at,
+      progress_percent = 100`,
+  )
+    .bind(userId, now, excludedLessonSlug)
     .run()
 }
 
@@ -1717,6 +1991,580 @@ describe('Course catalog and student learning APIs', () => {
     expect(body.data.previousLesson).not.toBeNull()
     expect(body.data.previousLesson?.isLocked).toBe(false)
     expect(body.data.navigation.subjectPosition).toBe(2)
+  })
+})
+
+describe('Topic quiz APIs', () => {
+  it('returns the seeded published quiz summary only after the quiz lesson is unlocked', async () => {
+    const { cookie } = await prepareUnlockedQuizUser('quiz-summary@example.com')
+
+    const response = await app.request(
+      '/api/student/lessons/lesson-percentages-topic-quiz/quiz',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const body = await response.json<QuizSummaryBody>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.quiz).toMatchObject({
+      title: 'Percentages Topic Quiz',
+      passingScore: 70,
+      questionCount: 10,
+      timeLimitMinutes: null,
+      maximumAttempts: null,
+      attemptsRemaining: null,
+    })
+    expect(body.data.inProgressAttempt).toBeNull()
+    expect(body.data.attempts).toEqual([])
+  })
+
+  it('rejects direct quiz access while the quiz lesson is locked', async () => {
+    const email = 'locked-quiz@example.com'
+    const { cookie } = await register(email)
+    await enrollUser(email)
+    const quizId = await getPercentagesQuizId()
+
+    const response = await app.request(
+      `/api/student/quizzes/${quizId}/attempts`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'LESSON_LOCKED',
+      },
+    })
+  })
+
+  it.each([
+    {
+      name: 'unenrolled',
+      setup: () => Promise.resolve(),
+      code: 'ENROLLMENT_REQUIRED',
+    },
+    {
+      name: 'expired',
+      setup: (email: string) =>
+        enrollUser(email, {
+          accessExpiresAt: '2001-01-01T00:00:00.000Z',
+        }),
+      code: 'COURSE_ACCESS_EXPIRED',
+    },
+    {
+      name: 'revoked',
+      setup: (email: string) =>
+        enrollUser(email, {
+          status: 'revoked',
+        }),
+      code: 'COURSE_ACCESS_EXPIRED',
+    },
+    {
+      name: 'future start',
+      setup: (email: string) =>
+        enrollUser(email, {
+          accessStartsAt: '2999-01-01T00:00:00.000Z',
+        }),
+      code: 'COURSE_ACCESS_EXPIRED',
+    },
+  ] satisfies ReadonlyArray<{
+    name: string
+    setup: (email: string) => Promise<void>
+    code: string
+  }>)('denies quiz attempts for $name enrollment state', async ({ name, setup, code }) => {
+    const email = `quiz-access-${name.replaceAll(' ', '-')}@example.com`
+    const { cookie } = await register(email)
+    await setup(email)
+    await completeLessonsBefore(email, 'percentages-topic-quiz')
+    const quizId = await getPercentagesQuizId()
+
+    const response = await app.request(
+      `/api/student/quizzes/${quizId}/attempts`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code,
+      },
+    })
+  })
+
+  it('does not start draft quizzes', async () => {
+    const { cookie } = await prepareUnlockedQuizUser('draft-quiz@example.com')
+    const draftQuizId = await createTestQuiz('draft')
+
+    const response = await app.request(
+      `/api/student/quizzes/${draftQuizId}/attempts`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'QUIZ_NOT_PUBLISHED',
+      },
+    })
+  })
+
+  it('starts a quiz attempt without exposing correct choices or explanations', async () => {
+    const email = 'safe-start@example.com'
+    const { cookie, quizId } = await prepareUnlockedQuizUser(email)
+
+    const { response, body } = await startQuiz(cookie, quizId)
+    const responseText = JSON.stringify(body)
+    const progress = await getLessonProgress(email, 'percentages-topic-quiz')
+
+    expect(response.status).toBe(201)
+    expect(body.data.attempt).toMatchObject({
+      status: 'in_progress',
+      attemptNumber: 1,
+    })
+    expect(body.data.questions).toHaveLength(10)
+    expect(body.data.questions[0]?.choices).toHaveLength(4)
+    expect(progress?.status).toBe('in_progress')
+    expect(responseText).not.toContain('is_correct')
+    expect(responseText).not.toContain('isCorrect')
+    expect(responseText).not.toContain('correctChoice')
+    expect(responseText).not.toContain('explanation')
+  })
+
+  it('increments attempt numbers for repeated starts while attempts are unlimited', async () => {
+    const { cookie, quizId } = await prepareUnlockedQuizUser(
+      'attempt-number@example.com',
+    )
+
+    const firstAttempt = await startQuiz(cookie, quizId)
+    const secondAttempt = await startQuiz(cookie, quizId)
+
+    expect(firstAttempt.body.data.attempt.attemptNumber).toBe(1)
+    expect(secondAttempt.body.data.attempt.attemptNumber).toBe(2)
+  })
+
+  it('saves and replaces answers idempotently', async () => {
+    const { cookie, quizId } = await prepareUnlockedQuizUser(
+      'save-answer@example.com',
+    )
+    const { body } = await startQuiz(cookie, quizId)
+    const question = body.data.questions[0]
+
+    if (question === undefined) {
+      throw new Error('Seeded quiz question was not returned.')
+    }
+
+    const firstChoiceId = question.choices[0]?.id
+    const replacementChoiceId = question.choices[1]?.id
+
+    if (firstChoiceId === undefined || replacementChoiceId === undefined) {
+      throw new Error('Seeded quiz choices were not returned.')
+    }
+
+    const firstSave = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/answers/${question.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ selectedChoiceId: firstChoiceId }),
+      },
+      createBindings('production'),
+    )
+    const replacementSave = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/answers/${question.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ selectedChoiceId: replacementChoiceId }),
+      },
+      createBindings('production'),
+    )
+    const reloadResponse = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}`,
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const reloadBody = await reloadResponse.json<QuizAttemptFetchBody>()
+
+    expect(firstSave.status).toBe(200)
+    expect(replacementSave.status).toBe(200)
+    expect('questions' in reloadBody.data).toBe(true)
+    if ('questions' in reloadBody.data) {
+      expect(reloadBody.data.questions[0]?.selectedChoiceId).toBe(
+        replacementChoiceId,
+      )
+    }
+  })
+
+  it('rejects malformed answer bodies with safe field errors', async () => {
+    const { cookie, quizId } = await prepareUnlockedQuizUser(
+      'malformed-answer@example.com',
+    )
+    const { body } = await startQuiz(cookie, quizId)
+    const question = body.data.questions[0]
+
+    if (question === undefined) {
+      throw new Error('Seeded quiz question was not returned.')
+    }
+
+    const response = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/answers/${question.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      },
+      createBindings('production'),
+    )
+    const responseBody = await response.json<ApiErrorBody>()
+
+    expect(response.status).toBe(400)
+    expect(responseBody.error.code).toBe('VALIDATION_ERROR')
+    expect(
+      responseBody.error.details?.fieldErrors.selectedChoiceId,
+    ).toBeDefined()
+  })
+
+  it('rejects questions and choices that do not belong to the attempt quiz', async () => {
+    const { cookie, quizId } = await prepareUnlockedQuizUser(
+      'wrong-question-choice@example.com',
+    )
+    const { body } = await startQuiz(cookie, quizId)
+    const firstQuestion = body.data.questions[0]
+    const secondQuestion = body.data.questions[1]
+
+    if (firstQuestion === undefined || secondQuestion === undefined) {
+      throw new Error('Seeded quiz questions were not returned.')
+    }
+
+    const wrongChoiceId = secondQuestion.choices[0]?.id
+    const otherQuizId = await createTestQuiz('published')
+    const otherQuestion = await env.DB.prepare(
+      `SELECT questions.id
+      FROM questions
+      WHERE questions.quiz_id = ?1
+      LIMIT 1`,
+    )
+      .bind(otherQuizId)
+      .first<{ id: number }>()
+
+    if (wrongChoiceId === undefined || otherQuestion === null) {
+      throw new Error('Test question or choice was not found.')
+    }
+
+    const wrongChoiceResponse = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/answers/${firstQuestion.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ selectedChoiceId: wrongChoiceId }),
+      },
+      createBindings('production'),
+    )
+    const wrongQuestionResponse = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/answers/${otherQuestion.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ selectedChoiceId: wrongChoiceId }),
+      },
+      createBindings('production'),
+    )
+
+    expect(wrongChoiceResponse.status).toBe(400)
+    await expect(wrongChoiceResponse.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'CHOICE_NOT_IN_QUESTION',
+      },
+    })
+    expect(wrongQuestionResponse.status).toBe(400)
+    await expect(wrongQuestionResponse.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'QUESTION_NOT_IN_QUIZ',
+      },
+    })
+  })
+
+  it('keeps in-progress attempts and results private to the owning student', async () => {
+    const ownerEmail = 'quiz-owner@example.com'
+    const otherEmail = 'quiz-other@example.com'
+    const { cookie: ownerCookie, quizId } =
+      await prepareUnlockedQuizUser(ownerEmail)
+    const { cookie: otherCookie } = await prepareUnlockedQuizUser(otherEmail)
+    const { body } = await startQuiz(ownerCookie, quizId)
+
+    const readResponse = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}`,
+      { headers: { cookie: otherCookie } },
+      createBindings('production'),
+    )
+    const resultResponse = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/results`,
+      { headers: { cookie: otherCookie } },
+      createBindings('production'),
+    )
+
+    expect(readResponse.status).toBe(403)
+    expect(resultResponse.status).toBe(403)
+  })
+
+  it('does not expose results before submission', async () => {
+    const { cookie, quizId } = await prepareUnlockedQuizUser(
+      'result-before-submit@example.com',
+    )
+    const { body } = await startQuiz(cookie, quizId)
+
+    const response = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/results`,
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'QUIZ_NOT_SUBMITTED',
+      },
+    })
+  })
+
+  it('scores unanswered questions as zero and leaves the quiz lesson incomplete when failed', async () => {
+    const email = 'failed-unanswered@example.com'
+    const { cookie, quizId } = await prepareUnlockedQuizUser(email)
+    const { body } = await startQuiz(cookie, quizId)
+
+    const response = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/submit`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const result = await response.json<QuizResultBody>()
+    const progress = await getLessonProgress(email, 'percentages-topic-quiz')
+    const summaryResponse = await app.request(
+      '/api/student/lessons/lesson-percentages-topic-quiz/quiz',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const summary = await summaryResponse.json<QuizSummaryBody>()
+
+    expect(response.status).toBe(200)
+    expect(result.data).toMatchObject({
+      earnedPoints: 0,
+      totalPoints: 10,
+      scorePercent: 0,
+      passed: false,
+    })
+    expect(progress?.status).toBe('in_progress')
+    expect(summary.data.attempts[0]).toMatchObject({
+      status: 'submitted',
+      scorePercent: 0,
+      passed: false,
+    })
+  })
+
+  it('passes at 70%, completes the quiz lesson, and returns explanations after submission', async () => {
+    const email = 'passing-quiz@example.com'
+    const { cookie, quizId } = await prepareUnlockedQuizUser(email)
+    await completeAllPublishedRequiredLessonsExcept(
+      email,
+      'percentages-topic-quiz',
+    )
+    const { body } = await startQuiz(cookie, quizId)
+
+    for (const question of body.data.questions.slice(0, 7)) {
+      const correctChoiceId = question.choices[0]?.id
+
+      if (correctChoiceId === undefined) {
+        throw new Error('Seeded quiz correct choice was not returned.')
+      }
+
+      const saveResponse = await app.request(
+        `/api/student/quiz-attempts/${body.data.attempt.publicId}/answers/${question.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            cookie,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ selectedChoiceId: correctChoiceId }),
+        },
+        createBindings('production'),
+      )
+
+      expect(saveResponse.status).toBe(200)
+    }
+
+    const firstSubmit = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/submit`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const secondSubmit = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/submit`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const result = await firstSubmit.json<QuizResultBody>()
+    const idempotentResult = await secondSubmit.json<QuizResultBody>()
+    const progress = await getLessonProgress(email, 'percentages-topic-quiz')
+    const fetchAttempt = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}`,
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const fetchAttemptBody = await fetchAttempt.json<QuizAttemptFetchBody>()
+
+    expect(firstSubmit.status).toBe(200)
+    expect(secondSubmit.status).toBe(200)
+    expect(result.data).toMatchObject({
+      earnedPoints: 7,
+      totalPoints: 10,
+      scorePercent: 70,
+      passed: true,
+    })
+    expect(idempotentResult.data).toMatchObject({
+      earnedPoints: 7,
+      totalPoints: 10,
+      scorePercent: 70,
+      passed: true,
+    })
+    expect(result.data.questions[0]?.correctChoice).toBeDefined()
+    expect(result.data.questions[0]?.explanation).not.toBeNull()
+    expect(progress?.status).toBe('completed')
+    expect(result.data.courseProgress.progressPercentage).toBe(100)
+    expect(result.data.courseProgress.continueLearning).toEqual({
+      courseCompleted: true,
+      lesson: null,
+    })
+    expect(fetchAttemptBody.data).toMatchObject({
+      attempt: {
+        publicId: body.data.attempt.publicId,
+        status: 'submitted',
+      },
+      resultAvailable: true,
+    })
+  })
+
+  it('rejects edits after submission', async () => {
+    const { cookie, quizId } = await prepareUnlockedQuizUser(
+      'submitted-edit@example.com',
+    )
+    const { body } = await startQuiz(cookie, quizId)
+    const question = body.data.questions[0]
+    const choiceId = question?.choices[0]?.id
+
+    if (question === undefined || choiceId === undefined) {
+      throw new Error('Seeded quiz question or choice was not returned.')
+    }
+
+    await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/submit`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const response = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/answers/${question.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ selectedChoiceId: choiceId }),
+      },
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'ATTEMPT_ALREADY_SUBMITTED',
+      },
+    })
+  })
+
+  it('expires in-progress attempts server-side', async () => {
+    const { cookie, quizId } = await prepareUnlockedQuizUser(
+      'expired-attempt@example.com',
+    )
+    const { body } = await startQuiz(cookie, quizId)
+
+    await env.DB.prepare(
+      `UPDATE quiz_attempts
+      SET expires_at = '2001-01-01T00:00:00.000Z'
+      WHERE public_id = ?1`,
+    )
+      .bind(body.data.attempt.publicId)
+      .run()
+
+    const response = await app.request(
+      `/api/student/quiz-attempts/${body.data.attempt.publicId}/submit`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const storedAttempt = await env.DB.prepare(
+      'SELECT status FROM quiz_attempts WHERE public_id = ?1',
+    )
+      .bind(body.data.attempt.publicId)
+      .first<{ status: string }>()
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'ATTEMPT_EXPIRED',
+      },
+    })
+    expect(storedAttempt?.status).toBe('expired')
+  })
+
+  it('enforces maximum attempts when a quiz policy sets a limit', async () => {
+    const { cookie } = await prepareUnlockedQuizUser('max-attempt@example.com')
+    const limitedQuizId = await createTestQuiz('published', 1)
+
+    const firstResponse = await app.request(
+      `/api/student/quizzes/${limitedQuizId}/attempts`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const secondResponse = await app.request(
+      `/api/student/quizzes/${limitedQuizId}/attempts`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+
+    expect(firstResponse.status).toBe(201)
+    expect(secondResponse.status).toBe(409)
+    await expect(secondResponse.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'MAXIMUM_ATTEMPTS_REACHED',
+      },
+    })
   })
 })
 

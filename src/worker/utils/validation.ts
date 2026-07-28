@@ -14,8 +14,12 @@ const validationFields = new Set<ValidationField>([
   'firstName',
   'lastName',
   'email',
+  'attemptPublicId',
+  'questionId',
+  'quizId',
   'lessonPublicId',
   'password',
+  'selectedChoiceId',
 ])
 
 function isValidationField(value: unknown): value is ValidationField {
