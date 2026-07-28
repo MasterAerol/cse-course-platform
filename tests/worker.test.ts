@@ -207,6 +207,22 @@ interface StoredLessonBlockRow {
   position: number
 }
 
+interface SeededQuizChoiceRow {
+  question_id: number
+  question_position: number
+  prompt: string
+  choice_id: number
+  choice_text: string
+  is_correct: 0 | 1
+  choice_position: number
+}
+
+interface StoredQuizAttemptAnswerRow {
+  is_correct: 0 | 1 | null
+  points_awarded: number
+  selected_choice_id: number | null
+}
+
 interface LessonCompletionBody {
   success: true
   data: {
@@ -326,6 +342,7 @@ interface QuizResultBody {
     questions: Array<{
       id: number
       prompt: string
+      position: number
       selectedChoice: QuizChoiceBody | null
       correctChoice: QuizChoiceBody
       isCorrect: boolean
@@ -988,6 +1005,69 @@ async function startQuiz(
   const body = await response.json<QuizAttemptBody>()
 
   return { response, body }
+}
+
+async function saveQuizAttemptAnswer(input: {
+  cookie: string
+  attemptPublicId: string
+  questionId: number
+  selectedChoiceId: number
+}): Promise<Response> {
+  return app.request(
+    `/api/student/quiz-attempts/${input.attemptPublicId}/answers/${input.questionId}`,
+    {
+      method: 'PUT',
+      headers: {
+        cookie: input.cookie,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ selectedChoiceId: input.selectedChoiceId }),
+    },
+    createBindings('production'),
+  )
+}
+
+async function submitQuizAttemptForTest(
+  cookie: string,
+  attemptPublicId: string,
+): Promise<{ response: Response; body: QuizResultBody }> {
+  const response = await app.request(
+    `/api/student/quiz-attempts/${attemptPublicId}/submit`,
+    { method: 'POST', headers: { cookie } },
+    createBindings('production'),
+  )
+  const body = await response.json<QuizResultBody>()
+
+  return { response, body }
+}
+
+async function getSeededQuizChoices(): Promise<SeededQuizChoiceRow[]> {
+  const rows = await env.DB.prepare(
+    `SELECT
+      questions.id AS question_id,
+      questions.position AS question_position,
+      questions.prompt,
+      question_choices.id AS choice_id,
+      question_choices.choice_text,
+      question_choices.is_correct,
+      question_choices.position AS choice_position
+    FROM questions
+    INNER JOIN quizzes ON quizzes.id = questions.quiz_id
+    INNER JOIN lessons ON lessons.id = quizzes.lesson_id
+    INNER JOIN topics ON topics.id = lessons.topic_id
+    INNER JOIN subjects ON subjects.id = topics.subject_id
+    INNER JOIN courses ON courses.id = subjects.course_id
+    INNER JOIN question_choices ON question_choices.question_id = questions.id
+    WHERE courses.slug = 'cse-professional'
+      AND subjects.slug = 'numerical-ability'
+      AND topics.slug = 'percentages'
+      AND lessons.slug = 'percentages-topic-quiz'
+      AND quizzes.title = 'Percentages Topic Quiz'
+      AND questions.status = 'active'
+    ORDER BY questions.position, question_choices.position, question_choices.id`,
+  ).all<SeededQuizChoiceRow>()
+
+  return rows.results
 }
 
 async function prepareUnlockedPracticeUser(
@@ -2648,6 +2728,36 @@ describe('Topic quiz APIs', () => {
     expect(responseText).not.toContain('explanation')
   })
 
+  it('keeps seeded Question 10 choices unique with 6 as the only correct answer', async () => {
+    const choices = (await getSeededQuizChoices()).filter(
+      (choice) => choice.question_position === 10,
+    )
+    const visibleChoiceCounts = choices.reduce(
+      (counts, choice) =>
+        counts.set(
+          choice.choice_text,
+          (counts.get(choice.choice_text) ?? 0) + 1,
+        ),
+      new Map<string, number>(),
+    )
+
+    expect(choices.map((choice) => choice.choice_text)).toEqual([
+      '6',
+      '10',
+      '15',
+      '24',
+    ])
+    expect(
+      choices.filter((choice) => choice.is_correct === 1).map((choice) => ({
+        text: choice.choice_text,
+        position: choice.choice_position,
+      })),
+    ).toEqual([{ text: '6', position: 1 }])
+    expect([...visibleChoiceCounts.values()].every((count) => count === 1)).toBe(
+      true,
+    )
+  })
+
   it('increments attempt numbers for repeated starts while attempts are unlimited', async () => {
     const { cookie, quizId } = await prepareUnlockedQuizUser(
       'attempt-number@example.com',
@@ -2895,6 +3005,152 @@ describe('Topic quiz APIs', () => {
       scorePercent: 0,
       passed: false,
     })
+  })
+
+  it('scores Percentages Topic Quiz Question 10 choice 6 as correct', async () => {
+    const email = 'question-ten-six-correct@example.com'
+    const { cookie, quizId } = await prepareUnlockedQuizUser(email)
+    const { body } = await startQuiz(cookie, quizId)
+    const questionTen = body.data.questions.find(
+      (question) => question.position === 10,
+    )
+    const sixChoice = questionTen?.choices.find(
+      (choice) => choice.text === '6',
+    )
+
+    if (questionTen === undefined || sixChoice === undefined) {
+      throw new Error('Question 10 choice 6 was not returned.')
+    }
+
+    const saveResponse = await saveQuizAttemptAnswer({
+      cookie,
+      attemptPublicId: body.data.attempt.publicId,
+      questionId: questionTen.id,
+      selectedChoiceId: sixChoice.id,
+    })
+    const { response, body: result } = await submitQuizAttemptForTest(
+      cookie,
+      body.data.attempt.publicId,
+    )
+    const questionResult = result.data.questions.find(
+      (question) => question.position === 10,
+    )
+    const storedAnswer = await env.DB.prepare(
+      `SELECT
+        selected_choice_id,
+        is_correct,
+        points_awarded
+      FROM quiz_attempt_answers
+      INNER JOIN quiz_attempts ON quiz_attempts.id = quiz_attempt_answers.attempt_id
+      WHERE quiz_attempts.public_id = ?1
+        AND quiz_attempt_answers.question_id = ?2
+      LIMIT 1`,
+    )
+      .bind(body.data.attempt.publicId, questionTen.id)
+      .first<StoredQuizAttemptAnswerRow>()
+
+    expect(saveResponse.status).toBe(200)
+    expect(response.status).toBe(200)
+    expect(questionResult).toMatchObject({
+      selectedChoice: {
+        id: sixChoice.id,
+        text: '6',
+      },
+      correctChoice: {
+        id: sixChoice.id,
+        text: '6',
+      },
+      isCorrect: true,
+      pointsAwarded: 1,
+    })
+    expect(storedAnswer).toEqual({
+      selected_choice_id: sixChoice.id,
+      is_correct: 1,
+      points_awarded: 1,
+    })
+  })
+
+  it('scores every seeded quiz correct choice consistently with result mapping', async () => {
+    const email = 'seeded-quiz-consistency@example.com'
+    const { cookie, quizId } = await prepareUnlockedQuizUser(email)
+    const seededChoices = await getSeededQuizChoices()
+    const choicesByQuestionPosition = new Map<number, SeededQuizChoiceRow[]>()
+
+    for (const choice of seededChoices) {
+      const existing =
+        choicesByQuestionPosition.get(choice.question_position) ?? []
+      existing.push(choice)
+      choicesByQuestionPosition.set(choice.question_position, existing)
+    }
+
+    expect(choicesByQuestionPosition.size).toBe(10)
+
+    for (const [questionPosition, choices] of choicesByQuestionPosition) {
+      const correctChoices = choices.filter((choice) => choice.is_correct === 1)
+      const visibleChoiceTexts = choices.map((choice) => choice.choice_text)
+
+      expect(correctChoices).toHaveLength(1)
+      expect(new Set(visibleChoiceTexts).size).toBe(visibleChoiceTexts.length)
+
+      const correctChoice = correctChoices[0]
+
+      if (correctChoice === undefined) {
+        throw new Error(`Question ${questionPosition} has no correct choice.`)
+      }
+
+      const { body } = await startQuiz(cookie, quizId)
+      const attemptQuestion = body.data.questions.find(
+        (question) => question.position === questionPosition,
+      )
+      const attemptChoice = attemptQuestion?.choices.find(
+        (choice) => choice.text === correctChoice.choice_text,
+      )
+
+      if (attemptQuestion === undefined || attemptChoice === undefined) {
+        throw new Error(
+          `Question ${questionPosition} correct choice was not returned.`,
+        )
+      }
+
+      const saveResponse = await saveQuizAttemptAnswer({
+        cookie,
+        attemptPublicId: body.data.attempt.publicId,
+        questionId: attemptQuestion.id,
+        selectedChoiceId: attemptChoice.id,
+      })
+      const { response, body: result } = await submitQuizAttemptForTest(
+        cookie,
+        body.data.attempt.publicId,
+      )
+      const questionResult = result.data.questions.find(
+        (question) => question.position === questionPosition,
+      )
+      const storedAnswer = await env.DB.prepare(
+        `SELECT
+          selected_choice_id,
+          is_correct,
+          points_awarded
+        FROM quiz_attempt_answers
+        INNER JOIN quiz_attempts ON quiz_attempts.id = quiz_attempt_answers.attempt_id
+        WHERE quiz_attempts.public_id = ?1
+          AND quiz_attempt_answers.question_id = ?2
+        LIMIT 1`,
+      )
+        .bind(body.data.attempt.publicId, attemptQuestion.id)
+        .first<StoredQuizAttemptAnswerRow>()
+
+      expect(saveResponse.status).toBe(200)
+      expect(response.status).toBe(200)
+      expect(questionResult?.selectedChoice).toEqual(attemptChoice)
+      expect(questionResult?.correctChoice).toEqual(attemptChoice)
+      expect(questionResult?.isCorrect).toBe(true)
+      expect(questionResult?.pointsAwarded).toBe(1)
+      expect(storedAnswer).toEqual({
+        selected_choice_id: attemptChoice.id,
+        is_correct: 1,
+        points_awarded: 1,
+      })
+    }
   })
 
   it('passes at 70%, completes the quiz lesson, and returns explanations after submission', async () => {
