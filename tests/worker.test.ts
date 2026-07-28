@@ -1,6 +1,8 @@
 import { env } from 'cloudflare:workers'
 import { describe, expect, it, vi } from 'vitest'
 
+import migration0008Sql from '../migrations/0008_upgrade_percentages_course_content.sql?raw'
+import percentageGridSvg from '../public/images/percentage-grid-25.svg?raw'
 import { app } from '../src/worker'
 import {
   hashPassword,
@@ -195,6 +197,14 @@ interface LessonDetailBody {
       lessonPosition: number
     }
   }
+}
+
+interface StoredLessonBlockRow {
+  lesson_slug: string
+  block_id: number
+  block_type: string
+  content_json: string
+  position: number
 }
 
 interface LessonCompletionBody {
@@ -457,6 +467,75 @@ const cseProfessionalLessonSlugs = [
   'worked-examples',
   'guided-practice',
   'percentages-topic-quiz',
+] as const
+
+const upgradedPercentagesContentExpectations = [
+  {
+    slug: 'introduction-to-percentages',
+    publicId: 'lesson-introduction-to-percentages',
+    minimumBlocks: 8,
+    expectedText: 'Twenty-five highlighted squares out of one hundred squares represent 25%.',
+  },
+  {
+    slug: 'understanding-percentages',
+    publicId: 'lesson-understanding-percentages',
+    minimumBlocks: 10,
+    expectedText: 'Percentage points',
+  },
+  {
+    slug: 'fractions-decimals-and-percentages',
+    publicId: 'lesson-fractions-decimals-and-percentages',
+    minimumBlocks: 12,
+    expectedText: '12.5% = 1/8',
+  },
+  {
+    slug: 'finding-the-percentage',
+    publicId: 'lesson-finding-the-percentage',
+    minimumBlocks: 8,
+    expectedText: 'Percentage amount = Rate × Base',
+  },
+  {
+    slug: 'finding-the-base',
+    publicId: 'lesson-finding-the-base',
+    minimumBlocks: 8,
+    expectedText: 'Base = Percentage amount ÷ Rate',
+  },
+  {
+    slug: 'finding-the-rate',
+    publicId: 'lesson-finding-the-rate',
+    minimumBlocks: 8,
+    expectedText: 'Rate = Percentage amount ÷ Base',
+  },
+  {
+    slug: 'percentage-increase-and-decrease',
+    publicId: 'lesson-percentage-increase-and-decrease',
+    minimumBlocks: 12,
+    expectedText: '100 × 1.20 = 120',
+  },
+  {
+    slug: 'discounts-and-markups',
+    publicId: 'lesson-discounts-and-markups',
+    minimumBlocks: 12,
+    expectedText: 'The sale price is ₱900.',
+  },
+  {
+    slug: 'worked-examples',
+    publicId: 'lesson-worked-examples',
+    minimumBlocks: 9,
+    expectedText: 'The selling price is ₱575.',
+  },
+  {
+    slug: 'guided-practice',
+    publicId: 'lesson-guided-practice',
+    minimumBlocks: 8,
+    expectedText: 'Asked for the whole → use Base = Percentage amount ÷ Rate.',
+  },
+  {
+    slug: 'percentages-topic-quiz',
+    publicId: 'lesson-percentages-topic-quiz',
+    minimumBlocks: 5,
+    expectedText: 'Questions are original review questions, not official CSC material.',
+  },
 ] as const
 
 const passwordValidationCases = [
@@ -1540,6 +1619,166 @@ describe('Course catalog and student learning APIs', () => {
     expect(text).not.toContain('Draft Percentages Lesson')
   })
 
+  it('seeds polished Percentages lesson blocks with deterministic positions', async () => {
+    const rows = await env.DB.prepare(
+      `SELECT
+        lessons.slug AS lesson_slug,
+        lesson_blocks.id AS block_id,
+        lesson_blocks.block_type,
+        lesson_blocks.content_json,
+        lesson_blocks.position
+      FROM lesson_blocks
+      INNER JOIN lessons ON lessons.id = lesson_blocks.lesson_id
+      INNER JOIN topics ON topics.id = lessons.topic_id
+      INNER JOIN subjects ON subjects.id = topics.subject_id
+      INNER JOIN courses ON courses.id = subjects.course_id
+      WHERE courses.slug = 'cse-professional'
+        AND subjects.slug = 'numerical-ability'
+        AND topics.slug = 'percentages'
+        AND lessons.slug IN (${cseProfessionalLessonSlugs.map(() => '?').join(', ')})
+      ORDER BY lessons.position ASC, lesson_blocks.position ASC`,
+    )
+      .bind(...cseProfessionalLessonSlugs)
+      .all<StoredLessonBlockRow>()
+
+    expect(rows.success).toBe(true)
+
+    for (const expectation of upgradedPercentagesContentExpectations) {
+      const lessonRows =
+        rows.results?.filter((row) => row.lesson_slug === expectation.slug) ??
+        []
+      const positions = lessonRows.map((row) => row.position)
+
+      expect(lessonRows.length).toBeGreaterThanOrEqual(
+        expectation.minimumBlocks,
+      )
+      expect(positions).toEqual(
+        Array.from({ length: lessonRows.length }, (_, index) => index + 1),
+      )
+      expect(new Set(positions).size).toBe(positions.length)
+      expect(
+        lessonRows.every((row) => {
+          const parsed = parseLessonBlock({
+            id: row.block_id,
+            blockType: row.block_type,
+            contentJson: row.content_json,
+            position: row.position,
+          })
+
+          return !parsed.malformed && parsed.block !== null
+        }),
+      ).toBe(true)
+      expect(lessonRows.map((row) => row.content_json).join(' ')).toContain(
+        expectation.expectedText,
+      )
+    }
+  })
+
+  it('keeps the content migration scoped away from user progress and attempts', () => {
+    expect(migration0008Sql).toContain('DELETE FROM lesson_blocks')
+    expect(migration0008Sql).toContain('INSERT INTO lesson_blocks')
+    expect(migration0008Sql).not.toMatch(/\blesson_progress\b/iu)
+    expect(migration0008Sql).not.toMatch(/\bquiz_attempts?\b/iu)
+    expect(migration0008Sql).not.toMatch(/\bpractice_attempts?\b/iu)
+    expect(migration0008Sql).not.toMatch(/\bcourse_enrollments\b/iu)
+  })
+
+  it('includes the accessible twenty-five percent SVG asset source', () => {
+    const highlightedCells = percentageGridSvg.match(/class="highlight"/gu)
+
+    expect(percentageGridSvg).toContain('<svg')
+    expect(percentageGridSvg).toContain('viewBox="0 0 120 120"')
+    expect(percentageGridSvg).toContain(
+      'exactly twenty-five highlighted squares',
+    )
+    expect(highlightedCells).toHaveLength(25)
+    expect(percentageGridSvg).not.toMatch(/<script\b/iu)
+    expect(percentageGridSvg).not.toMatch(
+      /\b(?:href|src|xlink:href)=["']https?:\/\//iu,
+    )
+  })
+
+  it('returns upgraded lesson detail blocks in order through the API', async () => {
+    const email = 'content-api-order@example.com'
+    const { cookie } = await register(email)
+
+    await enrollUser(email)
+
+    for (const expectation of upgradedPercentagesContentExpectations) {
+      await completeLessonsBefore(email, expectation.slug)
+
+      const response = await app.request(
+        `/api/student/lessons/${expectation.publicId}`,
+        { headers: { cookie } },
+        createBindings('production'),
+      )
+      const body = await response.json<LessonDetailBody>()
+
+      expect(response.status).toBe(200)
+      expect(body.data.blocks.length).toBeGreaterThanOrEqual(
+        expectation.minimumBlocks,
+      )
+      expect(body.data.blocks.map((block) => block.position)).toEqual(
+        Array.from(
+          { length: body.data.blocks.length },
+          (_, index) => index + 1,
+        ),
+      )
+      expect(body.data.malformedBlockCount).toBe(0)
+      expect(JSON.stringify(body.data.blocks)).toContain(
+        expectation.expectedText,
+      )
+      expect(JSON.stringify(body)).not.toContain('content_json')
+    }
+  })
+
+  it('keeps practice and quiz lesson activity APIs available after content blocks', async () => {
+    const { cookie: practiceCookie, practiceSetId } =
+      await prepareUnlockedPracticeUser(
+        'content-practice-api@example.com',
+        'finding-the-percentage',
+      )
+    const { cookie: quizCookie, quizId } = await prepareUnlockedQuizUser(
+      'content-quiz-api@example.com',
+    )
+
+    const practiceLessonResponse = await app.request(
+      '/api/student/lessons/lesson-finding-the-percentage',
+      { headers: { cookie: practiceCookie } },
+      createBindings('production'),
+    )
+    const practiceSummaryResponse = await app.request(
+      '/api/student/lessons/lesson-finding-the-percentage/practice',
+      { headers: { cookie: practiceCookie } },
+      createBindings('production'),
+    )
+    const quizLessonResponse = await app.request(
+      '/api/student/lessons/lesson-percentages-topic-quiz',
+      { headers: { cookie: quizCookie } },
+      createBindings('production'),
+    )
+    const quizSummaryResponse = await app.request(
+      '/api/student/lessons/lesson-percentages-topic-quiz/quiz',
+      { headers: { cookie: quizCookie } },
+      createBindings('production'),
+    )
+    const practiceLesson = await practiceLessonResponse.json<LessonDetailBody>()
+    const quizLesson = await quizLessonResponse.json<LessonDetailBody>()
+
+    expect(practiceLessonResponse.status).toBe(200)
+    expect(practiceLesson.data.lessonType).toBe('practice')
+    expect(practiceLesson.data.manualCompletionAllowed).toBe(false)
+    expect(practiceLesson.data.blocks.length).toBeGreaterThan(0)
+    expect(practiceSummaryResponse.status).toBe(200)
+    expect(practiceSetId).toBeGreaterThan(0)
+    expect(quizLessonResponse.status).toBe(200)
+    expect(quizLesson.data.lessonType).toBe('quiz')
+    expect(quizLesson.data.manualCompletionAllowed).toBe(false)
+    expect(quizLesson.data.blocks.length).toBeGreaterThan(0)
+    expect(quizSummaryResponse.status).toBe(200)
+    expect(quizId).toBeGreaterThan(0)
+  })
+
   it('allows an active enrolled student to access a lesson with ordered blocks', async () => {
     const email = 'lesson-reader-active@example.com'
     const { cookie } = await register(email)
@@ -1561,16 +1800,21 @@ describe('Course catalog and student learning APIs', () => {
       'heading',
       'paragraph',
       'callout',
-      'paragraph',
-      'image',
       'formula',
+      'image',
+      'heading',
+      'paragraph',
       'example',
       'callout',
       'summary',
+      'paragraph',
     ])
     expect(body.data.blocks.map((block) => block.position)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
     ])
+    expect(JSON.stringify(body.data.blocks)).toContain(
+      '/images/percentage-grid-25.svg',
+    )
     expect(JSON.stringify(body)).not.toContain('content_json')
   })
 
