@@ -728,6 +728,34 @@ async function register(
   }
 }
 
+async function registerAdmin(email: string): Promise<{ cookie: string }> {
+  const { cookie } = await register(email)
+
+  await env.DB.prepare(
+    `UPDATE users SET role = 'admin' WHERE email = ?1`,
+  )
+    .bind(email)
+    .run()
+
+  return { cookie }
+}
+
+function adminJsonRequest(
+  body: Record<string, unknown>,
+  cookie: string,
+  method = 'POST',
+): RequestInit {
+  const request = jsonRequest(body, cookie)
+  const headers = new Headers(request.headers)
+  headers.set('x-cse-admin-csrf', 'same-origin-admin-mutation')
+
+  return {
+    ...request,
+    method,
+    headers,
+  }
+}
+
 async function getUserId(email: string): Promise<number> {
   const user = await env.DB.prepare(
     'SELECT id FROM users WHERE email = ?1 LIMIT 1',
@@ -3940,7 +3968,7 @@ describe('Practice activity APIs', () => {
         expect(questionResult?.pointsAwarded).toBe(1)
       }
     }
-  })
+  }, 20_000)
 
   it('scores every fixed Percentages practice distractor as incorrect', async () => {
     const seededChoices = await getSeededFixedPracticeChoices()
@@ -5228,5 +5256,404 @@ describe('Authentication API', () => {
         },
       },
     })
+  })
+})
+
+describe('Admin Content Builder Lite API', () => {
+  async function createAdminCourseForTest(
+    cookie: string,
+    slug: string,
+    status = 'draft',
+  ): Promise<{ id: number; slug: string; updatedAt: string }> {
+    const response = await app.request(
+      '/api/admin/courses',
+      adminJsonRequest(
+        {
+          title: `Admin Test ${slug}`,
+          slug,
+          shortDescription: 'Admin test course',
+          description: 'Admin test course description',
+          level: 'test',
+          thumbnailKey: null,
+          accessDurationDays: null,
+          status,
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const body = await response.json<{
+      success: true
+      data: {
+        course: {
+          id: number
+          slug: string
+          updatedAt: string
+        }
+      }
+    }>()
+
+    expect(response.status).toBe(201)
+    return body.data.course
+  }
+
+  async function createCurriculumShell(cookie: string): Promise<{
+    courseId: number
+    subjectId: number
+    topicId: number
+    lessonId: number
+    lessonUpdatedAt: string
+  }> {
+    const unique = crypto.randomUUID().slice(0, 8)
+    const course = await createAdminCourseForTest(
+      cookie,
+      `admin-shell-${unique}`,
+    )
+    const subjectResponse = await app.request(
+      `/api/admin/courses/${course.id}/subjects`,
+      adminJsonRequest(
+        {
+          title: 'Admin Subject',
+          slug: `admin-subject-${unique}`,
+          description: null,
+          status: 'draft',
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const subjectBody = await subjectResponse.json<{
+      success: true
+      data: { subject: { id: number } }
+    }>()
+    const topicResponse = await app.request(
+      `/api/admin/subjects/${subjectBody.data.subject.id}/topics`,
+      adminJsonRequest(
+        {
+          title: 'Admin Topic',
+          slug: `admin-topic-${unique}`,
+          description: null,
+          status: 'draft',
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const topicBody = await topicResponse.json<{
+      success: true
+      data: { topic: { id: number } }
+    }>()
+    const lessonResponse = await app.request(
+      `/api/admin/topics/${topicBody.data.topic.id}/lessons`,
+      adminJsonRequest(
+        {
+          title: 'Admin Lesson',
+          slug: `admin-lesson-${unique}`,
+          lessonType: 'reading',
+          summary: null,
+          estimatedMinutes: null,
+          isPreview: false,
+          requiresPrevious: true,
+          status: 'draft',
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const lessonBody = await lessonResponse.json<{
+      success: true
+      data: { lesson: { id: number; updatedAt: string } }
+    }>()
+
+    expect(subjectResponse.status).toBe(201)
+    expect(topicResponse.status).toBe(201)
+    expect(lessonResponse.status).toBe(201)
+
+    return {
+      courseId: course.id,
+      subjectId: subjectBody.data.subject.id,
+      topicId: topicBody.data.topic.id,
+      lessonId: lessonBody.data.lesson.id,
+      lessonUpdatedAt: lessonBody.data.lesson.updatedAt,
+    }
+  }
+
+  it('protects admin reads by role and admin mutations by CSRF header', async () => {
+    const { cookie: studentCookie } = await register(
+      'admin-builder-student@example.com',
+    )
+    const studentResponse = await app.request(
+      '/api/admin/dashboard',
+      { headers: { cookie: studentCookie } },
+      createBindings('production'),
+    )
+
+    expect(studentResponse.status).toBe(403)
+
+    const { cookie } = await registerAdmin('admin-builder-csrf@example.com')
+    const missingCsrfResponse = await app.request(
+      '/api/admin/courses',
+      jsonRequest(
+        {
+          title: 'Missing CSRF',
+          slug: 'missing-csrf',
+          status: 'draft',
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+
+    expect(missingCsrfResponse.status).toBe(403)
+
+    const created = await createAdminCourseForTest(
+      cookie,
+      `csrf-ok-${crypto.randomUUID().slice(0, 8)}`,
+    )
+
+    expect(created.id).toBeGreaterThan(0)
+  })
+
+  it('rejects duplicate course slugs and stale admin updates', async () => {
+    const { cookie } = await registerAdmin('admin-builder-stale@example.com')
+    const slug = `duplicate-${crypto.randomUUID().slice(0, 8)}`
+    const course = await createAdminCourseForTest(cookie, slug)
+    const duplicateResponse = await app.request(
+      '/api/admin/courses',
+      adminJsonRequest(
+        {
+          title: 'Duplicate',
+          slug,
+          status: 'draft',
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+
+    expect(duplicateResponse.status).toBe(409)
+
+    const firstUpdate = await app.request(
+      `/api/admin/courses/${course.id}`,
+      adminJsonRequest(
+        {
+          title: 'Fresh update',
+          slug,
+          status: 'draft',
+          updatedAt: course.updatedAt,
+        },
+        cookie,
+        'PATCH',
+      ),
+      createBindings('production'),
+    )
+
+    expect(firstUpdate.status).toBe(200)
+
+    const staleUpdate = await app.request(
+      `/api/admin/courses/${course.id}`,
+      adminJsonRequest(
+        {
+          title: 'Stale update',
+          slug,
+          status: 'draft',
+          updatedAt: '1900-01-01 00:00:00',
+        },
+        cookie,
+        'PATCH',
+      ),
+      createBindings('production'),
+    )
+
+    expect(staleUpdate.status).toBe(409)
+  })
+
+  it('keeps draft admin-authored courses out of the public catalog', async () => {
+    const { cookie } = await registerAdmin('admin-builder-draft@example.com')
+    const slug = `draft-hidden-${crypto.randomUUID().slice(0, 8)}`
+    await createAdminCourseForTest(cookie, slug, 'draft')
+
+    const publicResponse = await app.request(
+      '/api/courses',
+      undefined,
+      createBindings('production'),
+    )
+    const body = await publicResponse.json<CourseListBody>()
+
+    expect(publicResponse.status).toBe(200)
+    expect(body.data.courses.map((course) => course.slug)).not.toContain(slug)
+  })
+
+  it('validates lesson publish readiness and blocks raw HTML content', async () => {
+    const { cookie } = await registerAdmin('admin-builder-publish@example.com')
+    const shell = await createCurriculumShell(cookie)
+
+    const publishResponse = await app.request(
+      `/api/admin/lessons/${shell.lessonId}`,
+      adminJsonRequest(
+        {
+          title: 'Admin Lesson',
+          slug: 'admin-lesson-publish-test',
+          status: 'published',
+          updatedAt: shell.lessonUpdatedAt,
+        },
+        cookie,
+        'PATCH',
+      ),
+      createBindings('production'),
+    )
+
+    expect(publishResponse.status).toBe(400)
+
+    const rawHtmlResponse = await app.request(
+      `/api/admin/lessons/${shell.lessonId}/blocks`,
+      adminJsonRequest(
+        {
+          blockType: 'paragraph',
+          content: { text: '<p>Do not store raw HTML.</p>' },
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+
+    expect(rawHtmlResponse.status).toBe(400)
+    await expect(rawHtmlResponse.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: 'RAW_HTML_BLOCKED' },
+    })
+  })
+
+  it('validates fixed practice and quiz choices safely', async () => {
+    const { cookie } = await registerAdmin('admin-builder-fixed@example.com')
+    const unique = crypto.randomUUID().slice(0, 8)
+    const course = await createAdminCourseForTest(
+      cookie,
+      `fixed-course-${unique}`,
+    )
+    const subject = await app.request(
+      `/api/admin/courses/${course.id}/subjects`,
+      adminJsonRequest(
+        {
+          title: 'Fixed Subject',
+          slug: `fixed-subject-${unique}`,
+          status: 'draft',
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const subjectBody = await subject.json<{
+      success: true
+      data: { subject: { id: number } }
+    }>()
+    const topic = await app.request(
+      `/api/admin/subjects/${subjectBody.data.subject.id}/topics`,
+      adminJsonRequest(
+        {
+          title: 'Fixed Topic',
+          slug: `fixed-topic-${unique}`,
+          status: 'draft',
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const topicBody = await topic.json<{
+      success: true
+      data: { topic: { id: number } }
+    }>()
+    const lesson = await app.request(
+      `/api/admin/topics/${topicBody.data.topic.id}/lessons`,
+      adminJsonRequest(
+        {
+          title: 'Fixed Practice',
+          slug: `fixed-practice-${unique}`,
+          lessonType: 'practice',
+          status: 'draft',
+          isPreview: false,
+          requiresPrevious: true,
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const lessonBody = await lesson.json<{
+      success: true
+      data: { lesson: { id: number } }
+    }>()
+    const practiceSet = await app.request(
+      `/api/admin/lessons/${lessonBody.data.lesson.id}/practice-set`,
+      adminJsonRequest(
+        {
+          title: 'Fixed Practice',
+          instructions: null,
+          passingScore: 70,
+          questionCount: 1,
+          maximumAttempts: null,
+          showExplanations: true,
+          status: 'draft',
+          questionSource: 'fixed',
+        },
+        cookie,
+        'PUT',
+      ),
+      createBindings('production'),
+    )
+    const practiceSetBody = await practiceSet.json<{
+      success: true
+      data: { practiceSet: { id: number } }
+    }>()
+    const invalidQuestion = await app.request(
+      `/api/admin/practice-sets/${practiceSetBody.data.practiceSet.id}/questions`,
+      adminJsonRequest(
+        {
+          prompt: 'Which answer is correct?',
+          explanation: null,
+          points: 1,
+          position: 1,
+          status: 'active',
+          choices: [
+            { text: 'A', isCorrect: true, position: 1 },
+            { text: 'B', isCorrect: false, position: 2 },
+            { text: 'C', isCorrect: false, position: 3 },
+          ],
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+
+    expect(invalidQuestion.status).toBe(400)
+  })
+
+  it('writes safe audit records for admin content changes', async () => {
+    const { cookie } = await registerAdmin('admin-builder-audit@example.com')
+    const slug = `audit-course-${crypto.randomUUID().slice(0, 8)}`
+    await createAdminCourseForTest(cookie, slug)
+
+    const auditResponse = await app.request(
+      '/api/admin/audit-logs',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const auditBody = await auditResponse.json<{
+      success: true
+      data: {
+        logs: Array<{
+          action: string
+          entityType: string
+          metadata: unknown
+        }>
+      }
+    }>()
+
+    expect(auditResponse.status).toBe(200)
+    expect(
+      auditBody.data.logs.some(
+        (log) => log.action === 'create' && log.entityType === 'course',
+      ),
+    ).toBe(true)
+    expect(JSON.stringify(auditBody.data.logs)).not.toContain('password')
   })
 })

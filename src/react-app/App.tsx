@@ -1,9 +1,14 @@
 import { Route, Routes } from 'react-router'
 
 import { AdminRoute } from './components/AdminRoute'
+import { AdminLayout } from './components/admin/AdminLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { PublicOnlyRoute } from './components/PublicOnlyRoute'
-import { AdminPage } from './pages/AdminPage'
+import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage'
+import { AdminCourseBuilderPage } from './pages/admin/AdminCourseBuilderPage'
+import { AdminCoursesPage } from './pages/admin/AdminCoursesPage'
+import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
+import { AdminStudentsPage } from './pages/admin/AdminStudentsPage'
 import { CourseCatalogPage } from './pages/CourseCatalogPage'
 import { CourseDetailPage } from './pages/CourseDetailPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -51,7 +56,13 @@ export function App() {
           element={<QuizResultPage />}
         />
         <Route element={<AdminRoute />}>
-          <Route path="admin" element={<AdminPage />} />
+          <Route path="admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboardPage />} />
+            <Route path="courses" element={<AdminCoursesPage />} />
+            <Route path="courses/:courseId" element={<AdminCourseBuilderPage />} />
+            <Route path="students" element={<AdminStudentsPage />} />
+            <Route path="audit-log" element={<AdminAuditLogPage />} />
+          </Route>
         </Route>
       </Route>
 

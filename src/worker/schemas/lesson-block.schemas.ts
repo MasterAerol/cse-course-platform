@@ -118,6 +118,13 @@ const schemasByBlockType = {
   summary: summaryContentSchema,
 } satisfies Record<LessonBlockType, z.ZodType>
 
+export function validateLessonBlockContent(
+  blockType: LessonBlockType,
+  content: unknown,
+): z.infer<(typeof schemasByBlockType)[LessonBlockType]> {
+  return schemasByBlockType[blockType].parse(content)
+}
+
 export interface LessonBlockParseResult {
   block: LessonBlock | null
   malformed: boolean

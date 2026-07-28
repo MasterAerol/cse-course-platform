@@ -1092,3 +1092,837 @@ export async function fetchPracticeAttemptResult(
 
   return response.data
 }
+
+const adminCsrfHeaderValue = 'same-origin-admin-mutation'
+
+function adminRequest<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  init?: RequestInit,
+): Promise<T> {
+  const headers = new Headers(init?.headers)
+  const method = init?.method?.toUpperCase() ?? 'GET'
+
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    headers.set('X-CSE-Admin-CSRF', adminCsrfHeaderValue)
+  }
+
+  return request(path, schema, {
+    ...init,
+    headers,
+  })
+}
+
+const adminEntityStatusSchema = z.enum(['draft', 'published', 'archived'])
+
+const adminCourseSchema = z.object({
+  id: z.number(),
+  publicId: z.string(),
+  title: z.string(),
+  slug: z.string(),
+  shortDescription: z.string().nullable(),
+  description: z.string().nullable(),
+  level: z.string().nullable(),
+  thumbnailKey: z.string().nullable(),
+  status: adminEntityStatusSchema,
+  accessDurationDays: z.number().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+const adminLessonSchema = z.object({
+  id: z.number(),
+  topicId: z.number(),
+  publicId: z.string(),
+  title: z.string(),
+  slug: z.string(),
+  lessonType: z.enum(['reading', 'video', 'practice', 'quiz']),
+  summary: z.string().nullable(),
+  estimatedMinutes: z.number().nullable(),
+  position: z.number(),
+  isPreview: z.boolean(),
+  requiresPrevious: z.boolean(),
+  status: adminEntityStatusSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+const adminTopicBaseSchema = z.object({
+  id: z.number(),
+  subjectId: z.number(),
+  title: z.string(),
+  slug: z.string(),
+  description: z.string().nullable(),
+  position: z.number(),
+  status: adminEntityStatusSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+const adminTopicSchema = adminTopicBaseSchema.extend({
+  lessons: z.array(adminLessonSchema),
+})
+
+const adminSubjectBaseSchema = z.object({
+  id: z.number(),
+  courseId: z.number(),
+  title: z.string(),
+  slug: z.string(),
+  description: z.string().nullable(),
+  position: z.number(),
+  status: adminEntityStatusSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+const adminSubjectSchema = adminSubjectBaseSchema.extend({
+  topics: z.array(adminTopicSchema),
+})
+
+const adminDashboardResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    counts: z.object({
+      courses: z.number(),
+      publishedCourses: z.number(),
+      draftCourses: z.number(),
+      subjects: z.number(),
+      topics: z.number(),
+      lessons: z.number(),
+      publishedLessons: z.number(),
+      practiceSets: z.number(),
+      quizzes: z.number(),
+    }),
+    recentChanges: z.array(z.unknown()),
+    cseProfessional: adminCourseSchema.nullable(),
+  }),
+})
+
+const adminCoursesResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    courses: z.array(adminCourseSchema),
+  }),
+})
+
+const adminCourseDetailResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    course: adminCourseSchema,
+    subjects: z.array(adminSubjectSchema),
+  }),
+})
+
+const adminCourseMutationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    course: adminCourseSchema,
+  }),
+})
+
+const adminSubjectMutationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    subject: adminSubjectBaseSchema,
+  }),
+})
+
+const adminTopicMutationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    topic: adminTopicBaseSchema,
+  }),
+})
+
+const adminLessonMutationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    lesson: adminLessonSchema,
+  }),
+})
+
+const adminLessonBlockSchema = z.object({
+  id: z.number(),
+  lessonId: z.number(),
+  type: z.enum([
+    'heading',
+    'paragraph',
+    'callout',
+    'formula',
+    'example',
+    'image',
+    'video',
+    'divider',
+    'summary',
+  ]),
+  content: z.unknown(),
+  position: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+const adminLessonBlocksResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    blocks: z.array(adminLessonBlockSchema),
+  }),
+})
+
+const adminLessonBlockMutationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    block: adminLessonBlockSchema,
+  }),
+})
+
+const adminMoveResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    moved: z.boolean(),
+  }),
+})
+
+const adminAuditLogSchema = z.object({
+  id: z.number(),
+  actorUserId: z.number().nullable(),
+  actorEmail: z.string().nullable(),
+  action: z.string(),
+  entityType: z.string(),
+  entityId: z.string().nullable(),
+  metadata: z.unknown(),
+  createdAt: z.string(),
+})
+
+const adminAuditLogsResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    logs: z.array(adminAuditLogSchema),
+  }),
+})
+
+const adminEnrollmentResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    enrollment: enrollmentStateSchema,
+  }),
+})
+
+const adminQuestionChoiceSchema = z.object({
+  id: z.number(),
+  text: z.string(),
+  isCorrect: z.boolean(),
+  position: z.number(),
+  updatedAt: z.string().nullable(),
+})
+
+const adminPracticeSetSchema = z.object({
+  id: z.number(),
+  lessonId: z.number(),
+  title: z.string(),
+  instructions: z.string().nullable(),
+  passingScore: z.number(),
+  questionCount: z.number(),
+  maximumAttempts: z.number().nullable(),
+  showExplanations: z.boolean(),
+  status: adminEntityStatusSchema,
+  questionSource: z.enum(['fixed', 'generated']),
+  generator: z
+    .object({
+      slug: z.string(),
+      version: z.number(),
+      difficulty: z.object({
+        easy: z.number(),
+        medium: z.number(),
+        hard: z.number(),
+      }),
+    })
+    .nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+const adminPracticeQuestionSchema = z.object({
+  id: z.number(),
+  practiceSetId: z.number(),
+  prompt: z.string(),
+  explanation: z.string().nullable(),
+  points: z.number(),
+  position: z.number(),
+  status: z.enum(['active', 'archived']),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  choices: z.array(adminQuestionChoiceSchema),
+})
+
+const adminQuizSchema = z.object({
+  id: z.number(),
+  lessonId: z.number().nullable(),
+  topicId: z.number().nullable(),
+  title: z.string(),
+  description: z.string().nullable(),
+  quizType: z.string(),
+  passingScore: z.number(),
+  timeLimitMinutes: z.number().nullable(),
+  maximumAttempts: z.number().nullable(),
+  shuffleQuestions: z.boolean(),
+  shuffleChoices: z.boolean(),
+  showExplanations: z.boolean(),
+  status: adminEntityStatusSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+const adminQuizQuestionSchema = z.object({
+  id: z.number(),
+  quizId: z.number(),
+  questionType: z.enum(['multiple_choice']),
+  prompt: z.string(),
+  explanation: z.string().nullable(),
+  points: z.number(),
+  position: z.number(),
+  status: z.enum(['active', 'archived']),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  choices: z.array(adminQuestionChoiceSchema),
+})
+
+const adminPracticeSetResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    practiceSet: adminPracticeSetSchema.nullable(),
+    questions: z.array(adminPracticeQuestionSchema).optional(),
+  }),
+})
+
+const adminPracticeSetMutationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    practiceSet: adminPracticeSetSchema,
+  }),
+})
+
+const adminPracticeQuestionMutationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    question: adminPracticeQuestionSchema,
+  }),
+})
+
+const adminQuizResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    quiz: adminQuizSchema.nullable(),
+    questions: z.array(adminQuizQuestionSchema),
+  }),
+})
+
+const adminQuizMutationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    quiz: adminQuizSchema,
+  }),
+})
+
+const adminQuizQuestionMutationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    question: adminQuizQuestionSchema,
+  }),
+})
+
+export type AdminDashboard = z.infer<
+  typeof adminDashboardResponseSchema
+>['data']
+export type AdminCourse = z.infer<typeof adminCourseSchema>
+export type AdminSubject = z.infer<typeof adminSubjectSchema>
+export type AdminSubjectSummary = z.infer<typeof adminSubjectBaseSchema>
+export type AdminTopic = z.infer<typeof adminTopicSchema>
+export type AdminTopicSummary = z.infer<typeof adminTopicBaseSchema>
+export type AdminLesson = z.infer<typeof adminLessonSchema>
+export type AdminLessonBlock = z.infer<typeof adminLessonBlockSchema>
+export type AdminAuditLog = z.infer<typeof adminAuditLogSchema>
+export type AdminPracticeSet = z.infer<typeof adminPracticeSetSchema>
+export type AdminPracticeQuestion = z.infer<
+  typeof adminPracticeQuestionSchema
+>
+export type AdminQuiz = z.infer<typeof adminQuizSchema>
+export type AdminQuizQuestion = z.infer<typeof adminQuizQuestionSchema>
+
+export interface AdminCourseInput {
+  title: string
+  slug: string
+  shortDescription?: string | null
+  description?: string | null
+  level?: string | null
+  accessDurationDays?: number | null
+  status?: 'draft' | 'published' | 'archived'
+  thumbnailKey?: string | null
+  updatedAt?: string
+}
+
+export interface AdminSubjectInput {
+  title: string
+  slug: string
+  description?: string | null
+  position?: number
+  status?: 'draft' | 'published' | 'archived'
+  updatedAt?: string
+}
+
+export interface AdminLessonInput {
+  title: string
+  slug: string
+  lessonType?: 'reading' | 'practice' | 'quiz'
+  summary?: string | null
+  estimatedMinutes?: number | null
+  position?: number
+  isPreview?: boolean
+  requiresPrevious?: boolean
+  status?: 'draft' | 'published' | 'archived'
+  updatedAt?: string
+}
+
+export interface AdminLessonBlockInput {
+  blockType: AdminLessonBlock['type']
+  content: unknown
+  position?: number
+}
+
+export interface AdminPracticeSetInput {
+  title: string
+  instructions?: string | null
+  passingScore: number
+  questionCount: number
+  maximumAttempts?: number | null
+  showExplanations: boolean
+  status: 'draft' | 'published' | 'archived'
+  questionSource: 'fixed' | 'generated'
+  generatorSlug?: string
+  generatorVersion?: number
+  difficulty?: {
+    easy: number
+    medium: number
+    hard: number
+  }
+  updatedAt?: string
+}
+
+export interface AdminFixedQuestionInput {
+  prompt: string
+  explanation?: string | null
+  points: number
+  position: number
+  status: 'active' | 'archived'
+  updatedAt?: string
+  choices: Array<{
+    id?: number
+    text: string
+    isCorrect: boolean
+    position: number
+  }>
+}
+
+export interface AdminQuizInput {
+  title: string
+  description?: string | null
+  quizType: 'topic'
+  passingScore: number
+  timeLimitMinutes?: number | null
+  maximumAttempts?: number | null
+  shuffleQuestions: boolean
+  shuffleChoices: boolean
+  showExplanations: boolean
+  status: 'draft' | 'published' | 'archived'
+  updatedAt?: string
+}
+
+export interface AdminOperationalEnrollmentInput {
+  email: string
+  courseSlug: string
+  accessExpiresAt?: string | null
+}
+
+export function fetchAdminDashboard(
+  signal?: AbortSignal,
+): Promise<AdminDashboard> {
+  return adminRequest('/api/admin/dashboard', adminDashboardResponseSchema, {
+    signal,
+  }).then((response) => response.data)
+}
+
+export function fetchAdminCourses(
+  signal?: AbortSignal,
+): Promise<AdminCourse[]> {
+  return adminRequest('/api/admin/courses', adminCoursesResponseSchema, {
+    signal,
+  }).then((response) => response.data.courses)
+}
+
+export function createAdminCourse(
+  input: AdminCourseInput,
+): Promise<AdminCourse> {
+  return adminRequest('/api/admin/courses', adminCourseMutationResponseSchema, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }).then((response) => response.data.course)
+}
+
+export function fetchAdminCourseDetail(
+  courseId: number,
+  signal?: AbortSignal,
+): Promise<{ course: AdminCourse; subjects: AdminSubject[] }> {
+  return adminRequest(
+    `/api/admin/courses/${encodeURIComponent(String(courseId))}`,
+    adminCourseDetailResponseSchema,
+    { signal },
+  ).then((response) => response.data)
+}
+
+export function updateAdminCourse(
+  courseId: number,
+  input: AdminCourseInput & { updatedAt: string },
+): Promise<AdminCourse> {
+  return adminRequest(
+    `/api/admin/courses/${encodeURIComponent(String(courseId))}`,
+    adminCourseMutationResponseSchema,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.course)
+}
+
+export function createAdminSubject(
+  courseId: number,
+  input: AdminSubjectInput,
+): Promise<AdminSubjectSummary> {
+  return adminRequest(
+    `/api/admin/courses/${encodeURIComponent(String(courseId))}/subjects`,
+    adminSubjectMutationResponseSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.subject)
+}
+
+export function updateAdminSubject(
+  subjectId: number,
+  input: AdminSubjectInput & { updatedAt: string },
+): Promise<AdminSubjectSummary> {
+  return adminRequest(
+    `/api/admin/subjects/${encodeURIComponent(String(subjectId))}`,
+    adminSubjectMutationResponseSchema,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.subject)
+}
+
+export function moveAdminSubject(
+  subjectId: number,
+  direction: 'up' | 'down',
+): Promise<boolean> {
+  return adminRequest(
+    `/api/admin/subjects/${encodeURIComponent(String(subjectId))}/move-${direction}`,
+    adminMoveResponseSchema,
+    { method: 'POST' },
+  ).then((response) => response.data.moved)
+}
+
+export function createAdminTopic(
+  subjectId: number,
+  input: AdminSubjectInput,
+): Promise<AdminTopicSummary> {
+  return adminRequest(
+    `/api/admin/subjects/${encodeURIComponent(String(subjectId))}/topics`,
+    adminTopicMutationResponseSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.topic)
+}
+
+export function updateAdminTopic(
+  topicId: number,
+  input: AdminSubjectInput & { updatedAt: string },
+): Promise<AdminTopicSummary> {
+  return adminRequest(
+    `/api/admin/topics/${encodeURIComponent(String(topicId))}`,
+    adminTopicMutationResponseSchema,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.topic)
+}
+
+export function moveAdminTopic(
+  topicId: number,
+  direction: 'up' | 'down',
+): Promise<boolean> {
+  return adminRequest(
+    `/api/admin/topics/${encodeURIComponent(String(topicId))}/move-${direction}`,
+    adminMoveResponseSchema,
+    { method: 'POST' },
+  ).then((response) => response.data.moved)
+}
+
+export function createAdminLesson(
+  topicId: number,
+  input: AdminLessonInput,
+): Promise<AdminLesson> {
+  return adminRequest(
+    `/api/admin/topics/${encodeURIComponent(String(topicId))}/lessons`,
+    adminLessonMutationResponseSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.lesson)
+}
+
+export function moveAdminLesson(
+  lessonId: number,
+  direction: 'up' | 'down',
+): Promise<boolean> {
+  return adminRequest(
+    `/api/admin/lessons/${encodeURIComponent(String(lessonId))}/move-${direction}`,
+    adminMoveResponseSchema,
+    { method: 'POST' },
+  ).then((response) => response.data.moved)
+}
+
+export function updateAdminLesson(
+  lessonId: number,
+  input: AdminLessonInput & { updatedAt: string },
+): Promise<AdminLesson> {
+  return adminRequest(
+    `/api/admin/lessons/${encodeURIComponent(String(lessonId))}`,
+    adminLessonMutationResponseSchema,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.lesson)
+}
+
+export function fetchAdminLessonBlocks(
+  lessonId: number,
+  signal?: AbortSignal,
+): Promise<AdminLessonBlock[]> {
+  return adminRequest(
+    `/api/admin/lessons/${encodeURIComponent(String(lessonId))}/blocks`,
+    adminLessonBlocksResponseSchema,
+    { signal },
+  ).then((response) => response.data.blocks)
+}
+
+export function createAdminLessonBlock(
+  lessonId: number,
+  input: AdminLessonBlockInput,
+): Promise<AdminLessonBlock> {
+  return adminRequest(
+    `/api/admin/lessons/${encodeURIComponent(String(lessonId))}/blocks`,
+    adminLessonBlockMutationResponseSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.block)
+}
+
+export function updateAdminLessonBlock(
+  blockId: number,
+  input: Partial<AdminLessonBlockInput>,
+): Promise<AdminLessonBlock> {
+  return adminRequest(
+    `/api/admin/lesson-blocks/${encodeURIComponent(String(blockId))}`,
+    adminLessonBlockMutationResponseSchema,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.block)
+}
+
+export function deleteAdminLessonBlock(blockId: number): Promise<boolean> {
+  return adminRequest(
+    `/api/admin/lesson-blocks/${encodeURIComponent(String(blockId))}`,
+    z.object({
+      success: z.literal(true),
+      data: z.object({ deleted: z.literal(true) }),
+    }),
+    { method: 'DELETE' },
+  ).then((response) => response.data.deleted)
+}
+
+export function moveAdminLessonBlock(
+  blockId: number,
+  direction: 'up' | 'down',
+): Promise<boolean> {
+  return adminRequest(
+    `/api/admin/lesson-blocks/${encodeURIComponent(
+      String(blockId),
+    )}/move-${direction}`,
+    adminMoveResponseSchema,
+    { method: 'POST' },
+  ).then((response) => response.data.moved)
+}
+
+export function fetchAdminPracticeSet(
+  lessonId: number,
+  signal?: AbortSignal,
+): Promise<{
+  practiceSet: AdminPracticeSet | null
+  questions: AdminPracticeQuestion[]
+}> {
+  return adminRequest(
+    `/api/admin/lessons/${encodeURIComponent(String(lessonId))}/practice-set`,
+    adminPracticeSetResponseSchema,
+    { signal },
+  ).then((response) => ({
+    practiceSet: response.data.practiceSet,
+    questions: response.data.questions ?? [],
+  }))
+}
+
+export function saveAdminPracticeSet(
+  lessonId: number,
+  input: AdminPracticeSetInput,
+): Promise<AdminPracticeSet> {
+  return adminRequest(
+    `/api/admin/lessons/${encodeURIComponent(String(lessonId))}/practice-set`,
+    adminPracticeSetMutationResponseSchema,
+    {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.practiceSet)
+}
+
+export function createAdminPracticeQuestion(
+  practiceSetId: number,
+  input: AdminFixedQuestionInput,
+): Promise<AdminPracticeQuestion> {
+  return adminRequest(
+    `/api/admin/practice-sets/${encodeURIComponent(String(practiceSetId))}/questions`,
+    adminPracticeQuestionMutationResponseSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.question)
+}
+
+export function updateAdminPracticeQuestion(
+  questionId: number,
+  input: AdminFixedQuestionInput,
+): Promise<AdminPracticeQuestion> {
+  return adminRequest(
+    `/api/admin/practice-questions/${encodeURIComponent(String(questionId))}`,
+    adminPracticeQuestionMutationResponseSchema,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.question)
+}
+
+export function moveAdminPracticeQuestion(
+  questionId: number,
+  direction: 'up' | 'down',
+): Promise<boolean> {
+  return adminRequest(
+    `/api/admin/practice-questions/${encodeURIComponent(String(questionId))}/move-${direction}`,
+    adminMoveResponseSchema,
+    { method: 'POST' },
+  ).then((response) => response.data.moved)
+}
+
+export function fetchAdminQuiz(
+  lessonId: number,
+  signal?: AbortSignal,
+): Promise<{ quiz: AdminQuiz | null; questions: AdminQuizQuestion[] }> {
+  return adminRequest(
+    `/api/admin/lessons/${encodeURIComponent(String(lessonId))}/quiz`,
+    adminQuizResponseSchema,
+    { signal },
+  ).then((response) => response.data)
+}
+
+export function saveAdminQuiz(
+  lessonId: number,
+  input: AdminQuizInput,
+): Promise<AdminQuiz> {
+  return adminRequest(
+    `/api/admin/lessons/${encodeURIComponent(String(lessonId))}/quiz`,
+    adminQuizMutationResponseSchema,
+    {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.quiz)
+}
+
+export function createAdminQuizQuestion(
+  quizId: number,
+  input: AdminFixedQuestionInput,
+): Promise<AdminQuizQuestion> {
+  return adminRequest(
+    `/api/admin/quizzes/${encodeURIComponent(String(quizId))}/questions`,
+    adminQuizQuestionMutationResponseSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.question)
+}
+
+export function updateAdminQuizQuestion(
+  questionId: number,
+  input: AdminFixedQuestionInput,
+): Promise<AdminQuizQuestion> {
+  return adminRequest(
+    `/api/admin/questions/${encodeURIComponent(String(questionId))}`,
+    adminQuizQuestionMutationResponseSchema,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.question)
+}
+
+export function moveAdminQuizQuestion(
+  questionId: number,
+  direction: 'up' | 'down',
+): Promise<boolean> {
+  return adminRequest(
+    `/api/admin/questions/${encodeURIComponent(String(questionId))}/move-${direction}`,
+    adminMoveResponseSchema,
+    { method: 'POST' },
+  ).then((response) => response.data.moved)
+}
+
+export function fetchAdminAuditLogs(
+  signal?: AbortSignal,
+): Promise<AdminAuditLog[]> {
+  return adminRequest('/api/admin/audit-logs', adminAuditLogsResponseSchema, {
+    signal,
+  }).then((response) => response.data.logs)
+}
+
+export function createAdminOperationalEnrollment(
+  input: AdminOperationalEnrollmentInput,
+): Promise<z.infer<typeof enrollmentStateSchema>> {
+  return adminRequest(
+    '/api/admin/enrollments',
+    adminEnrollmentResponseSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  ).then((response) => response.data.enrollment)
+}
