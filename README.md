@@ -1,13 +1,15 @@
 # CSE Course Platform
 
-Milestone 3 foundation for a Civil Service Examination learning platform. The
+Milestone 6+ foundation for a Civil Service Examination learning platform. The
 repository combines a React single-page application, a Hono API, secure
 server-managed sessions, a public course catalog, student enrollments, and
 Cloudflare D1 in one Cloudflare Worker deployment.
 
-This milestone adds curriculum navigation and a protected lesson reader. It
-intentionally contains no lesson completion, sequential unlocking, admin lesson
-editor, quiz execution, payments, or R2 integration.
+The current platform includes curriculum navigation, a protected lesson
+reader, lesson completion, sequential unlocking, a topic quiz, fixed practice
+activities, and dynamic percentage practice generation. It intentionally
+contains no admin content editor, payments, certificates, mock exams, R2
+media pipeline, or AI-generated question wording.
 
 ## Architecture
 
@@ -38,6 +40,9 @@ Browser
   ordered block data after server-side access checks.
 - Student progress is calculated from lesson-level rows, not stored as the
   single source of truth.
+- Practice generation is backend-only. Generated practice attempts persist
+  immutable D1 snapshots and score against those snapshots instead of
+  regenerating questions.
 
 ## Prerequisites
 
@@ -119,6 +124,23 @@ Git.
 - `GET /api/student/lessons/:lessonPublicId` requires authentication and
   returns the protected lesson reader payload, including ordered typed blocks
   plus previous and next published lessons.
+- `POST /api/student/lessons/:lessonPublicId/complete` completes eligible
+  reading lessons and updates unlock/progress state.
+- `GET /api/student/lessons/:lessonPublicId/practice` returns the practice
+  summary for a practice lesson.
+- `POST /api/student/practice-sets/:practiceSetId/attempts` starts a fixed or
+  generated practice attempt.
+- `GET /api/student/practice-attempts/:attemptPublicId` returns the in-progress
+  practice attempt snapshot without answer keys.
+- `PUT /api/student/practice-attempts/:attemptPublicId/answers/:questionId`
+  saves one practice answer.
+- `POST /api/student/practice-attempts/:attemptPublicId/submit` scores a
+  practice attempt on the Worker.
+- `GET /api/student/practice-attempts/:attemptPublicId/results` returns a
+  submitted practice result.
+- Quiz endpoints under `/api/student/quizzes/*` and
+  `/api/student/quiz-attempts/*` provide the Percentages Topic Quiz attempt,
+  answer, submit, and result flow.
 
 ## Authentication
 
@@ -218,6 +240,42 @@ the whole lesson while making the content issue visible to the frontend.
 The seed data includes polished sample blocks for `Introduction to
 Percentages` and short placeholder blocks for `Understanding Percentages` and
 `Fractions, Decimals and Percentages`.
+
+## Practice and dynamic generators
+
+The practice engine supports two question sources:
+
+- `fixed` practice sets read seeded rows from `practice_questions` and
+  `practice_question_choices`.
+- `generated` practice sets create immutable rows in
+  `generated_question_snapshots` and `generated_question_choices` at attempt
+  start.
+
+Dynamic generation currently exists only for these Percentages practice
+lessons:
+
+- Finding the Percentage (`finding-percentage` v1)
+- Finding the Base (`finding-base` v1)
+- Finding the Rate (`finding-rate` v1)
+
+Each generated attempt creates five questions: two easy, two medium, and one
+hard. The Worker creates a cryptographically random attempt seed with Web
+Crypto, derives deterministic per-question seeds from the generator slug,
+version, difficulty, position, and retry count, validates every generated
+question, and retries bounded duplicate or invalid generations before saving.
+
+Generated snapshots store the generator slug, version, seed, difficulty,
+prompt, structured explanation JSON, private parameters JSON, and metadata.
+The API never returns the raw seed, private parameters, correct choice, or
+explanation before submission. On refresh, the Worker reloads saved snapshots;
+it does not call the generator again. On submit and review, scoring and
+explanations come from the saved snapshot rows so historical attempts remain
+reviewable after future generator-code changes.
+
+`Worked Examples` and `Guided Practice` remain fixed practice sets for now.
+Do not edit an existing generator version in a way that changes generated
+question behavior materially; add a new generator version and migration
+configuration instead.
 
 ## D1 setup and migrations
 

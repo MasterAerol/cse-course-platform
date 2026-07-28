@@ -9,8 +9,16 @@ import {
   verifyPassword,
 } from '../src/worker/auth/password'
 import { hashSessionToken } from '../src/worker/auth/session'
+import {
+  generateValidatedQuestion,
+  getRegisteredGenerators,
+} from '../src/worker/generators/generator.registry'
 import { parseLessonBlock } from '../src/worker/schemas/lesson-block.schemas'
 import type { Bindings } from '../src/worker/types/bindings'
+import type {
+  GeneratedQuestion,
+  GeneratorDifficulty,
+} from '../src/worker/generators/generator.types'
 
 interface ApiErrorBody {
   success: false
@@ -459,6 +467,11 @@ interface PracticeResultBody {
       isCorrect: boolean
       pointsAwarded: number
       explanation: string | null
+      generator?: {
+        slug: string
+        version: number
+        difficulty: GeneratorDifficulty
+      } | null
       choices: PracticeChoiceBody[]
     }>
     newlyUnlockedNextLesson: {
@@ -1097,6 +1110,125 @@ async function startPractice(
   const body = await response.json<PracticeAttemptBody>()
 
   return { response, body }
+}
+
+async function getGeneratedCorrectChoiceIds(
+  attemptPublicId: string,
+): Promise<Map<number, number>> {
+  const rows = await env.DB.prepare(
+    `SELECT
+      generated_question_snapshots.id AS snapshot_id,
+      generated_question_choices.id AS choice_id
+    FROM generated_question_snapshots
+    INNER JOIN practice_attempts
+      ON practice_attempts.id = generated_question_snapshots.practice_attempt_id
+    INNER JOIN generated_question_choices
+      ON generated_question_choices.snapshot_id = generated_question_snapshots.id
+    WHERE practice_attempts.public_id = ?1
+      AND generated_question_choices.is_correct = 1`,
+  )
+    .bind(attemptPublicId)
+    .all<{ snapshot_id: number; choice_id: number }>()
+
+  return new Map(
+    rows.results.map((row) => [row.snapshot_id, row.choice_id]),
+  )
+}
+
+async function getGeneratedCanonicalSignatures(
+  attemptPublicId: string,
+): Promise<string[]> {
+  const rows = await env.DB.prepare(
+    `SELECT generated_question_snapshots.metadata_json
+    FROM generated_question_snapshots
+    INNER JOIN practice_attempts
+      ON practice_attempts.id = generated_question_snapshots.practice_attempt_id
+    WHERE practice_attempts.public_id = ?1
+    ORDER BY generated_question_snapshots.source_position`,
+  )
+    .bind(attemptPublicId)
+    .all<{ metadata_json: string }>()
+
+  return rows.results.map((row) => {
+    const metadata = JSON.parse(row.metadata_json) as {
+      canonicalSignature: string
+    }
+
+    return metadata.canonicalSignature
+  })
+}
+
+function expectedGeneratedAnswer(question: GeneratedQuestion): number {
+  const parameters = question.parameters
+
+  if (question.generatorSlug === 'finding-percentage') {
+    return (
+      (parameters.ratePercent as number) /
+      100 *
+      (parameters.base as number)
+    )
+  }
+
+  if (question.generatorSlug === 'finding-base') {
+    return (
+      (parameters.percentageAmount as number) /
+      ((parameters.ratePercent as number) / 100)
+    )
+  }
+
+  return (
+    (parameters.percentageAmount as number) /
+    (parameters.base as number) *
+    100
+  )
+}
+
+function normalizedGeneratedNumber(value: number): string {
+  return value.toFixed(4)
+}
+
+function generatedChoiceNumericIdentity(choiceText: string): string {
+  const normalizedText = choiceText.replace('₱', '').replaceAll(',', '')
+  const numericText = normalizedText.endsWith('%')
+    ? normalizedText.slice(0, -1)
+    : normalizedText
+  const numericValue = Number(numericText)
+
+  return normalizedGeneratedNumber(numericValue)
+}
+
+function expectGeneratedQuestionValid(question: GeneratedQuestion): void {
+  const correctChoices = question.choices.filter((choice) => choice.isCorrect)
+  const choiceTexts = new Set(question.choices.map((choice) => choice.text))
+  const numericIdentities = new Set(
+    question.choices.map((choice) =>
+      normalizedGeneratedNumber(choice.numericValue),
+    ),
+  )
+  const expectedAnswer = normalizedGeneratedNumber(
+    expectedGeneratedAnswer(question),
+  )
+
+  expect(question.choices).toHaveLength(4)
+  expect(correctChoices).toHaveLength(1)
+  expect(choiceTexts.size).toBe(4)
+  expect(numericIdentities.size).toBe(4)
+  expect(Number.isFinite(expectedGeneratedAnswer(question))).toBe(true)
+  expect(correctChoices[0]?.text).toBe(question.explanation.finalAnswer)
+  expect(
+    normalizedGeneratedNumber(correctChoices[0]?.numericValue ?? Number.NaN),
+  ).toBe(expectedAnswer)
+  expect(generatedChoiceNumericIdentity(question.explanation.finalAnswer)).toBe(
+    expectedAnswer,
+  )
+  if (question.generatorSlug !== 'finding-rate') {
+    const ratePercent = question.parameters.ratePercent as number
+
+    expect(question.explanation.steps.join(' ')).toContain(
+      String(ratePercent / 100),
+    )
+  }
+  expect(question.metadata.canonicalSignature).toContain(question.generatorSlug)
 }
 
 async function setLessonProgress(
@@ -3336,6 +3468,78 @@ describe('Topic quiz APIs', () => {
   })
 })
 
+describe('Dynamic percentage generator engine', () => {
+  it('is deterministic for the same seed and preserves generator versions', () => {
+    for (const generator of getRegisteredGenerators()) {
+      const first = generator.generate({
+        seed: `deterministic-${generator.slug}`,
+        difficulty: 'medium',
+      })
+      const second = generator.generate({
+        seed: `deterministic-${generator.slug}`,
+        difficulty: 'medium',
+      })
+      const different = generator.generate({
+        seed: `different-${generator.slug}`,
+        difficulty: 'medium',
+      })
+
+      expect(first).toEqual(second)
+      expect(JSON.stringify(first)).not.toBe(JSON.stringify(different))
+      expect(first.generatorSlug).toBe(generator.slug)
+      expect(first.generatorVersion).toBe(1)
+    }
+  })
+
+  it('validates 1,000 mathematically correct generated questions per generator', () => {
+    const difficulties: readonly GeneratorDifficulty[] = [
+      'easy',
+      'medium',
+      'hard',
+    ]
+
+    for (const generator of getRegisteredGenerators()) {
+      for (let index = 0; index < 1_000; index += 1) {
+        const difficulty = difficulties[index % difficulties.length]
+        const question = generateValidatedQuestion({
+          attemptSeed: `math-validation-${generator.slug}-${index}`,
+          generatorSlug: generator.slug,
+          generatorVersion: generator.version,
+          difficulty,
+          position: index + 1,
+          existingSignatures: new Set<string>(),
+        })
+        const validation = generator.validate(question)
+
+        expect(validation).toEqual({ valid: true, reason: null })
+        expectGeneratedQuestionValid(question)
+        expect(question.difficulty).toBe(difficulty)
+      }
+    }
+  })
+
+  it('prevents duplicate canonical signatures within one generated batch', () => {
+    const signatures = new Set<string>()
+    const questions = Array.from({ length: 5 }, (_, index) => {
+      const question = generateValidatedQuestion({
+        attemptSeed: 'duplicate-prevention',
+        generatorSlug: 'finding-percentage',
+        generatorVersion: 1,
+        difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard',
+        position: index + 1,
+        existingSignatures: signatures,
+      })
+
+      signatures.add(question.metadata.canonicalSignature)
+
+      return question
+    })
+
+    expect(questions).toHaveLength(5)
+    expect(signatures.size).toBe(5)
+  })
+})
+
 describe('Practice activity APIs', () => {
   it('returns all five seeded practice lessons with linked practice sets', async () => {
     const email = 'practice-linked@example.com'
@@ -3395,6 +3599,93 @@ describe('Practice activity APIs', () => {
     expect(responseText).not.toContain('correctChoice')
     expect(responseText).not.toContain('explanation')
   })
+
+  it('creates immutable generated snapshots and reloads the same questions on refresh', async () => {
+    const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+      'practice-generated-refresh@example.com',
+    )
+    const firstAttempt = await startPractice(cookie, practiceSetId)
+    const firstPayload = JSON.stringify(firstAttempt.body.data.questions)
+    const signatures = await getGeneratedCanonicalSignatures(
+      firstAttempt.body.data.attempt.publicId,
+    )
+
+    const reloadResponse = await app.request(
+      `/api/student/practice-attempts/${firstAttempt.body.data.attempt.publicId}`,
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const reloadBody = await reloadResponse.json<PracticeAttemptFetchBody>()
+    const secondAttempt = await startPractice(cookie, practiceSetId)
+
+    expect(firstAttempt.response.status).toBe(201)
+    expect(signatures).toHaveLength(5)
+    expect(new Set(signatures).size).toBe(5)
+    expect(reloadResponse.status).toBe(200)
+    expect('questions' in reloadBody.data).toBe(true)
+    if ('questions' in reloadBody.data) {
+      expect(JSON.stringify(reloadBody.data.questions)).toBe(firstPayload)
+    }
+    expect(JSON.stringify(secondAttempt.body.data.questions)).not.toBe(
+      firstPayload,
+    )
+  })
+
+  it.each([
+    ['finding-the-percentage', 'finding-percentage'],
+    ['finding-the-base', 'finding-base'],
+    ['finding-the-rate', 'finding-rate'],
+  ] as const)(
+    'uses generated snapshots for %s only',
+    async (lessonSlug, generatorSlug) => {
+      const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+        `practice-generated-${lessonSlug}@example.com`,
+        lessonSlug,
+      )
+      const { body } = await startPractice(cookie, practiceSetId)
+      const rows = await env.DB.prepare(
+        `SELECT
+          generated_question_snapshots.generator_slug,
+          generated_question_snapshots.generator_version,
+          generated_question_snapshots.difficulty,
+          COUNT(generated_question_choices.id) AS choice_count,
+          SUM(generated_question_choices.is_correct) AS correct_count
+        FROM generated_question_snapshots
+        INNER JOIN practice_attempts
+          ON practice_attempts.id = generated_question_snapshots.practice_attempt_id
+        INNER JOIN generated_question_choices
+          ON generated_question_choices.snapshot_id = generated_question_snapshots.id
+        WHERE practice_attempts.public_id = ?1
+        GROUP BY generated_question_snapshots.id
+        ORDER BY generated_question_snapshots.source_position`,
+      )
+        .bind(body.data.attempt.publicId)
+        .all<{
+          generator_slug: string
+          generator_version: number
+          difficulty: string
+          choice_count: number
+          correct_count: number
+        }>()
+
+      expect(rows.results).toHaveLength(5)
+      expect(rows.results.map((row) => row.generator_slug)).toEqual(
+        Array<string>(5).fill(generatorSlug),
+      )
+      expect(rows.results.map((row) => row.generator_version)).toEqual(
+        Array<number>(5).fill(1),
+      )
+      expect(rows.results.map((row) => row.difficulty)).toEqual([
+        'easy',
+        'easy',
+        'medium',
+        'medium',
+        'hard',
+      ])
+      expect(rows.results.every((row) => row.choice_count === 4)).toBe(true)
+      expect(rows.results.every((row) => row.correct_count === 1)).toBe(true)
+    },
+  )
 
   it('rejects locked practice access with LESSON_LOCKED', async () => {
     const email = 'locked-practice@example.com'
@@ -3740,14 +4031,107 @@ describe('Practice activity APIs', () => {
     expect(progress?.status).toBe('in_progress')
   })
 
+  it('scores generated practice against persisted snapshot choices', async () => {
+    const email = 'practice-generated-scoring@example.com'
+    const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(email)
+    const { body } = await startPractice(cookie, practiceSetId)
+    const correctChoices = await getGeneratedCorrectChoiceIds(
+      body.data.attempt.publicId,
+    )
+
+    for (const question of body.data.questions) {
+      const choiceId = correctChoices.get(question.id)
+
+      if (choiceId === undefined) {
+        throw new Error('Generated correct choice was not found.')
+      }
+
+      await app.request(
+        `/api/student/practice-attempts/${body.data.attempt.publicId}/answers/${question.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            cookie,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ selectedChoiceId: choiceId }),
+        },
+        createBindings('production'),
+      )
+    }
+
+    const response = await app.request(
+      `/api/student/practice-attempts/${body.data.attempt.publicId}/submit`,
+      { method: 'POST', headers: { cookie } },
+      createBindings('production'),
+    )
+    const result = await response.json<PracticeResultBody>()
+    const storedAnswers = await env.DB.prepare(
+      `SELECT
+        COUNT(*) AS answer_count,
+        SUM(is_correct) AS correct_count,
+        SUM(points_awarded) AS awarded_points
+      FROM generated_practice_attempt_answers
+      INNER JOIN practice_attempts
+        ON practice_attempts.id = generated_practice_attempt_answers.attempt_id
+      WHERE practice_attempts.public_id = ?1`,
+    )
+      .bind(body.data.attempt.publicId)
+      .first<{
+        answer_count: number
+        correct_count: number
+        awarded_points: number
+      }>()
+
+    expect(response.status).toBe(200)
+    expect(result.data.scorePercent).toBe(100)
+    expect(result.data.passed).toBe(true)
+    expect(result.data.questions.every((question) => question.isCorrect)).toBe(
+      true,
+    )
+    expect(result.data.questions[0]?.generator).toMatchObject({
+      slug: 'finding-percentage',
+      version: 1,
+    })
+    expect(storedAnswers).toMatchObject({
+      answer_count: 5,
+      correct_count: 5,
+      awarded_points: 5,
+    })
+  })
+
+  it('keeps fixed practice sets on the original question tables', async () => {
+    const { cookie, practiceSetId } = await prepareUnlockedPracticeUser(
+      'practice-fixed-guided@example.com',
+      'guided-practice',
+    )
+    const { body } = await startPractice(cookie, practiceSetId)
+    const snapshotCount = await env.DB.prepare(
+      `SELECT COUNT(*) AS snapshot_count
+      FROM generated_question_snapshots
+      INNER JOIN practice_attempts
+        ON practice_attempts.id = generated_question_snapshots.practice_attempt_id
+      WHERE practice_attempts.public_id = ?1`,
+    )
+      .bind(body.data.attempt.publicId)
+      .first<{ snapshot_count: number }>()
+
+    expect(body.data.questions).toHaveLength(5)
+    expect(body.data.questions[0]?.prompt).toBe('What is 18% of 450?')
+    expect(snapshotCount?.snapshot_count).toBe(0)
+  })
+
   it('fails below 60%, passes at 60%, completes the lesson, and is idempotent', async () => {
     const failEmail = 'practice-below-sixty@example.com'
     const { cookie: failCookie, practiceSetId: failPracticeSetId } =
       await prepareUnlockedPracticeUser(failEmail)
     const failedAttempt = await startPractice(failCookie, failPracticeSetId)
+    const failedCorrectChoices = await getGeneratedCorrectChoiceIds(
+      failedAttempt.body.data.attempt.publicId,
+    )
 
     for (const question of failedAttempt.body.data.questions.slice(0, 2)) {
-      const choiceId = question.choices[0]?.id
+      const choiceId = failedCorrectChoices.get(question.id)
 
       if (choiceId === undefined) {
         throw new Error('Practice correct choice was not returned.')
@@ -3787,9 +4171,12 @@ describe('Practice activity APIs', () => {
     const { cookie: passCookie, practiceSetId: passPracticeSetId } =
       await prepareUnlockedPracticeUser(passEmail)
     const passingAttempt = await startPractice(passCookie, passPracticeSetId)
+    const passingCorrectChoices = await getGeneratedCorrectChoiceIds(
+      passingAttempt.body.data.attempt.publicId,
+    )
 
     for (const question of passingAttempt.body.data.questions.slice(0, 3)) {
-      const choiceId = question.choices[0]?.id
+      const choiceId = passingCorrectChoices.get(question.id)
 
       if (choiceId === undefined) {
         throw new Error('Practice correct choice was not returned.')

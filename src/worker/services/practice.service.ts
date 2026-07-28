@@ -11,6 +11,13 @@ import {
 import {
   countPracticeQuestions,
   createPracticeAttempt,
+  createGeneratedQuestionChoices,
+  createGeneratedQuestionSnapshots,
+  findGeneratedChoiceInSnapshot,
+  findGeneratedPracticeAttemptAnswers,
+  findGeneratedQuestionsWithChoices,
+  findGeneratedSnapshotIdsByPublicIds,
+  findGeneratedSnapshotInAttempt,
   findMaxPracticeAttemptNumber,
   findPracticeAttemptAnswers,
   findPracticeAttemptByPublicId,
@@ -18,17 +25,32 @@ import {
   findPracticeChoiceInQuestion,
   findPracticeQuestionInSet,
   findPracticeQuestionsWithChoices,
+  findPracticeSetGeneratorConfig,
   findPracticeSetById,
   findPublishedPracticeSetByLessonPublicId,
+  saveGeneratedPracticeAttemptAnswer,
   savePracticeAttemptAnswer,
   submitPracticeAttempt,
+  updateGeneratedPracticeAttemptAnswerScores,
   updatePracticeAttemptAnswerScores,
+  type GeneratedPracticeAttemptAnswerRow,
+  type GeneratedQuestionChoiceRow,
   type PracticeAccessRow,
   type PracticeAttemptAnswerRow,
   type PracticeAttemptHistoryRow,
   type PracticeAttemptRow,
   type PracticeQuestionChoiceRow,
+  type PracticeSetGeneratorConfigRow,
 } from '../repositories/practice.repository'
+import {
+  generateValidatedQuestion,
+} from '../generators/generator.registry'
+import { createAttemptSeed } from '../generators/generator-random'
+import type {
+  GeneratedExplanation,
+  GeneratedQuestion,
+  GeneratorDifficulty,
+} from '../generators/generator.types'
 import { AppError } from '../utils/app-error'
 import type {
   CourseProgressState,
@@ -54,6 +76,11 @@ export interface PracticeQuestion {
   explanation: string | null
   points: number
   position: number
+  generator: {
+    slug: string
+    version: number
+    difficulty: GeneratorDifficulty
+  } | null
   choices: Array<SafePracticeChoice & { isCorrect: boolean }>
 }
 
@@ -144,6 +171,11 @@ export interface PracticeAttemptResult {
     isCorrect: boolean
     pointsAwarded: number
     explanation: string | null
+    generator: {
+      slug: string
+      version: number
+      difficulty: GeneratorDifficulty
+    } | null
     choices: SafePracticeChoice[]
   }>
   newlyUnlockedNextLesson: LessonNavigationItem | null
@@ -221,6 +253,7 @@ function groupPracticeQuestions(
         explanation: row.explanation,
         points: row.points,
         position: row.question_position,
+        generator: null,
         choices: [],
       }
 
@@ -239,6 +272,158 @@ function groupPracticeQuestions(
   return Array.from(questions.values()).sort(
     (left, right) => left.position - right.position,
   )
+}
+
+function mapGeneratedAnswers(
+  answers: GeneratedPracticeAttemptAnswerRow[],
+): PracticeAttemptAnswerRow[] {
+  return answers.map((answer) => ({
+    question_id: answer.snapshot_id,
+    selected_choice_id: answer.selected_choice_id,
+    is_correct: answer.is_correct,
+    points_awarded: answer.points_awarded,
+    answered_at: answer.answered_at,
+  }))
+}
+
+function parseGeneratedExplanation(explanationJson: string): string {
+  const parsed = JSON.parse(explanationJson) as GeneratedExplanation
+  const steps = parsed.steps.join(' ')
+
+  return `${parsed.title}: ${steps} Final answer: ${parsed.finalAnswer}`
+}
+
+function groupGeneratedQuestions(
+  rows: GeneratedQuestionChoiceRow[],
+): PracticeQuestion[] {
+  const questions = new Map<number, PracticeQuestion>()
+
+  for (const row of rows) {
+    const existing = questions.get(row.snapshot_id)
+    const question =
+      existing ??
+      {
+        id: row.snapshot_id,
+        prompt: row.prompt,
+        explanation: parseGeneratedExplanation(row.explanation_json),
+        points: 1,
+        position: row.source_position,
+        generator: {
+          slug: row.generator_slug,
+          version: row.generator_version,
+          difficulty: row.difficulty,
+        },
+        choices: [],
+      }
+
+    question.choices.push({
+      id: row.choice_id,
+      text: row.choice_text,
+      position: row.choice_position,
+      isCorrect: row.is_correct === 1,
+    })
+
+    if (existing === undefined) {
+      questions.set(row.snapshot_id, question)
+    }
+  }
+
+  return Array.from(questions.values()).sort(
+    (left, right) => left.position - right.position,
+  )
+}
+
+function buildDifficultyPlan(
+  config: PracticeSetGeneratorConfigRow,
+): GeneratorDifficulty[] {
+  return [
+    ...Array<GeneratorDifficulty>(config.easy_count).fill('easy'),
+    ...Array<GeneratorDifficulty>(config.medium_count).fill('medium'),
+    ...Array<GeneratorDifficulty>(config.hard_count).fill('hard'),
+  ]
+}
+
+function createGeneratedQuestionsForAttempt(
+  config: PracticeSetGeneratorConfigRow,
+): Array<{ publicId: string; question: GeneratedQuestion; position: number }> {
+  const attemptSeed = createAttemptSeed()
+  const signatures = new Set<string>()
+
+  return buildDifficultyPlan(config).map((difficulty, index) => {
+    const question = generateValidatedQuestion({
+      attemptSeed,
+      generatorSlug: config.generator_slug,
+      generatorVersion: config.generator_version,
+      difficulty,
+      position: index + 1,
+      existingSignatures: signatures,
+    })
+
+    signatures.add(question.metadata.canonicalSignature)
+
+    return {
+      publicId: `generated-question-${crypto.randomUUID()}`,
+      question,
+      position: index + 1,
+    }
+  })
+}
+
+async function persistGeneratedQuestions(
+  database: D1Database,
+  input: {
+    ownerUserId: number
+    attemptId: number
+    generatedQuestions: Array<{
+      publicId: string
+      question: GeneratedQuestion
+      position: number
+    }>
+  },
+): Promise<void> {
+  await createGeneratedQuestionSnapshots(database, {
+    ownerUserId: input.ownerUserId,
+    practiceAttemptId: input.attemptId,
+    snapshots: input.generatedQuestions.map((generatedQuestion) => ({
+      publicId: generatedQuestion.publicId,
+      sourcePosition: generatedQuestion.position,
+      generatorSlug: generatedQuestion.question.generatorSlug,
+      generatorVersion: generatedQuestion.question.generatorVersion,
+      seed: generatedQuestion.question.seed,
+      difficulty: generatedQuestion.question.difficulty,
+      prompt: generatedQuestion.question.prompt,
+      explanationJson: JSON.stringify(generatedQuestion.question.explanation),
+      parametersJson: JSON.stringify(generatedQuestion.question.parameters),
+      metadataJson: JSON.stringify(generatedQuestion.question.metadata),
+    })),
+  })
+
+  const snapshotIds = await findGeneratedSnapshotIdsByPublicIds(
+    database,
+    input.attemptId,
+    input.generatedQuestions.map((question) => question.publicId),
+  )
+  const snapshotIdByPublicId = new Map(
+    snapshotIds.map((snapshot) => [snapshot.public_id, snapshot.id]),
+  )
+  const choices = input.generatedQuestions.flatMap((generatedQuestion) => {
+    const snapshotId = snapshotIdByPublicId.get(generatedQuestion.publicId)
+
+    if (snapshotId === undefined) {
+      throw new Error('Generated snapshot could not be loaded after insert.')
+    }
+
+    return generatedQuestion.question.choices.map((choice, index) => ({
+      snapshotId,
+      publicId: `generated-choice-${crypto.randomUUID()}`,
+      choiceText: choice.text,
+      isCorrect: choice.isCorrect,
+      position: index + 1,
+      distractorType: choice.distractorType,
+    }))
+  })
+
+  await createGeneratedQuestionChoices(database, choices)
 }
 
 function mapPracticeHistory(
@@ -342,6 +527,18 @@ async function getQuestionsAndAnswers(
   questions: PracticeQuestion[]
   answers: PracticeAttemptAnswerRow[]
 }> {
+  if (attempt.question_source === 'generated') {
+    const [questionRows, answers] = await Promise.all([
+      findGeneratedQuestionsWithChoices(database, attempt.attempt_id),
+      findGeneratedPracticeAttemptAnswers(database, attempt.attempt_id),
+    ])
+
+    return {
+      questions: groupGeneratedQuestions(questionRows),
+      answers: mapGeneratedAnswers(answers),
+    }
+  }
+
   const [questionRows, answers] = await Promise.all([
     findPracticeQuestionsWithChoices(database, attempt.practice_set_id),
     findPracticeAttemptAnswers(database, attempt.attempt_id),
@@ -483,6 +680,7 @@ function buildPracticeResultPayload(
         pointsAwarded: answer?.points_awarded ?? 0,
         explanation:
           attempt.show_explanations === 1 ? question.explanation : null,
+        generator: question.generator,
         choices: question.choices.map((choice) => ({
           id: choice.id,
           text: choice.text,
@@ -538,7 +736,9 @@ export async function getLessonPracticeSummary(
     practice.lesson_public_id,
   )
   const [questionCount, attempts] = await Promise.all([
-    countPracticeQuestions(database, practice.practice_set_id),
+    practice.question_source === 'generated'
+      ? Promise.resolve(practice.question_count)
+      : countPracticeQuestions(database, practice.practice_set_id),
     findPracticeAttemptHistory(database, practice.practice_set_id, userId),
   ])
   const mappedAttempts = attempts.map(mapPracticeHistory)
@@ -574,8 +774,7 @@ export async function startPracticeAttempt(
     userId,
     practiceSetId,
   )
-  const [questionRows, attempts, maxAttemptNumber] = await Promise.all([
-    findPracticeQuestionsWithChoices(database, practice.practice_set_id),
+  const [attempts, maxAttemptNumber] = await Promise.all([
     findPracticeAttemptHistory(database, practice.practice_set_id, userId),
     findMaxPracticeAttemptNumber(database, practice.practice_set_id, userId),
   ])
@@ -591,6 +790,65 @@ export async function startPracticeAttempt(
     )
   }
 
+  if (practice.question_source === 'generated') {
+    const config = await findPracticeSetGeneratorConfig(
+      database,
+      practice.practice_set_id,
+    )
+
+    if (config === null) {
+      throw new Error('Generated practice set is missing generator config.')
+    }
+
+    const generatedQuestions = createGeneratedQuestionsForAttempt(config)
+    const attempt = await createPracticeAttempt(database, {
+      publicId: `practice-attempt-${crypto.randomUUID()}`,
+      practiceSetId: practice.practice_set_id,
+      userId,
+      attemptNumber: maxAttemptNumber + 1,
+      totalPoints: generatedQuestions.length,
+    })
+
+    if (attempt === null) {
+      throw new Error('The practice attempt could not be loaded.')
+    }
+
+    await persistGeneratedQuestions(database, {
+      ownerUserId: userId,
+      attemptId: attempt.attempt_id,
+      generatedQuestions,
+    })
+    await startActivityLesson(database, userId, lessonContext)
+
+    const questionRows = await findGeneratedQuestionsWithChoices(
+      database,
+      attempt.attempt_id,
+    )
+    const questions = groupGeneratedQuestions(questionRows)
+
+    return {
+      attempt: {
+        publicId: attempt.attempt_public_id,
+        status: attempt.status,
+        attemptNumber: attempt.attempt_number,
+        startedAt: attempt.started_at,
+      },
+      practice: {
+        id: practice.practice_set_id,
+        title: practice.practice_title,
+        passingScore: practice.passing_score,
+        questionCount: questions.length,
+      },
+      questions: mapSafeQuestions(questions, []),
+      answeredCount: 0,
+      totalCount: questions.length,
+    }
+  }
+
+  const questionRows = await findPracticeQuestionsWithChoices(
+    database,
+    practice.practice_set_id,
+  )
   const questions = groupPracticeQuestions(questionRows)
   const totalPoints = questions.reduce(
     (sum, question) => sum + question.points,
@@ -711,6 +969,52 @@ export async function savePracticeAnswer(
     )
   }
 
+  if (attempt.question_source === 'generated') {
+    const snapshot = await findGeneratedSnapshotInAttempt(
+      database,
+      attempt.attempt_id,
+      input.questionId,
+    )
+
+    if (snapshot === null) {
+      throw new AppError(
+        400,
+        'QUESTION_NOT_IN_PRACTICE',
+        'The question does not belong to this practice activity.',
+      )
+    }
+
+    const choice = await findGeneratedChoiceInSnapshot(
+      database,
+      input.questionId,
+      input.selectedChoiceId,
+    )
+
+    if (choice === null) {
+      throw new AppError(
+        400,
+        'CHOICE_NOT_IN_QUESTION',
+        'The selected choice does not belong to this question.',
+      )
+    }
+
+    await saveGeneratedPracticeAttemptAnswer(database, {
+      attemptId: attempt.attempt_id,
+      snapshotId: input.questionId,
+      selectedChoiceId: input.selectedChoiceId,
+    })
+
+    const answers = mapGeneratedAnswers(
+      await findGeneratedPracticeAttemptAnswers(database, attempt.attempt_id),
+    )
+
+    return {
+      saved: true,
+      answeredCount: countAnswered(answers),
+      totalCount: attempt.total_points,
+    }
+  }
+
   const question = await findPracticeQuestionInSet(
     database,
     attempt.practice_set_id,
@@ -762,16 +1066,30 @@ async function persistScore(
   attempt: PracticeAttemptRow,
   score: AssessmentScore,
 ): Promise<PracticeAttemptRow> {
-  await updatePracticeAttemptAnswerScores(
-    database,
-    attempt.attempt_id,
-    score.questions.map((question) => ({
-      questionId: question.questionId,
-      selectedChoiceId: question.selectedChoiceId,
-      isCorrect: question.isCorrect,
-      pointsAwarded: question.pointsAwarded,
-    })),
-  )
+  if (attempt.question_source === 'generated') {
+    await updateGeneratedPracticeAttemptAnswerScores(
+      database,
+      attempt.attempt_id,
+      score.questions.map((question) => ({
+        snapshotId: question.questionId,
+        selectedChoiceId: question.selectedChoiceId,
+        isCorrect: question.isCorrect,
+        pointsAwarded: question.pointsAwarded,
+      })),
+    )
+  } else {
+    await updatePracticeAttemptAnswerScores(
+      database,
+      attempt.attempt_id,
+      score.questions.map((question) => ({
+        questionId: question.questionId,
+        selectedChoiceId: question.selectedChoiceId,
+        isCorrect: question.isCorrect,
+        pointsAwarded: question.pointsAwarded,
+      })),
+    )
+  }
+
   await submitPracticeAttempt(database, {
     attemptId: attempt.attempt_id,
     earnedPoints: score.earnedPoints,
@@ -822,9 +1140,9 @@ export async function submitPracticeAttemptByPublicId(
           userId,
           submittedAttempt,
         )
-  const scoredAnswers = await findPracticeAttemptAnswers(
+  const { answers: scoredAnswers } = await getQuestionsAndAnswers(
     database,
-    attempt.attempt_id,
+    submittedAttempt,
   )
 
   return buildPracticeResultPayload(

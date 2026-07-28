@@ -3,6 +3,8 @@ export type PracticeAttemptStatus =
   | 'submitted'
   | 'abandoned'
 
+export type PracticeQuestionSource = 'fixed' | 'generated'
+
 export interface PracticeAccessRow {
   practice_set_id: number
   practice_title: string
@@ -11,6 +13,7 @@ export interface PracticeAccessRow {
   question_count: number
   maximum_attempts: number | null
   show_explanations: 0 | 1
+  question_source: PracticeQuestionSource
   practice_status: 'draft' | 'published'
   lesson_id: number
   lesson_public_id: string
@@ -52,6 +55,7 @@ export interface PracticeAttemptRow {
   passing_score: number
   maximum_attempts: number | null
   show_explanations: 0 | 1
+  question_source: PracticeQuestionSource
   lesson_id: number
   lesson_public_id: string
   lesson_title: string
@@ -60,6 +64,15 @@ export interface PracticeAttemptRow {
   course_id: number
   course_slug: string
   topic_slug: string
+}
+
+export interface PracticeSetGeneratorConfigRow {
+  practice_set_id: number
+  generator_slug: 'finding-percentage' | 'finding-base' | 'finding-rate'
+  generator_version: number
+  easy_count: number
+  medium_count: number
+  hard_count: number
 }
 
 export interface PracticeAttemptAnswerRow {
@@ -82,6 +95,36 @@ export interface PracticeAttemptHistoryRow {
   submitted_at: string | null
 }
 
+export interface GeneratedQuestionChoiceRow {
+  snapshot_id: number
+  snapshot_public_id: string
+  owner_user_id: number
+  practice_attempt_id: number
+  source_position: number
+  generator_slug: 'finding-percentage' | 'finding-base' | 'finding-rate'
+  generator_version: number
+  seed: string
+  difficulty: 'easy' | 'medium' | 'hard'
+  prompt: string
+  explanation_json: string
+  parameters_json: string
+  metadata_json: string
+  choice_id: number
+  choice_public_id: string
+  choice_text: string
+  is_correct: 0 | 1
+  choice_position: number
+  distractor_type: string | null
+}
+
+export interface GeneratedPracticeAttemptAnswerRow {
+  snapshot_id: number
+  selected_choice_id: number | null
+  is_correct: 0 | 1 | null
+  points_awarded: number
+  answered_at: string | null
+}
+
 const practiceAccessSelect = `practice_sets.id AS practice_set_id,
   practice_sets.title AS practice_title,
   practice_sets.instructions,
@@ -89,6 +132,7 @@ const practiceAccessSelect = `practice_sets.id AS practice_set_id,
   practice_sets.question_count,
   practice_sets.maximum_attempts,
   practice_sets.show_explanations,
+  practice_sets.question_source,
   practice_sets.status AS practice_status,
   lessons.id AS lesson_id,
   lessons.public_id AS lesson_public_id,
@@ -292,6 +336,7 @@ export async function findPracticeAttemptByPublicId(
         practice_sets.passing_score,
         practice_sets.maximum_attempts,
         practice_sets.show_explanations,
+        practice_sets.question_source,
         lessons.id AS lesson_id,
         lessons.public_id AS lesson_public_id,
         lessons.title AS lesson_title,
@@ -337,6 +382,318 @@ export async function findPracticeAttemptAnswers(
     .all<PracticeAttemptAnswerRow>()
 
   return result.results
+}
+
+export async function findPracticeSetGeneratorConfig(
+  database: D1Database,
+  practiceSetId: number,
+): Promise<PracticeSetGeneratorConfigRow | null> {
+  return database
+    .prepare(
+      `SELECT
+        practice_set_id,
+        generator_slug,
+        generator_version,
+        easy_count,
+        medium_count,
+        hard_count
+      FROM practice_set_generator_configs
+      WHERE practice_set_id = ?1
+      LIMIT 1`,
+    )
+    .bind(practiceSetId)
+    .first<PracticeSetGeneratorConfigRow>()
+}
+
+export async function createGeneratedQuestionSnapshots(
+  database: D1Database,
+  input: {
+    ownerUserId: number
+    practiceAttemptId: number
+    snapshots: Array<{
+      publicId: string
+      sourcePosition: number
+      generatorSlug: string
+      generatorVersion: number
+      seed: string
+      difficulty: string
+      prompt: string
+      explanationJson: string
+      parametersJson: string
+      metadataJson: string
+    }>
+  },
+): Promise<void> {
+  if (input.snapshots.length === 0) {
+    return
+  }
+
+  await database.batch(
+    input.snapshots.map((snapshot) =>
+      database
+        .prepare(
+          `INSERT INTO generated_question_snapshots (
+            public_id,
+            owner_user_id,
+            practice_attempt_id,
+            source_position,
+            generator_slug,
+            generator_version,
+            seed,
+            difficulty,
+            prompt,
+            explanation_json,
+            parameters_json,
+            metadata_json
+          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
+        )
+        .bind(
+          snapshot.publicId,
+          input.ownerUserId,
+          input.practiceAttemptId,
+          snapshot.sourcePosition,
+          snapshot.generatorSlug,
+          snapshot.generatorVersion,
+          snapshot.seed,
+          snapshot.difficulty,
+          snapshot.prompt,
+          snapshot.explanationJson,
+          snapshot.parametersJson,
+          snapshot.metadataJson,
+        ),
+    ),
+  )
+}
+
+export async function findGeneratedSnapshotIdsByPublicIds(
+  database: D1Database,
+  attemptId: number,
+  publicIds: readonly string[],
+): Promise<Array<{ id: number; public_id: string }>> {
+  if (publicIds.length === 0) {
+    return []
+  }
+
+  const result = await database
+    .prepare(
+      `SELECT id, public_id
+      FROM generated_question_snapshots
+      WHERE practice_attempt_id = ?1
+        AND public_id IN (${publicIds.map(() => '?').join(', ')})`,
+    )
+    .bind(attemptId, ...publicIds)
+    .all<{ id: number; public_id: string }>()
+
+  return result.results
+}
+
+export async function createGeneratedQuestionChoices(
+  database: D1Database,
+  choices: Array<{
+    snapshotId: number
+    publicId: string
+    choiceText: string
+    isCorrect: boolean
+    position: number
+    distractorType: string | null
+  }>,
+): Promise<void> {
+  if (choices.length === 0) {
+    return
+  }
+
+  await database.batch(
+    choices.map((choice) =>
+      database
+        .prepare(
+          `INSERT INTO generated_question_choices (
+            snapshot_id,
+            public_id,
+            choice_text,
+            is_correct,
+            position,
+            distractor_type
+          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+        )
+        .bind(
+          choice.snapshotId,
+          choice.publicId,
+          choice.choiceText,
+          choice.isCorrect ? 1 : 0,
+          choice.position,
+          choice.distractorType,
+        ),
+    ),
+  )
+}
+
+export async function findGeneratedQuestionsWithChoices(
+  database: D1Database,
+  attemptId: number,
+): Promise<GeneratedQuestionChoiceRow[]> {
+  const result = await database
+    .prepare(
+      `SELECT
+        generated_question_snapshots.id AS snapshot_id,
+        generated_question_snapshots.public_id AS snapshot_public_id,
+        generated_question_snapshots.owner_user_id,
+        generated_question_snapshots.practice_attempt_id,
+        generated_question_snapshots.source_position,
+        generated_question_snapshots.generator_slug,
+        generated_question_snapshots.generator_version,
+        generated_question_snapshots.seed,
+        generated_question_snapshots.difficulty,
+        generated_question_snapshots.prompt,
+        generated_question_snapshots.explanation_json,
+        generated_question_snapshots.parameters_json,
+        generated_question_snapshots.metadata_json,
+        generated_question_choices.id AS choice_id,
+        generated_question_choices.public_id AS choice_public_id,
+        generated_question_choices.choice_text,
+        generated_question_choices.is_correct,
+        generated_question_choices.position AS choice_position,
+        generated_question_choices.distractor_type
+      FROM generated_question_snapshots
+      INNER JOIN generated_question_choices
+        ON generated_question_choices.snapshot_id = generated_question_snapshots.id
+      WHERE generated_question_snapshots.practice_attempt_id = ?1
+      ORDER BY
+        generated_question_snapshots.source_position,
+        generated_question_choices.position`,
+    )
+    .bind(attemptId)
+    .all<GeneratedQuestionChoiceRow>()
+
+  return result.results
+}
+
+export async function findGeneratedPracticeAttemptAnswers(
+  database: D1Database,
+  attemptId: number,
+): Promise<GeneratedPracticeAttemptAnswerRow[]> {
+  const result = await database
+    .prepare(
+      `SELECT
+        snapshot_id,
+        selected_choice_id,
+        is_correct,
+        points_awarded,
+        answered_at
+      FROM generated_practice_attempt_answers
+      WHERE attempt_id = ?1`,
+    )
+    .bind(attemptId)
+    .all<GeneratedPracticeAttemptAnswerRow>()
+
+  return result.results
+}
+
+export async function findGeneratedSnapshotInAttempt(
+  database: D1Database,
+  attemptId: number,
+  snapshotId: number,
+): Promise<{ id: number } | null> {
+  return database
+    .prepare(
+      `SELECT id
+      FROM generated_question_snapshots
+      WHERE id = ?1
+        AND practice_attempt_id = ?2
+      LIMIT 1`,
+    )
+    .bind(snapshotId, attemptId)
+    .first<{ id: number }>()
+}
+
+export async function findGeneratedChoiceInSnapshot(
+  database: D1Database,
+  snapshotId: number,
+  choiceId: number,
+): Promise<{ id: number } | null> {
+  return database
+    .prepare(
+      `SELECT id
+      FROM generated_question_choices
+      WHERE id = ?1
+        AND snapshot_id = ?2
+      LIMIT 1`,
+    )
+    .bind(choiceId, snapshotId)
+    .first<{ id: number }>()
+}
+
+export async function saveGeneratedPracticeAttemptAnswer(
+  database: D1Database,
+  input: {
+    attemptId: number
+    snapshotId: number
+    selectedChoiceId: number
+  },
+): Promise<void> {
+  await database
+    .prepare(
+      `INSERT INTO generated_practice_attempt_answers (
+        attempt_id,
+        snapshot_id,
+        selected_choice_id,
+        is_correct,
+        points_awarded,
+        answered_at
+      ) VALUES (?1, ?2, ?3, NULL, 0, CURRENT_TIMESTAMP)
+      ON CONFLICT(attempt_id, snapshot_id) DO UPDATE SET
+        selected_choice_id = excluded.selected_choice_id,
+        is_correct = NULL,
+        points_awarded = 0,
+        answered_at = CURRENT_TIMESTAMP`,
+    )
+    .bind(input.attemptId, input.snapshotId, input.selectedChoiceId)
+    .run()
+}
+
+export async function updateGeneratedPracticeAttemptAnswerScores(
+  database: D1Database,
+  attemptId: number,
+  scores: Array<{
+    snapshotId: number
+    selectedChoiceId: number | null
+    isCorrect: boolean
+    pointsAwarded: number
+  }>,
+): Promise<void> {
+  if (scores.length === 0) {
+    return
+  }
+
+  await database.batch(
+    scores.map((score) =>
+      database
+        .prepare(
+          `INSERT INTO generated_practice_attempt_answers (
+            attempt_id,
+            snapshot_id,
+            selected_choice_id,
+            is_correct,
+            points_awarded,
+            answered_at
+          ) VALUES (?1, ?2, ?3, ?4, ?5, CURRENT_TIMESTAMP)
+          ON CONFLICT(attempt_id, snapshot_id) DO UPDATE SET
+            selected_choice_id = excluded.selected_choice_id,
+            is_correct = excluded.is_correct,
+            points_awarded = excluded.points_awarded,
+            answered_at = COALESCE(
+              generated_practice_attempt_answers.answered_at,
+              excluded.answered_at
+            )`,
+        )
+        .bind(
+          attemptId,
+          score.snapshotId,
+          score.selectedChoiceId,
+          score.isCorrect ? 1 : 0,
+          score.pointsAwarded,
+        ),
+    ),
+  )
 }
 
 export async function findPracticeQuestionInSet(
