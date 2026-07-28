@@ -9,8 +9,15 @@ export type GeneratorSlug =
   | 'finding-percentage'
   | 'finding-base'
   | 'finding-rate'
+  | 'equivalent-fractions'
+  | 'simplifying-fractions'
+  | 'comparing-fractions'
+  | 'adding-fractions'
+  | 'subtracting-fractions'
+  | 'multiplying-fractions'
+  | 'dividing-fractions'
 
-export type AnswerKind = 'number' | 'percent' | 'money' | 'count'
+export type AnswerKind = 'number' | 'percent' | 'money' | 'count' | 'fraction'
 
 export interface GeneratedExplanation {
   title: string

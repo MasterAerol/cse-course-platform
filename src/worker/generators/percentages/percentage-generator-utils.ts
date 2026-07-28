@@ -24,16 +24,18 @@ import type {
   GeneratorValidationResult,
 } from '../generator.types'
 
+type NumericGeneratedAnswerKind = Exclude<AnswerKind, 'fraction'>
+
 export interface PercentageScenario {
   prompt: string
   unit: string | null
-  answerKind: AnswerKind
+  answerKind: NumericGeneratedAnswerKind
   countable: boolean
 }
 
 export function formatGeneratedNumber(
   value: number,
-  answerKind: AnswerKind,
+  answerKind: NumericGeneratedAnswerKind,
 ): string {
   return formatNumericChoice(value, answerKind)
 }
@@ -56,7 +58,7 @@ export function createBaseRandom(input: {
 
 export function shuffledChoices(input: {
   correctValue: number
-  answerKind: AnswerKind
+  answerKind: NumericGeneratedAnswerKind
   candidates: readonly DistractorCandidate[]
   random: SeededRandom
 }): GeneratedChoice[] {
@@ -92,7 +94,7 @@ export function validateQuestionContract(
     slug: GeneratorSlug
     version: number
     recomputedAnswer: number
-    answerKind: AnswerKind
+    answerKind: NumericGeneratedAnswerKind
     allowedDifficulties: readonly GeneratorDifficulty[]
   },
 ): GeneratorValidationResult {

@@ -101,9 +101,17 @@ export const lessonCreateSchema = z
   })
   .strict()
 
-export const lessonUpdateSchema = lessonCreateSchema
-  .partial()
-  .extend({
+export const lessonUpdateSchema = z
+  .object({
+    title: requiredTitleSchema.optional(),
+    slug: adminSlugSchema.optional(),
+    lessonType: lessonTypeSchema.optional(),
+    summary: optionalTextSchema(1_000),
+    estimatedMinutes: z.coerce.number().int().positive().nullable().optional(),
+    position: positivePositionSchema.optional(),
+    isPreview: z.boolean().optional(),
+    requiresPrevious: z.boolean().optional(),
+    status: adminStatusSchema.optional(),
     updatedAt: adminUpdatedAtSchema,
   })
   .strict()

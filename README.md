@@ -6,10 +6,10 @@ server-managed sessions, a public course catalog, student enrollments, and
 Cloudflare D1 in one Cloudflare Worker deployment.
 
 The current platform includes curriculum navigation, a protected lesson
-reader, lesson completion, sequential unlocking, a topic quiz, fixed practice
-activities, and dynamic percentage practice generation. It intentionally
-contains no admin content editor, payments, certificates, mock exams, R2
-media pipeline, or AI-generated question wording.
+reader, lesson completion, sequential unlocking, topic quizzes, fixed practice
+activities, generated practice activities, and a lightweight admin content
+builder for course content review. It intentionally contains no payments,
+certificates, mock exams, R2 media pipeline, or AI-generated question wording.
 
 ## Architecture
 
@@ -43,6 +43,9 @@ Browser
 - Practice generation is backend-only. Generated practice attempts persist
   immutable D1 snapshots and score against those snapshots instead of
   regenerating questions.
+- Admin content mutations go through authenticated admin APIs and write audit
+  entries. Content authoring scripts should call those APIs rather than
+  bypassing services with ad hoc SQL.
 
 ## Prerequisites
 
@@ -141,6 +144,9 @@ Git.
 - Quiz endpoints under `/api/student/quizzes/*` and
   `/api/student/quiz-attempts/*` provide the Percentages Topic Quiz attempt,
   answer, submit, and result flow.
+- Admin content builder endpoints under `/api/admin/*` allow administrators to
+  review and draft courses, subjects, topics, lessons, lesson blocks, practice
+  sets, quizzes, and audit log entries.
 
 ## Authentication
 
@@ -181,9 +187,10 @@ default administrator password or commit credentials.
 ## Course catalog and enrollments
 
 The seed migration creates the published `CSE Professional` course with the
-`Numerical Ability` subject, the `Percentages` topic, and 11 published lesson
-stubs. The lesson rows contain placeholder summaries only; full lesson content
-is intentionally out of scope for this milestone.
+`Numerical Ability` subject, the `Percentages` topic, and published
+Percentages lessons. Additional draft topics, such as `Fractions`, should be
+created through the admin APIs or approved operational scripts so they remain
+reviewable before publication.
 
 Enrollment checks are always server-side. Student APIs bind the authenticated
 session's internal user id and require:
@@ -258,6 +265,16 @@ lessons:
 - Finding the Base (`finding-base` v1)
 - Finding the Rate (`finding-rate` v1)
 
+Draft Fractions generated practice can use these generator slugs:
+
+- Equivalent Fractions (`equivalent-fractions` v1)
+- Simplifying Fractions (`simplifying-fractions` v1)
+- Comparing Fractions (`comparing-fractions` v1)
+- Adding Fractions (`adding-fractions` v1)
+- Subtracting Fractions (`subtracting-fractions` v1)
+- Multiplying Fractions (`multiplying-fractions` v1)
+- Dividing Fractions (`dividing-fractions` v1)
+
 Each generated attempt creates five questions: two easy, two medium, and one
 hard. The Worker creates a cryptographically random attempt seed with Web
 Crypto, derives deterministic per-question seeds from the generator slug,
@@ -272,10 +289,65 @@ it does not call the generator again. On submit and review, scoring and
 explanations come from the saved snapshot rows so historical attempts remain
 reviewable after future generator-code changes.
 
-`Worked Examples` and `Guided Practice` remain fixed practice sets for now.
-Do not edit an existing generator version in a way that changes generated
-question behavior materially; add a new generator version and migration
-configuration instead.
+`Worked Examples`, `Guided Practice`, and the Fractions mixed application
+lesson use fixed practice sets. Do not edit an existing generator version in a
+way that changes generated question behavior materially; add a new generator
+version and configuration instead.
+
+## Admin content builder
+
+Open the admin builder at:
+
+```text
+/admin/courses/<course-id>
+```
+
+Use it to review draft topics and lessons before publishing. Draft courses,
+topics, lessons, practice sets, quizzes, questions, and choices are visible to
+administrators but remain hidden from student APIs until their parent content
+chain is published.
+
+The admin mutation APIs require an authenticated admin session and the
+same-origin CSRF header used by the React admin UI. Keep operational scripts
+idempotent and do not hardcode credentials or student emails into migrations.
+
+## Fractions draft content creation
+
+The Fractions topic is intentionally created by a one-time admin API script
+instead of a large content seed migration. This keeps draft authoring auditable
+and avoids automatically publishing unreviewed lesson content.
+
+Start the local development server, then run one of these with an admin
+account:
+
+```bash
+CSE_FRACTIONS_ADMIN_PASSWORD="<password>" node scripts/create-fractions-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-fractions-draft
+```
+
+or, if you already have a valid admin session cookie:
+
+```bash
+node scripts/create-fractions-topic.mjs --base-url http://127.0.0.1:5173 --cookie "cse_session=<cookie-value>" --confirm create-fractions-draft
+```
+
+For production, deploy the code first so the fraction generators and admin API
+support are available, then run the same script against the production origin
+with an admin-controlled credential or cookie. The script creates the
+`Fractions` topic under `CSE Professional` → `Numerical Ability` as `draft`,
+adds 12 draft lessons, configures seven generated practice lessons, creates a
+fixed mixed-applications practice set, and creates a fixed 15-question topic
+quiz.
+
+After the script runs, review in the admin UI:
+
+1. Open `/admin/courses/<course-id>`.
+2. Select `Numerical Ability` → `Fractions`.
+3. Review every lesson block, generated practice configuration, fixed practice
+   question, and quiz question.
+4. Publish from the outside in only after review: topic, lessons, practice
+   sets/quizzes, and their questions/choices as appropriate.
+5. Confirm the public course detail still hides draft Fractions content until
+   publication.
 
 ## D1 setup and migrations
 

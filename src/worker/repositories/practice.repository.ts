@@ -66,9 +66,21 @@ export interface PracticeAttemptRow {
   topic_slug: string
 }
 
+type PracticeGeneratorSlug =
+  | 'finding-percentage'
+  | 'finding-base'
+  | 'finding-rate'
+  | 'equivalent-fractions'
+  | 'simplifying-fractions'
+  | 'comparing-fractions'
+  | 'adding-fractions'
+  | 'subtracting-fractions'
+  | 'multiplying-fractions'
+  | 'dividing-fractions'
+
 export interface PracticeSetGeneratorConfigRow {
   practice_set_id: number
-  generator_slug: 'finding-percentage' | 'finding-base' | 'finding-rate'
+  generator_slug: PracticeGeneratorSlug
   generator_version: number
   easy_count: number
   medium_count: number
@@ -103,7 +115,7 @@ export interface GeneratedQuestionChoiceRow {
   owner_user_id: number
   practice_attempt_id: number
   source_position: number
-  generator_slug: 'finding-percentage' | 'finding-base' | 'finding-rate'
+  generator_slug: PracticeGeneratorSlug
   generator_version: number
   seed: string
   difficulty: 'easy' | 'medium' | 'hard'

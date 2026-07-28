@@ -13,11 +13,27 @@ import {
   generateValidatedQuestion,
   getRegisteredGenerators,
 } from '../src/worker/generators/generator.registry'
+import {
+  addFractions,
+  compareFractions,
+  divideFractions,
+  fractionIdentity,
+  fractionsEqual,
+  greatestCommonDivisor,
+  improperToMixed,
+  leastCommonMultiple,
+  mixedToImproper,
+  multiplyFractions,
+  normalizeFraction,
+  simplifyFraction,
+  subtractFractions,
+} from '../src/worker/domain/fractions/fraction-math'
 import { parseLessonBlock } from '../src/worker/schemas/lesson-block.schemas'
 import type { Bindings } from '../src/worker/types/bindings'
 import type {
   GeneratedQuestion,
   GeneratorDifficulty,
+  GeneratorSlug,
 } from '../src/worker/generators/generator.types'
 
 interface ApiErrorBody {
@@ -1330,6 +1346,34 @@ function generatedChoiceNumericIdentity(choiceText: string): string {
   return normalizedGeneratedNumber(numericValue)
 }
 
+const percentageGeneratorSlugs = new Set<GeneratorSlug>([
+  'finding-percentage',
+  'finding-base',
+  'finding-rate',
+])
+
+const fractionGeneratorSlugs = new Set<GeneratorSlug>([
+  'equivalent-fractions',
+  'simplifying-fractions',
+  'comparing-fractions',
+  'adding-fractions',
+  'subtracting-fractions',
+  'multiplying-fractions',
+  'dividing-fractions',
+])
+
+function registeredPercentageGenerators() {
+  return getRegisteredGenerators().filter((generator) =>
+    percentageGeneratorSlugs.has(generator.slug),
+  )
+}
+
+function registeredFractionGenerators() {
+  return getRegisteredGenerators().filter((generator) =>
+    fractionGeneratorSlugs.has(generator.slug),
+  )
+}
+
 function expectGeneratedQuestionValid(question: GeneratedQuestion): void {
   const correctChoices = question.choices.filter((choice) => choice.isCorrect)
   const choiceTexts = new Set(question.choices.map((choice) => choice.text))
@@ -1369,6 +1413,40 @@ function expectGeneratedQuestionValid(question: GeneratedQuestion): void {
       String(ratePercent / 100),
     )
   }
+  expect(question.metadata.canonicalSignature).toContain(question.generatorSlug)
+}
+
+function expectFractionGeneratedQuestionValid(question: GeneratedQuestion): void {
+  const correctChoices = question.choices.filter((choice) => choice.isCorrect)
+  const choiceTexts = new Set(question.choices.map((choice) => choice.text))
+  const parameters = question.parameters as {
+    correctIdentity?: unknown
+    choiceIdentities?: unknown
+  }
+
+  expect(question.metadata.answerKind).toBe('fraction')
+  expect(question.choices).toHaveLength(4)
+  expect(correctChoices).toHaveLength(1)
+  expect(choiceTexts.size).toBe(4)
+  expect(Array.isArray(parameters.choiceIdentities)).toBe(true)
+  expect(parameters.choiceIdentities).toHaveLength(4)
+  expect(new Set(parameters.choiceIdentities as string[]).size).toBe(4)
+  expect(parameters.correctIdentity).toEqual(expect.any(String))
+  expect(parameters.choiceIdentities).toContain(parameters.correctIdentity)
+  expect(correctChoices[0]?.text).toBe(question.explanation.finalAnswer)
+
+  for (const choice of question.choices) {
+    expect(Number.isFinite(choice.numericValue)).toBe(true)
+
+    if (!choice.isCorrect) {
+      expect(choice.mistakeType).not.toBeNull()
+      expect(choice.distractorType).toBe(choice.mistakeType)
+      expect(choice.derivation?.operation).toEqual(expect.any(String))
+      expect(choice.derivation?.inputs.length).toBeGreaterThan(0)
+      expect(choice.qualityScore).toBeGreaterThanOrEqual(35)
+    }
+  }
+
   expect(question.metadata.canonicalSignature).toContain(question.generatorSlug)
 }
 
@@ -3747,7 +3825,7 @@ describe('Topic quiz APIs', () => {
 
 describe('Dynamic percentage generator engine', () => {
   it('is deterministic for the same seed and preserves generator versions', () => {
-    for (const generator of getRegisteredGenerators()) {
+    for (const generator of registeredPercentageGenerators()) {
       const first = generator.generate({
         seed: `deterministic-${generator.slug}`,
         difficulty: 'medium',
@@ -3775,7 +3853,7 @@ describe('Dynamic percentage generator engine', () => {
       'hard',
     ]
 
-    for (const generator of getRegisteredGenerators()) {
+    for (const generator of registeredPercentageGenerators()) {
       for (let index = 0; index < 1_000; index += 1) {
         const difficulty = difficulties[index % difficulties.length]
         const question = generateValidatedQuestion({
@@ -3814,6 +3892,131 @@ describe('Dynamic percentage generator engine', () => {
 
     expect(questions).toHaveLength(5)
     expect(signatures.size).toBe(5)
+  })
+})
+
+describe('Dynamic fractions generator engine', () => {
+  it('performs exact fraction arithmetic and mixed-number conversions', () => {
+    expect(greatestCommonDivisor(24, 36)).toBe(12)
+    expect(leastCommonMultiple(6, 8)).toBe(24)
+    expect(normalizeFraction({ numerator: 3, denominator: -9 })).toEqual({
+      numerator: -3,
+      denominator: 9,
+    })
+    expect(simplifyFraction({ numerator: 24, denominator: 36 })).toEqual({
+      numerator: 2,
+      denominator: 3,
+    })
+    expect(fractionIdentity({ numerator: 10, denominator: 15 })).toBe('2/3')
+    expect(fractionsEqual(
+      { numerator: 6, denominator: 9 },
+      { numerator: 2, denominator: 3 },
+    )).toBe(true)
+    expect(compareFractions(
+      { numerator: 3, denominator: 5 },
+      { numerator: 5, denominator: 8 },
+    )).toBe(-1)
+    expect(addFractions(
+      { numerator: 1, denominator: 4 },
+      { numerator: 1, denominator: 6 },
+    )).toEqual({ numerator: 5, denominator: 12 })
+    expect(subtractFractions(
+      { numerator: 5, denominator: 6 },
+      { numerator: 1, denominator: 3 },
+    )).toEqual({ numerator: 1, denominator: 2 })
+    expect(multiplyFractions(
+      { numerator: 2, denominator: 5 },
+      { numerator: 3, denominator: 4 },
+    )).toEqual({ numerator: 3, denominator: 10 })
+    expect(divideFractions(
+      { numerator: 3, denominator: 4 },
+      { numerator: 2, denominator: 5 },
+    )).toEqual({ numerator: 15, denominator: 8 })
+    expect(improperToMixed({ numerator: 17, denominator: 5 })).toEqual({
+      whole: 3,
+      numerator: 2,
+      denominator: 5,
+    })
+    expect(mixedToImproper({
+      whole: 3,
+      numerator: 2,
+      denominator: 5,
+    })).toEqual({ numerator: 17, denominator: 5 })
+    expect(() =>
+      normalizeFraction({ numerator: 1, denominator: 0 }),
+    ).toThrow('denominator cannot be zero')
+  })
+
+  it('registers seven versioned fraction generators', () => {
+    const generators = registeredFractionGenerators()
+
+    expect(generators.map((generator) => generator.slug)).toEqual([
+      'equivalent-fractions',
+      'simplifying-fractions',
+      'comparing-fractions',
+      'adding-fractions',
+      'subtracting-fractions',
+      'multiplying-fractions',
+      'dividing-fractions',
+    ])
+
+    for (const generator of generators) {
+      expect(generator.version).toBe(1)
+      expect(generator.supportedDifficulties).toEqual([
+        'easy',
+        'medium',
+        'hard',
+      ])
+    }
+  })
+
+  it('is deterministic for the same seed and preserves generator versions', () => {
+    for (const generator of registeredFractionGenerators()) {
+      const first = generator.generate({
+        seed: `deterministic-${generator.slug}`,
+        difficulty: 'medium',
+      })
+      const second = generator.generate({
+        seed: `deterministic-${generator.slug}`,
+        difficulty: 'medium',
+      })
+      const different = generator.generate({
+        seed: `different-${generator.slug}`,
+        difficulty: 'medium',
+      })
+
+      expect(first).toEqual(second)
+      expect(JSON.stringify(first)).not.toBe(JSON.stringify(different))
+      expect(first.generatorSlug).toBe(generator.slug)
+      expect(first.generatorVersion).toBe(1)
+    }
+  })
+
+  it('validates 1,000 rationally unique generated questions per generator', () => {
+    const difficulties: readonly GeneratorDifficulty[] = [
+      'easy',
+      'medium',
+      'hard',
+    ]
+
+    for (const generator of registeredFractionGenerators()) {
+      for (let index = 0; index < 1_000; index += 1) {
+        const difficulty = difficulties[index % difficulties.length]
+        const question = generateValidatedQuestion({
+          attemptSeed: `fraction-math-validation-${generator.slug}-${index}`,
+          generatorSlug: generator.slug,
+          generatorVersion: generator.version,
+          difficulty,
+          position: index + 1,
+          existingSignatures: new Set<string>(),
+        })
+        const validation = generator.validate(question)
+
+        expect(validation).toEqual({ valid: true, reason: null })
+        expectFractionGeneratedQuestionValid(question)
+        expect(question.difficulty).toBe(difficulty)
+      }
+    }
   })
 })
 
@@ -5378,6 +5581,250 @@ describe('Admin Content Builder Lite API', () => {
     }
   }
 
+  async function createTypedLessonShell(
+    cookie: string,
+    lessonType: 'reading' | 'practice' | 'quiz',
+  ): Promise<{
+    lessonId: number
+    lessonType: 'reading' | 'practice' | 'quiz'
+    updatedAt: string
+  }> {
+    const unique = crypto.randomUUID().slice(0, 8)
+    const course = await createAdminCourseForTest(
+      cookie,
+      `typed-course-${unique}`,
+    )
+    const subjectResponse = await app.request(
+      `/api/admin/courses/${course.id}/subjects`,
+      adminJsonRequest(
+        {
+          title: 'Typed Subject',
+          slug: `typed-subject-${unique}`,
+          status: 'draft',
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const subjectBody = await subjectResponse.json<{
+      success: true
+      data: { subject: { id: number } }
+    }>()
+    const topicResponse = await app.request(
+      `/api/admin/subjects/${subjectBody.data.subject.id}/topics`,
+      adminJsonRequest(
+        {
+          title: 'Typed Topic',
+          slug: `typed-topic-${unique}`,
+          status: 'draft',
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const topicBody = await topicResponse.json<{
+      success: true
+      data: { topic: { id: number } }
+    }>()
+    const lessonResponse = await app.request(
+      `/api/admin/topics/${topicBody.data.topic.id}/lessons`,
+      adminJsonRequest(
+        {
+          title: `Typed ${lessonType} Lesson`,
+          slug: `typed-${lessonType}-${unique}`,
+          lessonType,
+          status: 'draft',
+          isPreview: false,
+          requiresPrevious: true,
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const lessonBody = await lessonResponse.json<{
+      success: true
+      data: {
+        lesson: {
+          id: number
+          lessonType: 'reading' | 'practice' | 'quiz'
+          updatedAt: string
+        }
+      }
+    }>()
+
+    expect(subjectResponse.status).toBe(201)
+    expect(topicResponse.status).toBe(201)
+    expect(lessonResponse.status).toBe(201)
+
+    return {
+      lessonId: lessonBody.data.lesson.id,
+      lessonType: lessonBody.data.lesson.lessonType,
+      updatedAt: lessonBody.data.lesson.updatedAt,
+    }
+  }
+
+  async function addPublishableReadingBlock(
+    cookie: string,
+    lessonId: number,
+  ): Promise<void> {
+    const response = await app.request(
+      `/api/admin/lessons/${lessonId}/blocks`,
+      adminJsonRequest(
+        {
+          blockType: 'paragraph',
+          content: { text: 'Publishable reading content.' },
+          position: 1,
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(201)
+  }
+
+  async function savePublishedGeneratedPracticeSet(
+    cookie: string,
+    lessonId: number,
+  ): Promise<void> {
+    const response = await app.request(
+      `/api/admin/lessons/${lessonId}/practice-set`,
+      adminJsonRequest(
+        {
+          title: 'Generated Practice',
+          instructions: null,
+          passingScore: 60,
+          questionCount: 1,
+          maximumAttempts: null,
+          showExplanations: true,
+          status: 'published',
+          questionSource: 'generated',
+          generatorSlug: 'finding-percentage',
+          generatorVersion: 1,
+          difficulty: { easy: 1, medium: 0, hard: 0 },
+        },
+        cookie,
+        'PUT',
+      ),
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(200)
+  }
+
+  async function savePublishedQuiz(
+    cookie: string,
+    lessonId: number,
+  ): Promise<void> {
+    const draftResponse = await app.request(
+      `/api/admin/lessons/${lessonId}/quiz`,
+      adminJsonRequest(
+        {
+          title: 'Publishable Quiz',
+          description: null,
+          quizType: 'topic',
+          passingScore: 70,
+          timeLimitMinutes: null,
+          maximumAttempts: null,
+          shuffleQuestions: false,
+          shuffleChoices: false,
+          showExplanations: true,
+          status: 'draft',
+        },
+        cookie,
+        'PUT',
+      ),
+      createBindings('production'),
+    )
+    const draftBody = await draftResponse.json<{
+      success: true
+      data: { quiz: { id: number } }
+    }>()
+
+    expect(draftResponse.status).toBe(200)
+
+    const questionResponse = await app.request(
+      `/api/admin/quizzes/${draftBody.data.quiz.id}/questions`,
+      adminJsonRequest(
+        {
+          prompt: 'Which fraction is equal to one half?',
+          explanation: '2/4 simplifies to 1/2.',
+          points: 1,
+          position: 1,
+          status: 'active',
+          questionType: 'multiple_choice',
+          choices: [
+            { text: '2/4', isCorrect: true, position: 1 },
+            { text: '1/4', isCorrect: false, position: 2 },
+            { text: '3/4', isCorrect: false, position: 3 },
+            { text: '4/1', isCorrect: false, position: 4 },
+          ],
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+
+    expect(questionResponse.status).toBe(201)
+
+    const publishResponse = await app.request(
+      `/api/admin/lessons/${lessonId}/quiz`,
+      adminJsonRequest(
+        {
+          title: 'Publishable Quiz',
+          description: null,
+          quizType: 'topic',
+          passingScore: 70,
+          timeLimitMinutes: null,
+          maximumAttempts: null,
+          shuffleQuestions: false,
+          shuffleChoices: false,
+          showExplanations: true,
+          status: 'published',
+        },
+        cookie,
+        'PUT',
+      ),
+      createBindings('production'),
+    )
+
+    expect(publishResponse.status).toBe(200)
+  }
+
+  async function patchLesson(
+    cookie: string,
+    lessonId: number,
+    input: Record<string, unknown>,
+  ): Promise<{
+    response: Response
+    body: {
+      success: true
+      data: {
+        lesson: {
+          lessonType: 'reading' | 'practice' | 'quiz'
+          status: 'draft' | 'published' | 'archived'
+        }
+      }
+    }
+  }> {
+    const response = await app.request(
+      `/api/admin/lessons/${lessonId}`,
+      adminJsonRequest(input, cookie, 'PATCH'),
+      createBindings('production'),
+    )
+    const body = await response.json<{
+      success: true
+      data: {
+        lesson: {
+          lessonType: 'reading' | 'practice' | 'quiz'
+          status: 'draft' | 'published' | 'archived'
+        }
+      }
+    }>()
+
+    return { response, body }
+  }
+
   it('protects admin reads by role and admin mutations by CSRF header', async () => {
     const { cookie: studentCookie } = await register(
       'admin-builder-student@example.com',
@@ -5484,6 +5931,127 @@ describe('Admin Content Builder Lite API', () => {
     expect(body.data.courses.map((course) => course.slug)).not.toContain(slug)
   })
 
+  it('keeps draft admin-authored curriculum hidden publicly but visible to admins and audited', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-draft-curriculum@example.com',
+    )
+    const courseResponse = await app.request(
+      '/api/admin/courses/1',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const courseBody = await courseResponse.json<{
+      success: true
+      data: {
+        subjects: Array<{
+          id: number
+          slug: string
+          topics: Array<{
+            slug: string
+            lessons: Array<{ slug: string }>
+          }>
+        }>
+      }
+    }>()
+    const numericalAbility = courseBody.data.subjects.find(
+      (subject) => subject.slug === 'numerical-ability',
+    )
+    const unique = crypto.randomUUID().slice(0, 8)
+    const topicSlug = `draft-fractions-${unique}`
+    const lessonSlug = `draft-fraction-lesson-${unique}`
+
+    expect(courseResponse.status).toBe(200)
+    expect(numericalAbility).toBeDefined()
+
+    const topicResponse = await app.request(
+      `/api/admin/subjects/${numericalAbility?.id}/topics`,
+      adminJsonRequest(
+        {
+          title: 'Draft Fractions Test',
+          slug: topicSlug,
+          description: 'Draft-only curriculum test topic.',
+          position: 99,
+          status: 'draft',
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const topicBody = await topicResponse.json<{
+      success: true
+      data: { topic: { id: number } }
+    }>()
+    const lessonResponse = await app.request(
+      `/api/admin/topics/${topicBody.data.topic.id}/lessons`,
+      adminJsonRequest(
+        {
+          title: 'Draft Fraction Lesson Test',
+          slug: lessonSlug,
+          lessonType: 'reading',
+          summary: 'Draft-only lesson.',
+          estimatedMinutes: 5,
+          isPreview: false,
+          requiresPrevious: true,
+          status: 'draft',
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+
+    expect(topicResponse.status).toBe(201)
+    expect(lessonResponse.status).toBe(201)
+
+    const adminDetailResponse = await app.request(
+      '/api/admin/courses/1',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const adminDetailBody = await adminDetailResponse.json<typeof courseBody>()
+    const adminTopic = adminDetailBody.data.subjects
+      .find((subject) => subject.slug === 'numerical-ability')
+      ?.topics.find((topic) => topic.slug === topicSlug)
+    const publicResponse = await app.request(
+      '/api/courses/cse-professional',
+      undefined,
+      createBindings('production'),
+    )
+    const publicBody = await publicResponse.json<CourseDetailBody>()
+    const auditResponse = await app.request(
+      '/api/admin/audit-logs',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const auditBody = await auditResponse.json<{
+      success: true
+      data: {
+        logs: Array<{
+          action: string
+          entityType: string
+        }>
+      }
+    }>()
+
+    expect(adminTopic?.lessons.map((lesson) => lesson.slug)).toContain(
+      lessonSlug,
+    )
+    expect(
+      publicBody.data.curriculum.flatMap((subject) =>
+        subject.topics.map((topic) => topic.slug),
+      ),
+    ).not.toContain(topicSlug)
+    expect(
+      auditBody.data.logs.some(
+        (log) => log.action === 'create' && log.entityType === 'topic',
+      ),
+    ).toBe(true)
+    expect(
+      auditBody.data.logs.some(
+        (log) => log.action === 'create' && log.entityType === 'lesson',
+      ),
+    ).toBe(true)
+  })
+
   it('validates lesson publish readiness and blocks raw HTML content', async () => {
     const { cookie } = await registerAdmin('admin-builder-publish@example.com')
     const shell = await createCurriculumShell(cookie)
@@ -5522,6 +6090,167 @@ describe('Admin Content Builder Lite API', () => {
       success: false,
       error: { code: 'RAW_HTML_BLOCKED' },
     })
+  })
+
+  it('publishes a draft reading lesson without sending lessonType', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-reading-publish@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'reading')
+    await addPublishableReadingBlock(cookie, lesson.lessonId)
+
+    const { response, body } = await patchLesson(cookie, lesson.lessonId, {
+      status: 'published',
+      updatedAt: lesson.updatedAt,
+    })
+
+    expect(response.status).toBe(200)
+    expect(body.data.lesson).toMatchObject({
+      lessonType: 'reading',
+      status: 'published',
+    })
+  })
+
+  it('publishes a draft practice lesson without sending lessonType', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-practice-publish@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'practice')
+    await savePublishedGeneratedPracticeSet(cookie, lesson.lessonId)
+
+    const { response, body } = await patchLesson(cookie, lesson.lessonId, {
+      status: 'published',
+      updatedAt: lesson.updatedAt,
+    })
+
+    expect(response.status).toBe(200)
+    expect(body.data.lesson).toMatchObject({
+      lessonType: 'practice',
+      status: 'published',
+    })
+  })
+
+  it('publishes a draft quiz lesson without sending lessonType', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-quiz-publish@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'quiz')
+    await savePublishedQuiz(cookie, lesson.lessonId)
+
+    const { response, body } = await patchLesson(cookie, lesson.lessonId, {
+      status: 'published',
+      updatedAt: lesson.updatedAt,
+    })
+
+    expect(response.status).toBe(200)
+    expect(body.data.lesson).toMatchObject({
+      lessonType: 'quiz',
+      status: 'published',
+    })
+  })
+
+  it('accepts an unchanged lessonType in a lesson update', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-unchanged-type@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'reading')
+    await addPublishableReadingBlock(cookie, lesson.lessonId)
+
+    const { response, body } = await patchLesson(cookie, lesson.lessonId, {
+      lessonType: 'reading',
+      status: 'published',
+      updatedAt: lesson.updatedAt,
+    })
+
+    expect(response.status).toBe(200)
+    expect(body.data.lesson.lessonType).toBe('reading')
+  })
+
+  it('rejects a real reading to practice lesson type change', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-reading-change@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'reading')
+    const response = await app.request(
+      `/api/admin/lessons/${lesson.lessonId}`,
+      adminJsonRequest(
+        {
+          lessonType: 'practice',
+          updatedAt: lesson.updatedAt,
+        },
+        cookie,
+        'PATCH',
+      ),
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'LESSON_TYPE_CHANGE_BLOCKED',
+      },
+    })
+  })
+
+  it('rejects a real practice to quiz lesson type change', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-practice-change@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'practice')
+    const response = await app.request(
+      `/api/admin/lessons/${lesson.lessonId}`,
+      adminJsonRequest(
+        {
+          lessonType: 'quiz',
+          updatedAt: lesson.updatedAt,
+        },
+        cookie,
+        'PATCH',
+      ),
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'LESSON_TYPE_CHANGE_BLOCKED',
+      },
+    })
+  })
+
+  it('preserves lesson type on status-only updates', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-status-preserve@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'practice')
+
+    const { response, body } = await patchLesson(cookie, lesson.lessonId, {
+      status: 'archived',
+      updatedAt: lesson.updatedAt,
+    })
+
+    expect(response.status).toBe(200)
+    expect(body.data.lesson).toMatchObject({
+      lessonType: 'practice',
+      status: 'archived',
+    })
+  })
+
+  it('does not let a stale status form accidentally change lesson type', async () => {
+    const { cookie } = await registerAdmin(
+      'admin-builder-stale-form-type@example.com',
+    )
+    const lesson = await createTypedLessonShell(cookie, 'practice')
+
+    const { response, body } = await patchLesson(cookie, lesson.lessonId, {
+      status: 'draft',
+      updatedAt: lesson.updatedAt,
+    })
+
+    expect(response.status).toBe(200)
+    expect(body.data.lesson.lessonType).toBe('practice')
   })
 
   it('validates fixed practice and quiz choices safely', async () => {

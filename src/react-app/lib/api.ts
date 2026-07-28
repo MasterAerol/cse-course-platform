@@ -1697,7 +1697,7 @@ export function moveAdminLesson(
 
 export function updateAdminLesson(
   lessonId: number,
-  input: AdminLessonInput & { updatedAt: string },
+  input: Partial<AdminLessonInput> & { updatedAt: string },
 ): Promise<AdminLesson> {
   return adminRequest(
     `/api/admin/lessons/${encodeURIComponent(String(lessonId))}`,

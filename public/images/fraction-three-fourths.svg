@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc" viewBox="0 0 420 160">
+  <title id="title">Three fourths fraction model</title>
+  <desc id="desc">A rectangle divided into four equal parts with three shaded to show three fourths.</desc>
+  <rect width="420" height="160" rx="18" fill="#f8fafc"/>
+  <g transform="translate(34 38)">
+    <rect width="352" height="84" rx="10" fill="#ffffff" stroke="#1e293b" stroke-width="4"/>
+    <rect width="88" height="84" rx="8" fill="#2563eb"/>
+    <rect x="88" width="88" height="84" fill="#2563eb"/>
+    <rect x="176" width="88" height="84" fill="#2563eb"/>
+    <line x1="88" y1="0" x2="88" y2="84" stroke="#1e293b" stroke-width="4"/>
+    <line x1="176" y1="0" x2="176" y2="84" stroke="#1e293b" stroke-width="4"/>
+    <line x1="264" y1="0" x2="264" y2="84" stroke="#1e293b" stroke-width="4"/>
+    <text x="176" y="124" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#1e293b">3/4 shaded</text>
+  </g>
+</svg>

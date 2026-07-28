@@ -44,6 +44,7 @@ import {
   type AdminQuizQuestion,
   type AdminSubject,
   type AdminTopic,
+  ApiClientError,
 } from '../../lib/api'
 
 type BuilderState =
@@ -70,6 +71,10 @@ type AssessmentState =
     }
   | { status: 'error'; message: string }
 
+type PageMessage =
+  | { kind: 'success'; text: string }
+  | { kind: 'error'; text: string }
+
 function parseCourseId(value: string | undefined): number | null {
   if (value === undefined || !/^\d+$/.test(value)) {
     return null
@@ -81,6 +86,20 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
 }
 
+function getAdminMutationErrorMessage(error: unknown): string {
+  if (error instanceof ApiClientError) {
+    if (error.code === 'LESSON_TYPE_CHANGE_BLOCKED') {
+      return 'Lesson type changes are blocked after a lesson has content or attempts. Keep the existing lesson type and retry.'
+    }
+
+    if (error.code === 'PUBLISH_VALIDATION_FAILED') {
+      return error.message
+    }
+  }
+
+  return getErrorMessage(error, 'Admin change could not be saved.')
+}
+
 export function AdminCourseBuilderPage() {
   const params = useParams()
   const courseId = parseCourseId(params.courseId)
@@ -90,7 +109,7 @@ export function AdminCourseBuilderPage() {
   const [assessmentState, setAssessmentState] = useState<AssessmentState>({
     status: 'idle',
   })
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessage] = useState<PageMessage | null>(null)
 
   const selectedLesson = useMemo(() => {
     if (state.status !== 'loaded' || selectedLessonId === null) {
@@ -169,7 +188,7 @@ export function AdminCourseBuilderPage() {
   }, [])
 
   async function afterMutation(success: string): Promise<void> {
-    setMessage(success)
+    setMessage({ kind: 'success', text: success })
     await loadCourse()
     await reloadLessonAssets(selectedLesson)
   }
@@ -177,7 +196,10 @@ export function AdminCourseBuilderPage() {
   function runMutation(operation: () => Promise<void>): void {
     setMessage(null)
     operation().catch((error: unknown) =>
-      setMessage(getErrorMessage(error, 'Admin change could not be saved.')),
+      setMessage({
+        kind: 'error',
+        text: getAdminMutationErrorMessage(error),
+      }),
     )
   }
 
@@ -229,10 +251,10 @@ export function AdminCourseBuilderPage() {
       />
       {message !== null && (
         <p
-          className={message.includes('could not') ? 'form-error' : 'form-success'}
+          className={message.kind === 'error' ? 'form-error' : 'form-success'}
           role="status"
         >
-          {message}
+          {message.text}
         </p>
       )}
 
@@ -328,12 +350,6 @@ export function AdminCourseBuilderPage() {
               onStatusLesson={(lesson, status) =>
                 runMutation(async () => {
                   await updateAdminLesson(lesson.id, {
-                    title: lesson.title,
-                    slug: lesson.slug,
-                    summary: lesson.summary,
-                    estimatedMinutes: lesson.estimatedMinutes,
-                    isPreview: lesson.isPreview,
-                    requiresPrevious: lesson.requiresPrevious,
                     status,
                     updatedAt: lesson.updatedAt,
                   })
@@ -357,21 +373,21 @@ export function AdminCourseBuilderPage() {
                 runMutation(async () => {
                   await createAdminLessonBlock(selectedLesson.id, input)
                   setBlocks(await fetchAdminLessonBlocks(selectedLesson.id))
-                  setMessage('Block added.')
+                  setMessage({ kind: 'success', text: 'Block added.' })
                 })
               }
               onMoveBlock={(blockId, direction) =>
                 runMutation(async () => {
                   await moveAdminLessonBlock(blockId, direction)
                   setBlocks(await fetchAdminLessonBlocks(selectedLesson.id))
-                  setMessage('Block reordered.')
+                  setMessage({ kind: 'success', text: 'Block reordered.' })
                 })
               }
               onDeleteBlock={(blockId) =>
                 runMutation(async () => {
                   await deleteAdminLessonBlock(blockId)
                   setBlocks(await fetchAdminLessonBlocks(selectedLesson.id))
-                  setMessage('Block deleted.')
+                  setMessage({ kind: 'success', text: 'Block deleted.' })
                 })
               }
               onReloadAssessment={() => reloadLessonAssets(selectedLesson)}
