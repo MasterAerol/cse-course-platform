@@ -16,6 +16,13 @@ export type GeneratorSlug =
   | 'subtracting-fractions'
   | 'multiplying-fractions'
   | 'dividing-fractions'
+  | 'comparing-decimals'
+  | 'rounding-decimals'
+  | 'adding-decimals'
+  | 'subtracting-decimals'
+  | 'multiplying-decimals'
+  | 'dividing-decimals'
+  | 'decimal-conversions'
 
 export type AnswerKind = 'number' | 'percent' | 'money' | 'count' | 'fraction'
 

@@ -61,6 +61,14 @@ export type DistractorMistakeType =
   | 'flipped_both_fractions'
   | 'divided_straight_across'
   | 'added_instead_of_divided'
+  | 'ignored_decimal_point'
+  | 'misaligned_decimal_places'
+  | 'rounded_to_wrong_place'
+  | 'truncated_instead_of_rounded'
+  | 'ordered_by_digit_count'
+  | 'decimal_place_shift'
+  | 'used_wrong_operation'
+  | 'converted_fraction_denominator_incorrectly'
 
 export interface DistractorDerivation {
   operation: string

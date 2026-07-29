@@ -1363,6 +1363,16 @@ const fractionGeneratorSlugs = new Set<GeneratorSlug>([
   'dividing-fractions',
 ])
 
+const decimalGeneratorSlugs = new Set<GeneratorSlug>([
+  'comparing-decimals',
+  'rounding-decimals',
+  'adding-decimals',
+  'subtracting-decimals',
+  'multiplying-decimals',
+  'dividing-decimals',
+  'decimal-conversions',
+])
+
 function registeredPercentageGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     percentageGeneratorSlugs.has(generator.slug),
@@ -1372,6 +1382,12 @@ function registeredPercentageGenerators() {
 function registeredFractionGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     fractionGeneratorSlugs.has(generator.slug),
+  )
+}
+
+function registeredDecimalGenerators() {
+  return getRegisteredGenerators().filter((generator) =>
+    decimalGeneratorSlugs.has(generator.slug),
   )
 }
 
@@ -1449,6 +1465,47 @@ function expectFractionGeneratedQuestionValid(question: GeneratedQuestion): void
   }
 
   expect(question.metadata.canonicalSignature).toContain(question.generatorSlug)
+}
+
+function expectDecimalGeneratedQuestionValid(question: GeneratedQuestion): void {
+  const correctChoices = question.choices.filter((choice) => choice.isCorrect)
+  const choiceTexts = new Set(question.choices.map((choice) => choice.text))
+  const numericIdentities = new Set(
+    question.choices.map((choice) => normalizedGeneratedNumber(choice.numericValue)),
+  )
+  const validation = getRegisteredGenerators()
+    .find(
+      (generator) =>
+        generator.slug === question.generatorSlug &&
+        generator.version === question.generatorVersion,
+    )
+    ?.validate(question)
+
+  expect(validation).toEqual({ valid: true, reason: null })
+  expect(question.choices).toHaveLength(4)
+  expect(correctChoices).toHaveLength(1)
+  expect(choiceTexts.size).toBe(4)
+  expect(numericIdentities.size).toBe(4)
+  expect(correctChoices[0]?.text).toBe(question.explanation.finalAnswer)
+  expect(question.metadata.canonicalSignature).toContain(question.generatorSlug)
+  expect(Number.isFinite(correctChoices[0]?.numericValue)).toBe(true)
+
+  for (const choice of question.choices) {
+    expect(Number.isFinite(choice.numericValue)).toBe(true)
+    expect(Number.isNaN(choice.numericValue)).toBe(false)
+
+    if (question.metadata.answerKind === 'money') {
+      expect(choice.text).toMatch(/^\u20b1\d+(?:\.\d{1,2})?$/u)
+    }
+
+    if (!choice.isCorrect) {
+      expect(choice.mistakeType).not.toBeNull()
+      expect(choice.distractorType).toBe(choice.mistakeType)
+      expect(choice.derivation?.operation).toEqual(expect.any(String))
+      expect(choice.derivation?.inputs.length).toBeGreaterThan(0)
+      expect(choice.qualityScore).toBeGreaterThanOrEqual(35)
+    }
+  }
 }
 
 async function setLessonProgress(
@@ -4018,6 +4075,99 @@ describe('Dynamic fractions generator engine', () => {
         expect(question.difficulty).toBe(difficulty)
       }
     }
+  })
+})
+
+describe('Dynamic decimals generator engine', () => {
+  it('registers seven versioned decimal generators', () => {
+    const generators = registeredDecimalGenerators()
+
+    expect(generators.map((generator) => generator.slug)).toEqual([
+      'comparing-decimals',
+      'rounding-decimals',
+      'adding-decimals',
+      'subtracting-decimals',
+      'multiplying-decimals',
+      'dividing-decimals',
+      'decimal-conversions',
+    ])
+
+    for (const generator of generators) {
+      expect(generator.version).toBe(1)
+      expect(generator.supportedDifficulties).toEqual([
+        'easy',
+        'medium',
+        'hard',
+      ])
+    }
+  })
+
+  it('is deterministic for the same seed and preserves immutable snapshots', () => {
+    for (const generator of registeredDecimalGenerators()) {
+      const first = generator.generate({
+        seed: `deterministic-${generator.slug}`,
+        difficulty: 'medium',
+      })
+      const second = generator.generate({
+        seed: `deterministic-${generator.slug}`,
+        difficulty: 'medium',
+      })
+      const different = generator.generate({
+        seed: `different-${generator.slug}`,
+        difficulty: 'medium',
+      })
+
+      expect(first).toEqual(second)
+      expect(JSON.stringify(first)).not.toBe(JSON.stringify(different))
+      expect(first.generatorSlug).toBe(generator.slug)
+      expect(first.generatorVersion).toBe(1)
+    }
+  })
+
+  it('validates 1,000 mathematically correct decimal questions per generator', () => {
+    const difficulties: readonly GeneratorDifficulty[] = [
+      'easy',
+      'medium',
+      'hard',
+    ]
+
+    for (const generator of registeredDecimalGenerators()) {
+      for (let index = 0; index < 1_000; index += 1) {
+        const difficulty = difficulties[index % difficulties.length]
+        const question = generateValidatedQuestion({
+          attemptSeed: `decimal-math-validation-${generator.slug}-${index}`,
+          generatorSlug: generator.slug,
+          generatorVersion: generator.version,
+          difficulty,
+          position: index + 1,
+          existingSignatures: new Set<string>(),
+        })
+
+        expectDecimalGeneratedQuestionValid(question)
+        expect(question.difficulty).toBe(difficulty)
+      }
+    }
+  })
+
+  it('prevents duplicate decimal question snapshots in one practice attempt', () => {
+    const signatures = new Set<string>()
+    const questions = Array.from({ length: 5 }, (_, index) => {
+      const question = generateValidatedQuestion({
+        attemptSeed: 'decimal-duplicate-prevention',
+        generatorSlug: 'adding-decimals',
+        generatorVersion: 1,
+        difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard',
+        position: index + 1,
+        existingSignatures: signatures,
+      })
+
+      signatures.add(question.metadata.canonicalSignature)
+
+      return question
+    })
+
+    expect(questions).toHaveLength(5)
+    expect(signatures.size).toBe(5)
   })
 })
 
