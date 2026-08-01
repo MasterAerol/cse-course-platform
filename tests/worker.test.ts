@@ -29,6 +29,19 @@ import {
   simplifyFraction,
   subtractFractions,
 } from '../src/worker/domain/fractions/fraction-math'
+import {
+  calculateDirectProportion,
+  calculateInverseProportion,
+  compareRatios,
+  greatestCommonDivisor as ratioGreatestCommonDivisor,
+  normalizeRatio,
+  normalizeUnitQuantity,
+  ratioIdentity,
+  ratiosEqual,
+  shareInRatio,
+  simplifyRatio,
+  solveProportion,
+} from '../src/worker/domain/ratios/ratio-math'
 import { parseLessonBlock } from '../src/worker/schemas/lesson-block.schemas'
 import type { Bindings } from '../src/worker/types/bindings'
 import type {
@@ -1373,6 +1386,17 @@ const decimalGeneratorSlugs = new Set<GeneratorSlug>([
   'decimal-conversions',
 ])
 
+const ratioGeneratorSlugs = new Set<GeneratorSlug>([
+  'simplifying-ratios',
+  'equivalent-ratios',
+  'comparing-ratios',
+  'solving-proportions',
+  'direct-proportion',
+  'inverse-proportion',
+  'ratio-sharing',
+  'ratio-word-problems',
+])
+
 function registeredPercentageGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     percentageGeneratorSlugs.has(generator.slug),
@@ -1388,6 +1412,12 @@ function registeredFractionGenerators() {
 function registeredDecimalGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     decimalGeneratorSlugs.has(generator.slug),
+  )
+}
+
+function registeredRatioGenerators() {
+  return getRegisteredGenerators().filter((generator) =>
+    ratioGeneratorSlugs.has(generator.slug),
   )
 }
 
@@ -1497,6 +1527,38 @@ function expectDecimalGeneratedQuestionValid(question: GeneratedQuestion): void 
     if (question.metadata.answerKind === 'money') {
       expect(choice.text).toMatch(/^\u20b1\d+(?:\.\d{1,2})?$/u)
     }
+
+    if (!choice.isCorrect) {
+      expect(choice.mistakeType).not.toBeNull()
+      expect(choice.distractorType).toBe(choice.mistakeType)
+      expect(choice.derivation?.operation).toEqual(expect.any(String))
+      expect(choice.derivation?.inputs.length).toBeGreaterThan(0)
+      expect(choice.qualityScore).toBeGreaterThanOrEqual(35)
+    }
+  }
+}
+
+function expectRatioGeneratedQuestionValid(question: GeneratedQuestion): void {
+  const generator = getRegisteredGenerators().find(
+    (item) =>
+      item.slug === question.generatorSlug &&
+      item.version === question.generatorVersion,
+  )
+  const correctChoices = question.choices.filter((choice) => choice.isCorrect)
+  const choiceIdentities = question.parameters.choiceIdentities
+
+  expect(generator?.validate(question)).toEqual({ valid: true, reason: null })
+  expect(question.choices).toHaveLength(4)
+  expect(correctChoices).toHaveLength(1)
+  expect(new Set(question.choices.map((choice) => choice.text)).size).toBe(4)
+  expect(Array.isArray(choiceIdentities)).toBe(true)
+  expect(new Set(choiceIdentities as string[]).size).toBe(4)
+  expect(choiceIdentities).toContain(question.parameters.correctIdentity)
+  expect(correctChoices[0]?.text).toBe(question.explanation.finalAnswer)
+  expect(question.metadata.canonicalSignature).toContain(question.generatorSlug)
+
+  for (const choice of question.choices) {
+    expect(Number.isFinite(choice.numericValue)).toBe(true)
 
     if (!choice.isCorrect) {
       expect(choice.mistakeType).not.toBeNull()
@@ -4167,6 +4229,141 @@ describe('Dynamic decimals generator engine', () => {
     })
 
     expect(questions).toHaveLength(5)
+    expect(signatures.size).toBe(5)
+  })
+})
+
+describe('Dynamic ratio and proportion generator engine', () => {
+  it('performs exact ratio and proportion arithmetic and rejects invalid values', () => {
+    expect(ratioGreatestCommonDivisor(18, 24)).toBe(6)
+    expect(normalizeRatio({ left: 3, right: 5 })).toEqual({
+      left: 3,
+      right: 5,
+    })
+    expect(simplifyRatio({ left: 18, right: 24 })).toEqual({
+      left: 3,
+      right: 4,
+    })
+    expect(ratioIdentity({ left: 12, right: 18 })).toBe('2:3')
+    expect(ratiosEqual(
+      { left: 3, right: 5 },
+      { left: 12, right: 20 },
+    )).toBe(true)
+    expect(compareRatios(
+      { left: 3, right: 5 },
+      { left: 4, right: 7 },
+    )).toBe(1)
+    expect(solveProportion(3, 5, 12)).toBe(20)
+    expect(calculateDirectProportion(4, 120, 10)).toBe(300)
+    expect(calculateInverseProportion(6, 10, 12)).toBe(5)
+    expect(shareInRatio(12_000, { left: 2, right: 3 })).toEqual({
+      left: 4_800,
+      right: 7_200,
+    })
+    expect(normalizeUnitQuantity(1, 'm', 'cm')).toBe(100)
+    expect(() => normalizeRatio({ left: 0, right: 2 })).toThrow(
+      'finite positive',
+    )
+    expect(() => normalizeRatio({ left: 2, right: 0 })).toThrow(
+      'finite positive',
+    )
+    expect(() => normalizeUnitQuantity(1, 'kg', 'cm')).toThrow(
+      'same kind of quantity',
+    )
+    expect(() => calculateDirectProportion(0, 10, 2)).toThrow(
+      'finite positive',
+    )
+    expect(() => calculateInverseProportion(2, 10, 0)).toThrow(
+      'finite positive',
+    )
+  })
+
+  it('registers eight versioned ratio and proportion generators', () => {
+    const generators = registeredRatioGenerators()
+
+    expect(generators.map((generator) => generator.slug)).toEqual([
+      'simplifying-ratios',
+      'equivalent-ratios',
+      'comparing-ratios',
+      'solving-proportions',
+      'direct-proportion',
+      'inverse-proportion',
+      'ratio-sharing',
+      'ratio-word-problems',
+    ])
+
+    for (const generator of generators) {
+      expect(generator.version).toBe(1)
+      expect(generator.supportedDifficulties).toEqual([
+        'easy',
+        'medium',
+        'hard',
+      ])
+    }
+  })
+
+  it('is deterministic and preserves versioned immutable snapshots', () => {
+    for (const generator of registeredRatioGenerators()) {
+      const first = generator.generate({
+        seed: `ratio-deterministic-${generator.slug}`,
+        difficulty: 'medium',
+      })
+      const second = generator.generate({
+        seed: `ratio-deterministic-${generator.slug}`,
+        difficulty: 'medium',
+      })
+      const different = generator.generate({
+        seed: `ratio-different-${generator.slug}`,
+        difficulty: 'medium',
+      })
+
+      expect(first).toEqual(second)
+      expect(JSON.stringify(first)).not.toBe(JSON.stringify(different))
+      expect(first.generatorVersion).toBe(1)
+    }
+  })
+
+  it('validates 1,000 mathematically correct questions per ratio generator', () => {
+    const difficulties: readonly GeneratorDifficulty[] = [
+      'easy',
+      'medium',
+      'hard',
+    ]
+
+    for (const generator of registeredRatioGenerators()) {
+      for (let index = 0; index < 1_000; index += 1) {
+        const difficulty = difficulties[index % difficulties.length]
+        const question = generateValidatedQuestion({
+          attemptSeed: `ratio-math-validation-${generator.slug}-${index}`,
+          generatorSlug: generator.slug,
+          generatorVersion: generator.version,
+          difficulty,
+          position: index + 1,
+          existingSignatures: new Set<string>(),
+        })
+
+        expectRatioGeneratedQuestionValid(question)
+        expect(question.difficulty).toBe(difficulty)
+      }
+    }
+  })
+
+  it('prevents duplicate ratio snapshots in one generated attempt', () => {
+    const signatures = new Set<string>()
+
+    for (let index = 0; index < 5; index += 1) {
+      const question = generateValidatedQuestion({
+        attemptSeed: 'ratio-duplicate-prevention',
+        generatorSlug: 'ratio-word-problems',
+        generatorVersion: 1,
+        difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard',
+        position: index + 1,
+        existingSignatures: signatures,
+      })
+
+      signatures.add(question.metadata.canonicalSignature)
+    }
+
     expect(signatures.size).toBe(5)
   })
 })

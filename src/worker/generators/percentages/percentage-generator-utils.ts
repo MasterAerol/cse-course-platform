@@ -24,7 +24,7 @@ import type {
   GeneratorValidationResult,
 } from '../generator.types'
 
-type NumericGeneratedAnswerKind = Exclude<AnswerKind, 'fraction'>
+type NumericGeneratedAnswerKind = Exclude<AnswerKind, 'fraction' | 'ratio'>
 
 export interface PercentageScenario {
   prompt: string

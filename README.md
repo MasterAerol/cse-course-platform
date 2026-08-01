@@ -349,6 +349,38 @@ After the script runs, review in the admin UI:
 5. Confirm the public course detail still hides draft Fractions content until
    publication.
 
+## Ratio and Proportion automatic publication
+
+The Ratio and Proportion topic is created through the authenticated admin API,
+not a seed migration. The workflow is idempotent and creates the topic, 12
+lessons, instructional blocks, eight generated practice configurations, an
+eight-question fixed mixed practice, and a 15-question topic quiz as draft
+content before publication.
+
+Before any content mutation, the script runs the focused Workers-runtime test
+that generates and validates 1,000 questions for each registered ratio
+generator. It then validates the complete stored draft and publishes practice
+sets, the quiz, lessons, and the topic in that order. If publication fails, it
+restores only statuses changed during that run; content and audit records are
+preserved.
+
+Start the integrated development server and run:
+
+```bash
+CSE_RATIO_PROPORTION_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-ratio-proportion-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-ratio-proportion
+```
+
+An existing admin session may be used instead:
+
+```bash
+node scripts/create-and-publish-ratio-proportion-topic.mjs --base-url http://127.0.0.1:5173 --cookie "cse_session=<cookie-value>" --confirm create-validate-publish-ratio-proportion
+```
+
+For production, deploy the generator code first, use a checkout of the same
+deployed revision, and point the same confirmed command at the production
+origin. Credentials are supplied through the environment or a session cookie;
+they are never stored in the script.
+
 ## D1 setup and migrations
 
 Authenticate and create the production database:

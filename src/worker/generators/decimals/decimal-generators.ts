@@ -382,7 +382,7 @@ export const comparingDecimalsGenerator: QuestionGenerator = {
     const slug = 'comparing-decimals'
     const random = randomFor({ seed, slug, difficulty })
     const places = decimalPlacesForDifficulty(difficulty)
-    let left = makeDecimal(random, difficulty, { places })
+    const left = makeDecimal(random, difficulty, { places })
     let right = makeDecimal(random, difficulty, { places })
 
     while (left === right) {

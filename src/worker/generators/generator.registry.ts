@@ -3,6 +3,7 @@ import { findingPercentageGenerator } from './percentages/finding-percentage.gen
 import { findingRateGenerator } from './percentages/finding-rate.generator'
 import { fractionGenerators } from './fractions/fraction-generators'
 import { decimalGenerators } from './decimals/decimal-generators'
+import { ratioGenerators } from './ratios/ratio-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -17,6 +18,7 @@ const generators = [
   findingRateGenerator,
   ...fractionGenerators,
   ...decimalGenerators,
+  ...ratioGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(

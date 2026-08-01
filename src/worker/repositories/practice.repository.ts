@@ -77,6 +77,21 @@ type PracticeGeneratorSlug =
   | 'subtracting-fractions'
   | 'multiplying-fractions'
   | 'dividing-fractions'
+  | 'comparing-decimals'
+  | 'rounding-decimals'
+  | 'adding-decimals'
+  | 'subtracting-decimals'
+  | 'multiplying-decimals'
+  | 'dividing-decimals'
+  | 'decimal-conversions'
+  | 'simplifying-ratios'
+  | 'equivalent-ratios'
+  | 'comparing-ratios'
+  | 'solving-proportions'
+  | 'direct-proportion'
+  | 'inverse-proportion'
+  | 'ratio-sharing'
+  | 'ratio-word-problems'
 
 export interface PracticeSetGeneratorConfigRow {
   practice_set_id: number

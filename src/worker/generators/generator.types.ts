@@ -23,8 +23,22 @@ export type GeneratorSlug =
   | 'multiplying-decimals'
   | 'dividing-decimals'
   | 'decimal-conversions'
+  | 'simplifying-ratios'
+  | 'equivalent-ratios'
+  | 'comparing-ratios'
+  | 'solving-proportions'
+  | 'direct-proportion'
+  | 'inverse-proportion'
+  | 'ratio-sharing'
+  | 'ratio-word-problems'
 
-export type AnswerKind = 'number' | 'percent' | 'money' | 'count' | 'fraction'
+export type AnswerKind =
+  | 'number'
+  | 'percent'
+  | 'money'
+  | 'count'
+  | 'fraction'
+  | 'ratio'
 
 export interface GeneratedExplanation {
   title: string
