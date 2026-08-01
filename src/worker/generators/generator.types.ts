@@ -31,6 +31,14 @@ export type GeneratorSlug =
   | 'inverse-proportion'
   | 'ratio-sharing'
   | 'ratio-word-problems'
+  | 'finding-average'
+  | 'missing-value-average'
+  | 'combined-average'
+  | 'weighted-average'
+  | 'average-after-adding'
+  | 'average-after-removing'
+  | 'average-age'
+  | 'average-score-salary'
 
 export type AnswerKind =
   | 'number'

@@ -42,6 +42,18 @@ import {
   simplifyRatio,
   solveProportion,
 } from '../src/worker/domain/ratios/ratio-math'
+import {
+  arithmeticMean,
+  averagesEqual,
+  combinedMean,
+  meanAfterAdding,
+  meanAfterRemoving,
+  missingValueForMean,
+  requiredValueForTargetMean,
+  roundAverage,
+  sumValues,
+  weightedMean,
+} from '../src/worker/domain/averages/average-math'
 import { parseLessonBlock } from '../src/worker/schemas/lesson-block.schemas'
 import type { Bindings } from '../src/worker/types/bindings'
 import type {
@@ -1397,6 +1409,17 @@ const ratioGeneratorSlugs = new Set<GeneratorSlug>([
   'ratio-word-problems',
 ])
 
+const averageGeneratorSlugs = new Set<GeneratorSlug>([
+  'finding-average',
+  'missing-value-average',
+  'combined-average',
+  'weighted-average',
+  'average-after-adding',
+  'average-after-removing',
+  'average-age',
+  'average-score-salary',
+])
+
 function registeredPercentageGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     percentageGeneratorSlugs.has(generator.slug),
@@ -1418,6 +1441,12 @@ function registeredDecimalGenerators() {
 function registeredRatioGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     ratioGeneratorSlugs.has(generator.slug),
+  )
+}
+
+function registeredAverageGenerators() {
+  return getRegisteredGenerators().filter((generator) =>
+    averageGeneratorSlugs.has(generator.slug),
   )
 }
 
@@ -1560,6 +1589,35 @@ function expectRatioGeneratedQuestionValid(question: GeneratedQuestion): void {
   for (const choice of question.choices) {
     expect(Number.isFinite(choice.numericValue)).toBe(true)
 
+    if (!choice.isCorrect) {
+      expect(choice.mistakeType).not.toBeNull()
+      expect(choice.distractorType).toBe(choice.mistakeType)
+      expect(choice.derivation?.operation).toEqual(expect.any(String))
+      expect(choice.derivation?.inputs.length).toBeGreaterThan(0)
+      expect(choice.qualityScore).toBeGreaterThanOrEqual(35)
+    }
+  }
+}
+
+function expectAverageGeneratedQuestionValid(question: GeneratedQuestion): void {
+  const generator = getRegisteredGenerators().find(
+    (item) => item.slug === question.generatorSlug && item.version === question.generatorVersion,
+  )
+  const correctChoices = question.choices.filter((choice) => choice.isCorrect)
+  const identities = question.parameters.choiceIdentities
+
+  expect(generator?.validate(question)).toEqual({ valid: true, reason: null })
+  expect(question.choices).toHaveLength(4)
+  expect(correctChoices).toHaveLength(1)
+  expect(new Set(question.choices.map((choice) => choice.text)).size).toBe(4)
+  expect(Array.isArray(identities)).toBe(true)
+  expect(new Set(identities as string[]).size).toBe(4)
+  expect(identities).toContain(question.parameters.correctIdentity)
+  expect(correctChoices[0]?.text).toBe(question.explanation.finalAnswer)
+  expect(question.metadata.canonicalSignature).toContain(question.generatorSlug)
+
+  for (const choice of question.choices) {
+    expect(Number.isFinite(choice.numericValue)).toBe(true)
     if (!choice.isCorrect) {
       expect(choice.mistakeType).not.toBeNull()
       expect(choice.distractorType).toBe(choice.mistakeType)
@@ -4364,6 +4422,97 @@ describe('Dynamic ratio and proportion generator engine', () => {
       signatures.add(question.metadata.canonicalSignature)
     }
 
+    expect(signatures.size).toBe(5)
+  })
+})
+
+describe('Dynamic average generator engine', () => {
+  it('performs average arithmetic with controlled precision and validation', () => {
+    expect(sumValues([4, 6, 8])).toBe(18)
+    expect(arithmeticMean([4, 6, 8])).toBe(6)
+    expect(weightedMean([
+      { value: 80, weight: 40 },
+      { value: 90, weight: 60 },
+    ])).toBe(86)
+    expect(combinedMean([
+      { mean: 78, count: 20 },
+      { mean: 84, count: 30 },
+    ])).toBe(81.6)
+    expect(missingValueForMean(18, 5, [12, 15, 20, 23])).toBe(20)
+    expect(meanAfterAdding(20, 5, 32)).toBe(22)
+    expect(meanAfterRemoving(25, 6, 40)).toBe(22)
+    expect(requiredValueForTargetMean(82, 4, 85)).toBe(97)
+    expect(roundAverage(81.666, 2)).toBe(81.67)
+    expect(averagesEqual(0.1 + 0.2, 0.3, 1e-9)).toBe(true)
+    expect(() => arithmeticMean([])).toThrow('At least one value')
+    expect(() => weightedMean([{ value: 80, weight: 0 }])).toThrow('positive')
+    expect(() => combinedMean([{ mean: 80, count: 0 }])).toThrow('positive integer')
+    expect(() => missingValueForMean(10, 4, [1, 2])).toThrow('exactly one fewer')
+    expect(() => meanAfterRemoving(10, 1, 10)).toThrow('At least two')
+    expect(() => roundAverage(Number.NaN, 2)).toThrow('finite')
+  })
+
+  it('registers eight versioned average generators', () => {
+    const generators = registeredAverageGenerators()
+    expect(generators.map((generator) => generator.slug)).toEqual([
+      'finding-average',
+      'missing-value-average',
+      'combined-average',
+      'weighted-average',
+      'average-after-adding',
+      'average-after-removing',
+      'average-age',
+      'average-score-salary',
+    ])
+    for (const generator of generators) {
+      expect(generator.version).toBe(1)
+      expect(generator.supportedDifficulties).toEqual(['easy', 'medium', 'hard'])
+    }
+  })
+
+  it('is deterministic and preserves versioned immutable snapshots', () => {
+    for (const generator of registeredAverageGenerators()) {
+      const first = generator.generate({ seed: `average-deterministic-${generator.slug}`, difficulty: 'medium' })
+      const second = generator.generate({ seed: `average-deterministic-${generator.slug}`, difficulty: 'medium' })
+      const different = generator.generate({ seed: `average-different-${generator.slug}`, difficulty: 'medium' })
+      expect(first).toEqual(second)
+      expect(JSON.stringify(first)).not.toBe(JSON.stringify(different))
+      expect(first.generatorVersion).toBe(1)
+    }
+  })
+
+  it('validates 1,000 mathematically correct questions per average generator', () => {
+    const difficulties: readonly GeneratorDifficulty[] = ['easy', 'medium', 'hard']
+    for (const generator of registeredAverageGenerators()) {
+      for (let index = 0; index < 1_000; index += 1) {
+        const difficulty = difficulties[index % difficulties.length]
+        const question = generateValidatedQuestion({
+          attemptSeed: `average-math-validation-${generator.slug}-${index}`,
+          generatorSlug: generator.slug,
+          generatorVersion: generator.version,
+          difficulty,
+          position: index + 1,
+          existingSignatures: new Set<string>(),
+        })
+        expectAverageGeneratedQuestionValid(question)
+        expect(question.difficulty).toBe(difficulty)
+      }
+    }
+  })
+
+  it('prevents duplicate average snapshots within one attempt', () => {
+    const signatures = new Set<string>()
+    for (let index = 0; index < 5; index += 1) {
+      const question = generateValidatedQuestion({
+        attemptSeed: 'average-duplicate-prevention',
+        generatorSlug: 'finding-average',
+        generatorVersion: 1,
+        difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard',
+        position: index + 1,
+        existingSignatures: signatures,
+      })
+      signatures.add(question.metadata.canonicalSignature)
+    }
     expect(signatures.size).toBe(5)
   })
 })

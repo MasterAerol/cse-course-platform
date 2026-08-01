@@ -381,6 +381,35 @@ deployed revision, and point the same confirmed command at the production
 origin. Credentials are supplied through the environment or a session cookie;
 they are never stored in the script.
 
+## Average automatic publication
+
+The Average topic is created through the authenticated admin API rather than a
+content migration. The idempotent workflow creates 12 lessons, instructional
+blocks, eight generated practice configurations, an eight-question fixed
+practice, and a 15-question topic quiz as draft content before publication.
+
+Before any content mutation, the script runs 1,000 Workers-runtime generations
+for each of the eight Average generators. It then validates the stored topic and
+publishes practice sets, the quiz, lessons, and the topic in that order. A
+publication failure restores only statuses changed during that run and keeps
+content and audit records intact.
+
+With the integrated local server running:
+
+```bash
+CSE_AVERAGE_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-average-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-average
+```
+
+An existing admin session cookie may be used instead:
+
+```bash
+node scripts/create-and-publish-average-topic.mjs --base-url http://127.0.0.1:5173 --cookie "cse_session=<cookie-value>" --confirm create-validate-publish-average
+```
+
+For production, deploy the same reviewed revision first, then run the confirmed
+script against the live Worker URL using an environment-supplied password or an
+admin-controlled session cookie. The script contains no credentials.
+
 ## D1 setup and migrations
 
 Authenticate and create the production database:
