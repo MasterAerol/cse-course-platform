@@ -3,6 +3,14 @@ export interface SluggedRecord {
   [key: string]: unknown
 }
 
+export function parseSuccessEnvelope(value: unknown, context: string): unknown
+export function requireRecord<T extends Record<string, unknown>>(
+  value: unknown,
+  label: string,
+  fields?: readonly string[],
+): T
+export function requireArray<T>(value: unknown, label: string): T[]
+
 export function planAnalyticalSubject<T extends SluggedRecord>(
   subjects: readonly T[],
   numericalPosition: number,
