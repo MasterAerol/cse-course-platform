@@ -249,7 +249,7 @@ export function validateSubjectAssessmentBlueprint(
       errors.push(`Topic ${topic.topicSlug} needs at least one generator.`)
     }
 
-    const allowed = new Set(topicGeneratorOwnership[topic.topicSlug])
+    const allowed = new Set<GeneratorSlug>(topicGeneratorOwnership[topic.topicSlug])
     const seenGenerators = new Set<string>()
 
     for (const config of topic.generators) {

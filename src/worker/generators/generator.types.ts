@@ -84,6 +84,16 @@ export type GeneratorSlug =
   | 'compare-interest-options'
   | 'loan-savings-applications'
   | 'mixed-simple-interest'
+  | 'statement-classification'
+  | 'fact-opinion-conclusion'
+  | 'valid-conclusion'
+  | 'assumption-identification'
+  | 'conditional-reasoning'
+  | 'necessary-sufficient-condition'
+  | 'negation-contradiction'
+  | 'basic-deduction'
+  | 'logical-equivalence'
+  | 'mixed-logical-reasoning'
 
 export type AnswerKind =
   | 'number'
@@ -92,6 +102,7 @@ export type AnswerKind =
   | 'count'
   | 'fraction'
   | 'ratio'
+  | 'text'
 
 export interface GeneratedExplanation {
   title: string

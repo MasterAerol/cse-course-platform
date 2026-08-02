@@ -10,6 +10,7 @@ import { ageProblemGenerators } from './age-problems/age-problem-generators'
 import { workRateGenerators } from './work-rates/work-rate-generators'
 import { distanceSpeedTimeGenerators } from './distance-speed-time/distance-speed-time-generators'
 import { simpleInterestGenerators } from './simple-interest/simple-interest-generators'
+import { logicalReasoningGenerators } from './logical-reasoning/logical-reasoning-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -31,6 +32,7 @@ const generators = [
   ...workRateGenerators,
   ...distanceSpeedTimeGenerators,
   ...simpleInterestGenerators,
+  ...logicalReasoningGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(
