@@ -66,6 +66,15 @@ export type GeneratorSlug =
   | 'efficiency-work-rates'
   | 'unknown-work-time'
   | 'mixed-work-rate'
+  | 'distance-from-speed-time'
+  | 'speed-from-distance-time'
+  | 'time-from-distance-speed'
+  | 'travel-unit-conversions'
+  | 'average-speed'
+  | 'same-direction-relative-speed'
+  | 'opposite-direction-relative-speed'
+  | 'meeting-and-overtaking'
+  | 'mixed-distance-speed-time'
 
 export type AnswerKind =
   | 'number'

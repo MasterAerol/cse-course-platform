@@ -198,6 +198,19 @@ export type DistractorMistakeType =
   | 'misread_percent_more_efficiency'
   | 'subtracted_completion_times_for_unknown'
   | 'returned_rate_instead_of_time'
+  | 'multiplied_instead_of_divided_travel'
+  | 'divided_instead_of_multiplied_travel'
+  | 'inverted_speed_time_relationship'
+  | 'used_wrong_unit_conversion_factor'
+  | 'reversed_unit_conversion'
+  | 'averaged_speeds_without_time_weighting'
+  | 'used_one_leg_only'
+  | 'added_same_direction_speeds'
+  | 'subtracted_opposite_direction_speeds'
+  | 'ignored_head_start'
+  | 'included_delay_in_catch_time'
+  | 'omitted_stop_time'
+  | 'used_total_time_as_distance'
 
 export interface DistractorDerivation {
   operation: string

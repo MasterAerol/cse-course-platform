@@ -103,6 +103,20 @@ import {
 } from '../src/worker/domain/work-rates/work-rate-math'
 import { validateTimeline } from '../src/worker/domain/work-rates/work-rate-validation'
 import { recomputeWorkRateAnswer } from '../src/worker/generators/work-rates/work-rate-generators'
+import {
+  averageSpeed as calculateAverageSpeed,
+  catchTimeAfterDeparture,
+  distanceFromSpeedTime,
+  headStartDistance,
+  kilometersPerHourToMetersPerSecond,
+  meetingTime,
+  metersPerSecondToKilometersPerHour,
+  sameDirectionRelativeSpeed,
+  speedFromDistanceTime,
+  timeFromDistanceSpeed,
+  travelRational,
+} from '../src/worker/domain/distance-speed-time/distance-speed-time-math'
+import { recomputeDistanceSpeedTimeAnswer } from '../src/worker/generators/distance-speed-time/distance-speed-time-generators'
 import { parseLessonBlock } from '../src/worker/schemas/lesson-block.schemas'
 import type { Bindings } from '../src/worker/types/bindings'
 import type {
@@ -1505,6 +1519,18 @@ const workRateGeneratorSlugs = new Set<GeneratorSlug>([
   'mixed-work-rate',
 ])
 
+const distanceSpeedTimeGeneratorSlugs = new Set<GeneratorSlug>([
+  'distance-from-speed-time',
+  'speed-from-distance-time',
+  'time-from-distance-speed',
+  'travel-unit-conversions',
+  'average-speed',
+  'same-direction-relative-speed',
+  'opposite-direction-relative-speed',
+  'meeting-and-overtaking',
+  'mixed-distance-speed-time',
+])
+
 function registeredPercentageGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     percentageGeneratorSlugs.has(generator.slug),
@@ -1551,6 +1577,10 @@ function registeredWorkRateGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     workRateGeneratorSlugs.has(generator.slug),
   )
+}
+
+function registeredDistanceSpeedTimeGenerators() {
+  return getRegisteredGenerators().filter((generator) => distanceSpeedTimeGeneratorSlugs.has(generator.slug))
 }
 
 function expectGeneratedQuestionValid(question: GeneratedQuestion): void {
@@ -4994,6 +5024,84 @@ describe('Dynamic work-rate generator engine', () => {
         position: index + 1,
         existingSignatures: signatures,
       })
+      signatures.add(question.metadata.canonicalSignature)
+    }
+    expect(signatures.size).toBe(5)
+  })
+})
+
+describe('Dynamic distance-speed-time generator engine', () => {
+  it('uses exact formulas, normalized conversions, weighted averages, and classified relative motion', () => {
+    expect(distanceFromSpeedTime(travelRational(60), travelRational(3))).toEqual(travelRational(180))
+    expect(speedFromDistanceTime(travelRational(150), travelRational(5, 2))).toEqual(travelRational(60))
+    expect(timeFromDistanceSpeed(travelRational(240), travelRational(80))).toEqual(travelRational(3))
+    expect(kilometersPerHourToMetersPerSecond(travelRational(72))).toEqual(travelRational(20))
+    expect(metersPerSecondToKilometersPerHour(travelRational(15))).toEqual(travelRational(54))
+    expect(calculateAverageSpeed([
+      { distance: travelRational(60), time: travelRational(1) },
+      { distance: travelRational(60), time: travelRational(3, 2) },
+    ])).toEqual(travelRational(48))
+    expect(sameDirectionRelativeSpeed(travelRational(80), travelRational(60))).toEqual(travelRational(20))
+    expect(meetingTime(travelRational(300), travelRational(70), travelRational(80))).toEqual(travelRational(2))
+    expect(catchTimeAfterDeparture(headStartDistance(travelRational(50), travelRational(1)), travelRational(75), travelRational(50))).toEqual(travelRational(2))
+  })
+
+  it('rejects nonpositive travel values and invalid same-direction classification', () => {
+    expect(() => distanceFromSpeedTime(travelRational(0), travelRational(2))).toThrow('positive')
+    expect(() => sameDirectionRelativeSpeed(travelRational(40), travelRational(60))).toThrow('exceed')
+    expect(() => calculateAverageSpeed([])).toThrow('At least one')
+  })
+
+  it('registers nine versioned distance-speed-time generators', () => {
+    const generators = registeredDistanceSpeedTimeGenerators()
+    expect(generators.map((generator) => generator.slug)).toEqual([...distanceSpeedTimeGeneratorSlugs])
+    expect(generators).toHaveLength(9)
+    for (const generator of generators) {
+      expect(generator.version).toBe(1)
+      expect(generator.supportedDifficulties).toEqual(['easy', 'medium', 'hard'])
+    }
+  })
+
+  it('is deterministic and preserves immutable versioned snapshots', () => {
+    for (const generator of registeredDistanceSpeedTimeGenerators()) {
+      const first = generator.generate({ seed: `travel-stable-${generator.slug}`, difficulty: 'medium' })
+      const second = generator.generate({ seed: `travel-stable-${generator.slug}`, difficulty: 'medium' })
+      expect(first).toEqual(second)
+      expect(first.generatorVersion).toBe(1)
+    }
+  })
+
+  it('validates 1,000 independently recomputed questions per distance-speed-time generator', () => {
+    const difficulties: readonly GeneratorDifficulty[] = ['easy', 'medium', 'hard']
+    for (const generator of registeredDistanceSpeedTimeGenerators()) {
+      for (let index = 0; index < 1_000; index += 1) {
+        const question = generateValidatedQuestion({
+          attemptSeed: `travel-validation-${generator.slug}-${index}`,
+          generatorSlug: generator.slug,
+          generatorVersion: 1,
+          difficulty: difficulties[index % difficulties.length],
+          position: index + 1,
+          existingSignatures: new Set<string>(),
+        })
+        const correct = question.choices.find((choice) => choice.isCorrect)
+        const recomputed = recomputeDistanceSpeedTimeAnswer(question)
+        expect(generator.validate(question)).toEqual({ valid: true, reason: null })
+        expect(question.choices).toHaveLength(4)
+        expect(question.choices.filter((choice) => choice.isCorrect)).toHaveLength(1)
+        expect(new Set(question.choices.map((choice) => choice.text)).size).toBe(4)
+        expect(new Set(question.choices.map((choice) => choice.numericValue)).size).toBe(4)
+        expect(question.choices.filter((choice) => !choice.isCorrect).every((choice) => choice.mistakeType !== null && choice.derivation !== null)).toBe(true)
+        expect(correct?.numericValue).toBeCloseTo(recomputed.numerator / recomputed.denominator, 8)
+        expect(correct?.text).toBe(question.explanation.finalAnswer)
+        expect(question.prompt).not.toMatch(/NaN|Infinity/u)
+      }
+    }
+  }, 20_000)
+
+  it('prevents duplicate distance-speed-time snapshots within one attempt', () => {
+    const signatures = new Set<string>()
+    for (let index = 0; index < 5; index += 1) {
+      const question = generateValidatedQuestion({ attemptSeed: 'travel-duplicate-prevention', generatorSlug: 'mixed-distance-speed-time', generatorVersion: 1, difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard', position: index + 1, existingSignatures: signatures })
       signatures.add(question.metadata.canonicalSignature)
     }
     expect(signatures.size).toBe(5)

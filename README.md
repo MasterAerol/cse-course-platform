@@ -488,6 +488,33 @@ An existing authenticated admin cookie may be supplied instead:
 node scripts/create-and-publish-work-rate-topic.mjs --base-url http://127.0.0.1:5173 --cookie "cse_session=<cookie-value>" --confirm create-validate-publish-work-rate
 ```
 
+## Distance, Speed, and Time automatic publication
+
+Distance, Speed, and Time is created through the admin API by an idempotent draft → validate → publish script. It requires the published Work and Rate Problems topic, places the new topic immediately after it, creates exactly 12 sequential lessons, configures nine version-1 generated practices (2 easy, 2 medium, 1 hard), an 8-question fixed practice, and a 15-question topic quiz. Before changing D1 content it runs the focused 9,000-question exact-rational generator quality gate. Average speed always uses total distance divided by total elapsed time, unit conversions use exact factors, and relative-motion classification is explicit. Publication proceeds assessments → lessons → topic; failures roll back only statuses changed by that run.
+
+For local creation and publication, start the current app and supply an existing admin account without storing credentials in the repository:
+
+```powershell
+$env:CSE_DISTANCE_SPEED_TIME_ADMIN_PASSWORD='<admin-password>'
+node scripts/create-and-publish-distance-speed-time-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-distance-speed-time
+Remove-Item Env:CSE_DISTANCE_SPEED_TIME_ADMIN_PASSWORD
+```
+
+An existing admin session cookie may be used instead:
+
+```powershell
+node scripts/create-and-publish-distance-speed-time-topic.mjs --base-url http://127.0.0.1:5173 --cookie "cse_session=<cookie-value>" --confirm create-validate-publish-distance-speed-time
+```
+
+After deploying the Worker, run the same command against the production origin. No D1 migration is required for this topic because the script uses the existing admin content schema and APIs:
+
+```powershell
+npm.cmd run deploy
+$env:CSE_DISTANCE_SPEED_TIME_ADMIN_PASSWORD='<admin-password>'
+node scripts/create-and-publish-distance-speed-time-topic.mjs --base-url https://<worker-origin> --email <admin-email> --confirm create-validate-publish-distance-speed-time
+Remove-Item Env:CSE_DISTANCE_SPEED_TIME_ADMIN_PASSWORD
+```
+
 The generator domain represents the whole job as the reduced fraction `1/1`. Rates, phase work, remaining work, and durations stay as reduced integer fractions until display; drains use a negative contribution and required completion is rejected unless the net rate is positive. No D1 migration is needed for this topic because the existing content, practice, quiz, snapshot, and audit schemas are reused.
 
 For production, deploy the reviewed revision first and run the same confirmed
