@@ -440,6 +440,41 @@ confirmed command against the live Worker origin. Supply credentials through
 the environment or an administrator-controlled session cookie; the script does
 not contain credentials.
 
+## Age Problems automatic publication
+
+The Age Problems topic uses the authenticated admin APIs and existing content
+tables, so no content migration is required. Its idempotent workflow creates 12
+lessons, nine generated practice configurations, an eight-question fixed
+practice, and a 15-question topic quiz as drafts before validation.
+
+Before any content mutation, the script validates 1,000 deterministic questions
+for each of the nine age generators. It then validates stored teaching blocks,
+practice configurations, and fixed assessments before publishing assessments,
+lessons, and the topic in order. Publication failure restores only statuses
+changed by that run and preserves audit records.
+
+The practice engine supports one generator per practice set. The combined
+Present, Past, and Future Ages lesson therefore uses `present-age-equations` as
+its foundational generator; dedicated later lessons use the past and future
+generators.
+
+With the integrated local server running:
+
+```bash
+CSE_AGE_PROBLEMS_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-age-problems-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-age-problems
+```
+
+An existing administrator session cookie may be used instead:
+
+```bash
+node scripts/create-and-publish-age-problems-topic.mjs --base-url http://127.0.0.1:5173 --cookie "cse_session=<cookie-value>" --confirm create-validate-publish-age-problems
+```
+
+For production, deploy the reviewed revision first and run the same confirmed
+command against the live Worker origin. Keep the administrator password in an
+environment variable or use an administrator-controlled session cookie; the
+script contains no credentials.
+
 ## D1 setup and migrations
 
 Authenticate and create the production database:

@@ -69,6 +69,25 @@ import {
   solveLinearPair,
   uniqueIntegerSolutions,
 } from '../src/worker/domain/number-problems/number-problem-math'
+import {
+  ageDifference,
+  ageInFuture,
+  ageInPast,
+  ageSum,
+  reduceAgeRatio,
+  representPresentAge,
+  solveElapsedTimeForRatio,
+  solveTwoPersonAgeSystem,
+  uniqueIntegerAgeSolutions,
+} from '../src/worker/domain/age-problems/age-problem-math'
+import {
+  hasConstantAgeDifference,
+  hasUniqueAgeSolution,
+  isRealisticAge,
+  ratioMatchesAtTime,
+  validateParentChildAges,
+} from '../src/worker/domain/age-problems/age-problem-validation'
+import { recomputeAgeProblemAnswer } from '../src/worker/generators/age-problems/age-problem-generators'
 import { parseLessonBlock } from '../src/worker/schemas/lesson-block.schemas'
 import type { Bindings } from '../src/worker/types/bindings'
 import type {
@@ -1447,6 +1466,18 @@ const numberProblemGeneratorSlugs = new Set<GeneratorSlug>([
   'mixed-number-relationships',
 ])
 
+const ageProblemGeneratorSlugs = new Set<GeneratorSlug>([
+  'present-age-equations',
+  'past-age-problems',
+  'future-age-problems',
+  'age-difference',
+  'sum-of-ages',
+  'age-ratios',
+  'parent-child-ages',
+  'sibling-group-ages',
+  'mixed-age-relationships',
+])
+
 function registeredPercentageGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     percentageGeneratorSlugs.has(generator.slug),
@@ -1480,6 +1511,12 @@ function registeredAverageGenerators() {
 function registeredNumberProblemGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     numberProblemGeneratorSlugs.has(generator.slug),
+  )
+}
+
+function registeredAgeProblemGenerators() {
+  return getRegisteredGenerators().filter((generator) =>
+    ageProblemGeneratorSlugs.has(generator.slug),
   )
 }
 
@@ -1683,6 +1720,49 @@ function expectNumberProblemGeneratedQuestionValid(question: GeneratedQuestion):
   for (const choice of question.choices) {
     expect(Number.isFinite(choice.numericValue)).toBe(true)
     expect(Number.isInteger(choice.numericValue)).toBe(true)
+    if (!choice.isCorrect) {
+      expect(choice.mistakeType).not.toBeNull()
+      expect(choice.distractorType).toBe(choice.mistakeType)
+      expect(choice.derivation?.operation).toEqual(expect.any(String))
+      expect(choice.derivation?.inputs.length).toBeGreaterThan(0)
+      expect(choice.qualityScore).toBeGreaterThanOrEqual(35)
+    }
+  }
+}
+
+function expectAgeProblemGeneratedQuestionValid(question: GeneratedQuestion): void {
+  const generator = getRegisteredGenerators().find(
+    (item) => item.slug === question.generatorSlug && item.version === question.generatorVersion,
+  )
+  const correctChoices = question.choices.filter((choice) => choice.isCorrect)
+  const identities = question.parameters.choiceIdentities
+  const presentAges = question.parameters.presentAges
+  const pastAges = question.parameters.pastAges
+
+  expect(generator?.validate(question)).toEqual({ valid: true, reason: null })
+  expect(recomputeAgeProblemAnswer(question)).toBe(correctChoices[0]?.numericValue)
+  expect(question.choices).toHaveLength(4)
+  expect(correctChoices).toHaveLength(1)
+  expect(new Set(question.choices.map((choice) => choice.text)).size).toBe(4)
+  expect(new Set(question.choices.map((choice) => choice.numericValue)).size).toBe(4)
+  expect(Array.isArray(identities)).toBe(true)
+  expect(new Set(identities as string[]).size).toBe(4)
+  expect(correctChoices[0]?.text).toBe(question.explanation.finalAnswer)
+  expect(question.metadata.canonicalSignature).toContain(question.generatorSlug)
+  expect(question.prompt.trim().length).toBeGreaterThan(20)
+  expect(Array.isArray(presentAges)).toBe(true)
+  for (const age of presentAges as number[]) expect(isRealisticAge(age, 'general')).toBe(true)
+  if (Array.isArray(pastAges)) {
+    for (const age of pastAges) {
+      expect(Number.isInteger(age)).toBe(true)
+      expect(age).toBeGreaterThanOrEqual(0)
+    }
+  }
+
+  for (const choice of question.choices) {
+    expect(Number.isFinite(choice.numericValue)).toBe(true)
+    expect(Number.isInteger(choice.numericValue)).toBe(true)
+    expect(choice.numericValue).toBeGreaterThanOrEqual(0)
     if (!choice.isCorrect) {
       expect(choice.mistakeType).not.toBeNull()
       expect(choice.distractorType).toBe(choice.mistakeType)
@@ -4671,6 +4751,120 @@ describe('Dynamic number-problem generator engine', () => {
       const question = generateValidatedQuestion({
         attemptSeed: 'number-problem-duplicate-prevention',
         generatorSlug: 'mixed-number-relationships',
+        generatorVersion: 1,
+        difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard',
+        position: index + 1,
+        existingSignatures: signatures,
+      })
+      signatures.add(question.metadata.canonicalSignature)
+    }
+    expect(signatures.size).toBe(5)
+  })
+})
+
+describe('Dynamic age-problem generator engine', () => {
+  it('models present, past, future, sums, differences, ratios, and exact systems', () => {
+    expect(representPresentAge(24)).toBe(24)
+    expect(ageInPast(24, 5)).toBe(19)
+    expect(ageInFuture(24, 5)).toBe(29)
+    expect(ageDifference(42, 14)).toBe(28)
+    expect(ageSum([12, 16, 20])).toBe(48)
+    expect(reduceAgeRatio(45, 18)).toEqual({ olderPart: 5, youngerPart: 2 })
+    expect(solveTwoPersonAgeSystem(
+      { olderCoefficient: 1, youngerCoefficient: 1, constant: 42 },
+      { olderCoefficient: 1, youngerCoefficient: -1, constant: 8 },
+    )).toEqual({ older: 25, younger: 17 })
+    expect(solveElapsedTimeForRatio({
+      older: 42,
+      younger: 14,
+      ratio: { olderPart: 2, youngerPart: 1 },
+      direction: 'future',
+    })).toBe(14)
+    expect(solveElapsedTimeForRatio({
+      older: 40,
+      younger: 16,
+      ratio: { olderPart: 3, youngerPart: 1 },
+      direction: 'past',
+    })).toBe(4)
+    expect(hasConstantAgeDifference({ older: 40, younger: 16, years: 4, direction: 'past' })).toBe(true)
+    expect(ratioMatchesAtTime({ older: 40, younger: 16, years: 4, direction: 'past', olderPart: 3, youngerPart: 1 })).toBe(true)
+    expect(validateParentChildAges(40, 12)).toBe(true)
+    expect(uniqueIntegerAgeSolutions({ minimum: 5, maximum: 20, predicate: (age) => age + 8 === 25 })).toEqual([17])
+    expect(hasUniqueAgeSolution({ minimum: 5, maximum: 20, predicate: (age) => age + 8 === 25 })).toBe(true)
+  })
+
+  it('rejects invalid ages, timelines, ratios, and non-unique systems', () => {
+    expect(() => representPresentAge(-1)).toThrow('cannot be negative')
+    expect(() => ageInPast(4, 5)).toThrow('past age')
+    expect(() => ageInFuture(20, -1)).toThrow('cannot be negative')
+    expect(() => ageDifference(12, 12)).toThrow('must exceed')
+    expect(() => ageSum([])).toThrow('At least one')
+    expect(() => reduceAgeRatio(20, 0)).toThrow('positive ages')
+    expect(solveTwoPersonAgeSystem(
+      { olderCoefficient: 1, youngerCoefficient: 1, constant: 20 },
+      { olderCoefficient: 2, youngerCoefficient: 2, constant: 40 },
+    )).toBeNull()
+    expect(solveElapsedTimeForRatio({ older: 30, younger: 20, ratio: { olderPart: 2, youngerPart: 1 }, direction: 'future' })).toBeNull()
+    expect(isRealisticAge(4, 'child')).toBe(false)
+    expect(validateParentChildAges(24, 10)).toBe(false)
+    expect(hasUniqueAgeSolution({ minimum: 1, maximum: 5, predicate: (age) => age % 2 === 0 })).toBe(false)
+  })
+
+  it('registers nine versioned age-problem generators', () => {
+    const generators = registeredAgeProblemGenerators()
+    expect(generators.map((generator) => generator.slug)).toEqual([
+      'present-age-equations',
+      'past-age-problems',
+      'future-age-problems',
+      'age-difference',
+      'sum-of-ages',
+      'age-ratios',
+      'parent-child-ages',
+      'sibling-group-ages',
+      'mixed-age-relationships',
+    ])
+    for (const generator of generators) {
+      expect(generator.version).toBe(1)
+      expect(generator.supportedDifficulties).toEqual(['easy', 'medium', 'hard'])
+    }
+  })
+
+  it('is deterministic and preserves versioned immutable snapshots', () => {
+    for (const generator of registeredAgeProblemGenerators()) {
+      const first = generator.generate({ seed: `age-deterministic-${generator.slug}`, difficulty: 'medium' })
+      const second = generator.generate({ seed: `age-deterministic-${generator.slug}`, difficulty: 'medium' })
+      const different = generator.generate({ seed: `age-different-${generator.slug}`, difficulty: 'medium' })
+      expect(first).toEqual(second)
+      expect(JSON.stringify(first)).not.toBe(JSON.stringify(different))
+      expect(first.generatorVersion).toBe(1)
+    }
+  })
+
+  it('validates 1,000 mathematically correct questions per age-problem generator', () => {
+    const difficulties: readonly GeneratorDifficulty[] = ['easy', 'medium', 'hard']
+    for (const generator of registeredAgeProblemGenerators()) {
+      for (let index = 0; index < 1_000; index += 1) {
+        const difficulty = difficulties[index % difficulties.length]
+        const question = generateValidatedQuestion({
+          attemptSeed: `age-math-validation-${generator.slug}-${index}`,
+          generatorSlug: generator.slug,
+          generatorVersion: generator.version,
+          difficulty,
+          position: index + 1,
+          existingSignatures: new Set<string>(),
+        })
+        expectAgeProblemGeneratedQuestionValid(question)
+        expect(question.difficulty).toBe(difficulty)
+      }
+    }
+  }, 20_000)
+
+  it('prevents duplicate age-problem snapshots within one attempt', () => {
+    const signatures = new Set<string>()
+    for (let index = 0; index < 5; index += 1) {
+      const question = generateValidatedQuestion({
+        attemptSeed: 'age-problem-duplicate-prevention',
+        generatorSlug: 'mixed-age-relationships',
         generatorVersion: 1,
         difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard',
         position: index + 1,

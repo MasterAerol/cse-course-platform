@@ -109,6 +109,15 @@ type PracticeGeneratorSlug =
   | 'remainder-number-problems'
   | 'fractional-part-number-problems'
   | 'mixed-number-relationships'
+  | 'present-age-equations'
+  | 'past-age-problems'
+  | 'future-age-problems'
+  | 'age-difference'
+  | 'sum-of-ages'
+  | 'age-ratios'
+  | 'parent-child-ages'
+  | 'sibling-group-ages'
+  | 'mixed-age-relationships'
 
 export interface PracticeSetGeneratorConfigRow {
   practice_set_id: number
