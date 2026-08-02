@@ -94,6 +94,15 @@ export type GeneratorSlug =
   | 'basic-deduction'
   | 'logical-equivalence'
   | 'mixed-logical-reasoning'
+  | 'synonym-antonym-analogy'
+  | 'part-whole-analogy'
+  | 'function-purpose-analogy'
+  | 'cause-effect-analogy'
+  | 'degree-intensity-analogy'
+  | 'symbol-number-analogy'
+  | 'odd-one-out'
+  | 'category-classification'
+  | 'mixed-analogy-classification'
 
 export type AnswerKind =
   | 'number'
