@@ -103,6 +103,15 @@ export type GeneratorSlug =
   | 'odd-one-out'
   | 'category-classification'
   | 'mixed-analogy-classification'
+  | 'addition-subtraction-series'
+  | 'multiplication-division-series'
+  | 'alternating-operation-series'
+  | 'increasing-difference-series'
+  | 'squares-cubes-powers-series'
+  | 'fibonacci-recursive-series'
+  | 'interleaved-two-pattern-series'
+  | 'missing-term-series'
+  | 'mixed-number-series'
 
 export type AnswerKind =
   | 'number'

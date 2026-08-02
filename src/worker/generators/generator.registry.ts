@@ -12,6 +12,7 @@ import { distanceSpeedTimeGenerators } from './distance-speed-time/distance-spee
 import { simpleInterestGenerators } from './simple-interest/simple-interest-generators'
 import { logicalReasoningGenerators } from './logical-reasoning/logical-reasoning-generators'
 import { analogyClassificationGenerators } from './analogy-classification/analogy-classification-generators'
+import { numberSeriesGenerators } from './number-series/number-series-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -35,6 +36,7 @@ const generators = [
   ...simpleInterestGenerators,
   ...logicalReasoningGenerators,
   ...analogyClassificationGenerators,
+  ...numberSeriesGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(
