@@ -75,6 +75,15 @@ export type GeneratorSlug =
   | 'opposite-direction-relative-speed'
   | 'meeting-and-overtaking'
   | 'mixed-distance-speed-time'
+  | 'simple-interest'
+  | 'principal-from-interest'
+  | 'rate-from-interest'
+  | 'time-from-interest'
+  | 'maturity-value'
+  | 'interest-time-conversions'
+  | 'compare-interest-options'
+  | 'loan-savings-applications'
+  | 'mixed-simple-interest'
 
 export type AnswerKind =
   | 'number'

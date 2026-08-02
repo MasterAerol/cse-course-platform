@@ -522,6 +522,49 @@ command against the live Worker origin. Keep the administrator password in an
 environment variable or use an administrator-controlled session cookie; the
 script contains no credentials.
 
+## Simple Interest automatic publication
+
+Simple Interest is created through the authenticated admin API by an idempotent
+draft -> validate -> publish script. It requires the published Distance, Speed,
+and Time topic, places the new topic immediately after it, and creates exactly
+12 sequential lessons. The topic includes nine version-1 generated practices
+(2 easy, 2 medium, 1 hard), an 8-question fixed practice, and a 15-question
+topic quiz. Before changing D1 content, the script runs the focused 9,000-question
+generator quality gate. Publication proceeds assessments -> lessons -> topic;
+failures roll back only statuses changed by that run.
+
+The generator domain keeps money in integer centavos and rates and time periods
+as reduced rational values until display. It uses only simple-interest formulas
+(`I = Prt` and `A = P + I`), explicitly identifies 360-day or 365-day conventions
+when days are used, and never applies hidden compounding. Currency is rounded to
+the nearest centavo only at the documented calculation boundary.
+
+For local creation and publication, start the app and supply an existing admin
+account without storing credentials in the repository:
+
+```powershell
+$env:CSE_SIMPLE_INTEREST_ADMIN_PASSWORD='<admin-password>'
+node scripts/create-and-publish-simple-interest-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-simple-interest
+Remove-Item Env:CSE_SIMPLE_INTEREST_ADMIN_PASSWORD
+```
+
+An existing admin session cookie may be used instead:
+
+```powershell
+node scripts/create-and-publish-simple-interest-topic.mjs --base-url http://127.0.0.1:5173 --cookie "cse_session=<cookie-value>" --confirm create-validate-publish-simple-interest
+```
+
+After deploying the Worker, run the same command against the production origin.
+No D1 migration is required because this topic reuses the existing content,
+practice, quiz, snapshot, and audit schemas:
+
+```powershell
+npm.cmd run deploy
+$env:CSE_SIMPLE_INTEREST_ADMIN_PASSWORD='<admin-password>'
+node scripts/create-and-publish-simple-interest-topic.mjs --base-url https://<worker-origin> --email <admin-email> --confirm create-validate-publish-simple-interest
+Remove-Item Env:CSE_SIMPLE_INTEREST_ADMIN_PASSWORD
+```
+
 ## D1 setup and migrations
 
 Authenticate and create the production database:

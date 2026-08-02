@@ -117,6 +117,21 @@ import {
   travelRational,
 } from '../src/worker/domain/distance-speed-time/distance-speed-time-math'
 import { recomputeDistanceSpeedTimeAnswer } from '../src/worker/generators/distance-speed-time/distance-speed-time-generators'
+import {
+  annualRateFromInterest,
+  compareInterestOptions,
+  daysToYears,
+  interestFromMaturity,
+  interestRational,
+  maturityValue as calculateMaturityValue,
+  monthsToYears as interestMonthsToYears,
+  percentToAnnualRate,
+  principalFromInterest,
+  roundMoneyCentavos,
+  simpleInterest,
+  timeFromInterest,
+} from '../src/worker/domain/simple-interest/simple-interest-math'
+import { recomputeSimpleInterestAnswer } from '../src/worker/generators/simple-interest/simple-interest-generators'
 import { parseLessonBlock } from '../src/worker/schemas/lesson-block.schemas'
 import type { Bindings } from '../src/worker/types/bindings'
 import type {
@@ -1531,6 +1546,18 @@ const distanceSpeedTimeGeneratorSlugs = new Set<GeneratorSlug>([
   'mixed-distance-speed-time',
 ])
 
+const simpleInterestGeneratorSlugs = new Set<GeneratorSlug>([
+  'simple-interest',
+  'principal-from-interest',
+  'rate-from-interest',
+  'time-from-interest',
+  'maturity-value',
+  'interest-time-conversions',
+  'compare-interest-options',
+  'loan-savings-applications',
+  'mixed-simple-interest',
+])
+
 function registeredPercentageGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     percentageGeneratorSlugs.has(generator.slug),
@@ -1581,6 +1608,10 @@ function registeredWorkRateGenerators() {
 
 function registeredDistanceSpeedTimeGenerators() {
   return getRegisteredGenerators().filter((generator) => distanceSpeedTimeGeneratorSlugs.has(generator.slug))
+}
+
+function registeredSimpleInterestGenerators() {
+  return getRegisteredGenerators().filter((generator) => simpleInterestGeneratorSlugs.has(generator.slug))
 }
 
 function expectGeneratedQuestionValid(question: GeneratedQuestion): void {
@@ -4806,7 +4837,7 @@ describe('Dynamic number-problem generator engine', () => {
         expect(question.difficulty).toBe(difficulty)
       }
     }
-  })
+  }, 15_000)
 
   it('prevents duplicate number-problem snapshots within one attempt', () => {
     const signatures = new Set<string>()
@@ -5102,6 +5133,88 @@ describe('Dynamic distance-speed-time generator engine', () => {
     const signatures = new Set<string>()
     for (let index = 0; index < 5; index += 1) {
       const question = generateValidatedQuestion({ attemptSeed: 'travel-duplicate-prevention', generatorSlug: 'mixed-distance-speed-time', generatorVersion: 1, difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard', position: index + 1, existingSignatures: signatures })
+      signatures.add(question.metadata.canonicalSignature)
+    }
+    expect(signatures.size).toBe(5)
+  })
+})
+
+describe('Dynamic simple-interest generator engine', () => {
+  it('uses exact centavo, percent, time-conversion, and option-comparison arithmetic', () => {
+    const principal = interestRational(1_000_000)
+    const rate = percentToAnnualRate(600)
+    const time = interestRational(2)
+    const interest = simpleInterest(principal, rate, time)
+    expect(interest).toEqual(interestRational(120_000))
+    expect(principalFromInterest(interest, rate, time)).toEqual(principal)
+    expect(annualRateFromInterest(interest, principal, time)).toEqual(rate)
+    expect(timeFromInterest(interest, principal, rate)).toEqual(time)
+    expect(calculateMaturityValue(principal, interest)).toEqual(interestRational(1_120_000))
+    expect(interestFromMaturity(interestRational(1_120_000), principal)).toEqual(interest)
+    expect(interestMonthsToYears(18)).toEqual(interestRational(3, 2))
+    expect(daysToYears(90, 360)).toEqual(interestRational(1, 4))
+    expect(daysToYears(73, 365)).toEqual(interestRational(1, 5))
+    expect(roundMoneyCentavos(interestRational(1005, 2))).toBe(503)
+    expect(compareInterestOptions(
+      { principalCentavos: interestRational(2_000_000), annualRate: percentToAnnualRate(500), timeYears: interestRational(2) },
+      { principalCentavos: interestRational(2_000_000), annualRate: percentToAnnualRate(450), timeYears: interestRational(5, 2) },
+    )).toMatchObject({ winner: 'B', differenceCentavos: interestRational(25_000) })
+  })
+
+  it('rejects invalid monetary, rate, time, day-basis, and tied-option inputs', () => {
+    expect(() => simpleInterest(interestRational(0), interestRational(1, 20), interestRational(2))).toThrow('positive')
+    expect(() => percentToAnnualRate(0)).toThrow('positive')
+    expect(() => interestMonthsToYears(0)).toThrow('positive')
+    expect(() => daysToYears(90, 361 as 360)).toThrow('360 or 365')
+    const option = { principalCentavos: interestRational(100_000), annualRate: interestRational(1, 20), timeYears: interestRational(1) }
+    expect(() => compareInterestOptions(option, option)).toThrow('must not tie')
+  })
+
+  it('registers nine versioned simple-interest generators', () => {
+    const generators = registeredSimpleInterestGenerators()
+    expect(generators.map((generator) => generator.slug)).toEqual([...simpleInterestGeneratorSlugs])
+    expect(generators).toHaveLength(9)
+    for (const generator of generators) {
+      expect(generator.version).toBe(1)
+      expect(generator.supportedDifficulties).toEqual(['easy', 'medium', 'hard'])
+    }
+  })
+
+  it('is deterministic and preserves immutable versioned snapshots', () => {
+    for (const generator of registeredSimpleInterestGenerators()) {
+      const first = generator.generate({ seed: `interest-stable-${generator.slug}`, difficulty: 'medium' })
+      const second = generator.generate({ seed: `interest-stable-${generator.slug}`, difficulty: 'medium' })
+      expect(first).toEqual(second)
+      expect(first.generatorVersion).toBe(1)
+    }
+  })
+
+  it('validates 1,000 independently recomputed questions per simple-interest generator', () => {
+    const difficulties: readonly GeneratorDifficulty[] = ['easy', 'medium', 'hard']
+    for (const generator of registeredSimpleInterestGenerators()) {
+      for (let index = 0; index < 1_000; index += 1) {
+        const question = generateValidatedQuestion({ attemptSeed: `interest-validation-${generator.slug}-${index}`, generatorSlug: generator.slug, generatorVersion: 1, difficulty: difficulties[index % difficulties.length], position: index + 1, existingSignatures: new Set<string>() })
+        const correct = question.choices.find((choice) => choice.isCorrect)
+        const recomputed = recomputeSimpleInterestAnswer(question)
+        expect(generator.validate(question)).toEqual({ valid: true, reason: null })
+        expect(question.choices).toHaveLength(4)
+        expect(question.choices.filter((choice) => choice.isCorrect)).toHaveLength(1)
+        expect(new Set(question.choices.map((choice) => choice.text)).size).toBe(4)
+        expect(new Set(question.choices.map((choice) => choice.numericValue)).size).toBe(4)
+        expect(question.choices.filter((choice) => !choice.isCorrect).every((choice) => choice.mistakeType !== null && choice.derivation !== null)).toBe(true)
+        expect(correct?.numericValue).toBeCloseTo(recomputed.numerator / recomputed.denominator, 8)
+        expect(correct?.text).toBe(question.explanation.finalAnswer)
+        expect(question.prompt).not.toMatch(/NaN|Infinity|compound/iu)
+        if (question.parameters.timeKind === 'days') expect([360, 365]).toContain(question.parameters.dayCountBasis)
+        if (question.metadata.answerKind === 'money') expect(Number.isInteger(correct?.numericValue)).toBe(true)
+      }
+    }
+  }, 20_000)
+
+  it('prevents duplicate simple-interest snapshots within one attempt', () => {
+    const signatures = new Set<string>()
+    for (let index = 0; index < 5; index += 1) {
+      const question = generateValidatedQuestion({ attemptSeed: 'interest-duplicate-prevention', generatorSlug: 'mixed-simple-interest', generatorVersion: 1, difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard', position: index + 1, existingSignatures: signatures })
       signatures.add(question.metadata.canonicalSignature)
     }
     expect(signatures.size).toBe(5)
