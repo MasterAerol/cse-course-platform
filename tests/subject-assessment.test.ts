@@ -9,14 +9,17 @@ import {
 } from '../src/worker/domain/subject-assessment-blueprint'
 import { calculateSubjectAssessmentBreakdown } from '../src/worker/domain/subject-assessment-results'
 import { scoreAssessment } from '../src/worker/domain/assessment-scoring'
+import { subjectAssessmentResultSchema } from '../src/shared/subject-assessment-result.schema'
 import {
   findPublishedSubjectAssessmentForCourse,
 } from '../src/worker/repositories/subject-assessment.repository'
 import {
   getCourseDetailSubjectAssessment,
   getSubjectAssessmentAttempt,
+  saveSubjectAssessmentAnswer,
   saveAdminSubjectAssessment,
   startSubjectAssessmentAttempt,
+  submitSubjectAssessmentAttempt,
 } from '../src/worker/services/subject-assessment.service'
 
 describe('Numerical Ability subject assessment quality gate', () => {
@@ -101,6 +104,45 @@ describe('subject assessment discovery and learner state', () => {
        VALUES (?1, ?2, 'active')`,
     ).bind(userId, courseId).run()
     return userId
+  }
+
+  async function answerAttempt(
+    userId: number,
+    attemptPublicId: string,
+    correctAnswers: number,
+    answerCount = 50,
+  ): Promise<void> {
+    const attempt = await env.DB.prepare(
+      'SELECT id FROM subject_assessment_attempts WHERE public_id = ?1',
+    ).bind(attemptPublicId).first<{ id: number }>()
+    if (attempt === null) throw new Error('Attempt fixture is missing.')
+    const choices = await env.DB.prepare(
+      `SELECT snapshots.public_id AS snapshot_public_id,
+        correct.public_id AS correct_public_id,
+        incorrect.public_id AS incorrect_public_id
+       FROM subject_assessment_question_snapshots AS snapshots
+       INNER JOIN subject_assessment_question_choices AS correct
+         ON correct.snapshot_id = snapshots.id AND correct.is_correct = 1
+       INNER JOIN subject_assessment_question_choices AS incorrect
+         ON incorrect.snapshot_id = snapshots.id AND incorrect.is_correct = 0
+       WHERE snapshots.attempt_id = ?1
+       GROUP BY snapshots.id
+       ORDER BY snapshots.source_position`,
+    ).bind(attempt.id).all<{
+      snapshot_public_id: string
+      correct_public_id: string
+      incorrect_public_id: string
+    }>()
+    for (const [index, choice] of choices.results.slice(0, answerCount).entries()) {
+      await saveSubjectAssessmentAnswer(env.DB, userId, {
+        attemptPublicId,
+        snapshotPublicId: choice.snapshot_public_id,
+        selectedChoicePublicId:
+          index < correctAnswers
+            ? choice.correct_public_id
+            : choice.incorrect_public_id,
+      })
+    }
   }
 
   beforeAll(async () => {
@@ -222,5 +264,70 @@ describe('subject assessment discovery and learner state', () => {
       'numerical-ability-subject-assessment',
     )
     await expect(getSubjectAssessmentAttempt(env.DB, otherId, attempt.attempt.publicId)).rejects.toMatchObject({ status: 403 })
+    await expect(submitSubjectAssessmentAttempt(env.DB, otherId, attempt.attempt.publicId)).rejects.toMatchObject({ status: 403 })
+  })
+
+  it('submits all answered snapshots and returns the shared response shape', async () => {
+    const userId = await createLearner('submit-all')
+    const attempt = await startSubjectAssessmentAttempt(env.DB, userId, 'numerical-ability-subject-assessment')
+    await answerAttempt(userId, attempt.attempt.publicId, 50)
+    const result = await submitSubjectAssessmentAttempt(env.DB, userId, attempt.attempt.publicId)
+    expect(subjectAssessmentResultSchema.safeParse(result).success).toBe(true)
+    expect(result).toMatchObject({
+      attempt: { publicId: attempt.attempt.publicId, status: 'submitted' },
+      earnedPoints: 50,
+      totalPoints: 50,
+      scorePercent: 100,
+      passed: true,
+      resultUrl: `/assessment-attempts/${attempt.attempt.publicId}/results`,
+    })
+  })
+
+  it('counts unanswered questions as zero', async () => {
+    const userId = await createLearner('submit-unanswered')
+    const attempt = await startSubjectAssessmentAttempt(env.DB, userId, 'numerical-ability-subject-assessment')
+    await answerAttempt(userId, attempt.attempt.publicId, 10, 10)
+    const result = await submitSubjectAssessmentAttempt(env.DB, userId, attempt.attempt.publicId)
+    expect(result).toMatchObject({ earnedPoints: 10, totalPoints: 50, scorePercent: 20, passed: false })
+    expect(result.breakdown.unansweredCount).toBe(40)
+  })
+
+  it('passes at the exact 35 of 50 boundary', async () => {
+    const userId = await createLearner('submit-boundary')
+    const attempt = await startSubjectAssessmentAttempt(env.DB, userId, 'numerical-ability-subject-assessment')
+    await answerAttempt(userId, attempt.attempt.publicId, 35)
+    const result = await submitSubjectAssessmentAttempt(env.DB, userId, attempt.attempt.publicId)
+    expect(result).toMatchObject({ earnedPoints: 35, scorePercent: 70, passed: true })
+  })
+
+  it('is idempotent and keeps submitted answers immutable', async () => {
+    const userId = await createLearner('submit-idempotent')
+    const attempt = await startSubjectAssessmentAttempt(env.DB, userId, 'numerical-ability-subject-assessment')
+    await answerAttempt(userId, attempt.attempt.publicId, 25)
+    const first = await submitSubjectAssessmentAttempt(env.DB, userId, attempt.attempt.publicId)
+    const second = await submitSubjectAssessmentAttempt(env.DB, userId, attempt.attempt.publicId)
+    expect(second).toEqual(first)
+    const stored = await env.DB.prepare(
+      `SELECT COUNT(*) AS count FROM subject_assessment_answers
+       WHERE attempt_id = (SELECT id FROM subject_assessment_attempts WHERE public_id = ?1)`,
+    ).bind(attempt.attempt.publicId).first<{ count: number }>()
+    expect(stored?.count).toBe(50)
+    const restored = await getSubjectAssessmentAttempt(env.DB, userId, attempt.attempt.publicId)
+    expect(restored).toMatchObject({ attempt: { publicId: attempt.attempt.publicId }, resultAvailable: true })
+    await expect(saveSubjectAssessmentAnswer(env.DB, userId, {
+      attemptPublicId: attempt.attempt.publicId,
+      snapshotPublicId: attempt.questions[0].publicId,
+      selectedChoicePublicId: attempt.questions[0].choices[0].publicId,
+    })).rejects.toMatchObject({ status: 409, code: 'ASSESSMENT_ATTEMPT_SUBMITTED' })
+  })
+
+  it('rejects a choice that does not belong to the snapshot', async () => {
+    const userId = await createLearner('submit-malformed')
+    const attempt = await startSubjectAssessmentAttempt(env.DB, userId, 'numerical-ability-subject-assessment')
+    await expect(saveSubjectAssessmentAnswer(env.DB, userId, {
+      attemptPublicId: attempt.attempt.publicId,
+      snapshotPublicId: attempt.questions[0].publicId,
+      selectedChoicePublicId: attempt.questions[1].choices[0].publicId,
+    })).rejects.toMatchObject({ status: 400, code: 'CHOICE_NOT_IN_QUESTION' })
   })
 })

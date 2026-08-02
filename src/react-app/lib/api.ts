@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { subjectAssessmentResultSchema } from '../../shared/subject-assessment-result.schema'
 
 const userSchema = z.object({
   id: z.string().uuid(),
@@ -160,13 +161,14 @@ const subjectAssessmentAttemptSchema = z.object({
   assessment: z.object({ title: z.string(), slug: z.string(), questionCount: z.number(), passingScore: z.number() }),
   questions: z.array(z.object({ publicId: z.string(), position: z.number(), prompt: z.string(), selectedChoicePublicId: z.string().nullable(), choices: z.array(assessmentChoiceSchema) })), answeredCount: z.number(), totalCount: z.number(),
 })
-const assessmentResultSchema = z.object({
-  assessment: z.object({ title: z.string(), slug: z.string(), passingScore: z.number(), passingTarget: z.number() }),
-  attempt: z.object({ publicId: z.string(), attemptNumber: z.number(), status: z.string(), startedAt: z.string(), submittedAt: z.string() }),
-  totalPoints: z.number(), earnedPoints: z.number(), scorePercent: z.number(), passed: z.boolean(), feedback: z.string(),
-  breakdown: z.object({ topics: z.array(z.object({ topicSlug: z.string(), topicTitle: z.string(), correct: z.number(), total: z.number(), percentage: z.number(), category: z.string() })), strongestTopic: z.object({ topicSlug: z.string(), topicTitle: z.string(), correct: z.number(), total: z.number(), percentage: z.number(), category: z.string() }), weakestTopic: z.object({ topicSlug: z.string(), topicTitle: z.string(), correct: z.number(), total: z.number(), percentage: z.number(), category: z.string() }) }),
-})
-const assessmentReviewSchema = assessmentResultSchema.extend({ questions: z.array(z.object({ publicId: z.string(), position: z.number(), topic: z.object({ slug: z.string(), title: z.string() }), prompt: z.string(), difficulty: z.string(), selectedChoice: assessmentChoiceSchema.nullable(), correctChoice: assessmentChoiceSchema, isCorrect: z.boolean(), unanswered: z.boolean(), explanation: z.string().nullable(), choices: z.array(assessmentChoiceSchema) })) })
+const subjectAssessmentAttemptResponseSchema = z.union([
+  subjectAssessmentAttemptSchema,
+  z.object({
+    attempt: subjectAssessmentAttemptSchema.shape.attempt,
+    resultAvailable: z.literal(true),
+  }),
+])
+const assessmentReviewSchema = subjectAssessmentResultSchema.extend({ questions: z.array(z.object({ publicId: z.string(), position: z.number(), topic: z.object({ slug: z.string(), title: z.string() }), prompt: z.string(), difficulty: z.string(), selectedChoice: assessmentChoiceSchema.nullable(), correctChoice: assessmentChoiceSchema, isCorrect: z.boolean(), unanswered: z.boolean(), explanation: z.string().nullable(), choices: z.array(assessmentChoiceSchema) })) })
 
 const dashboardCourseWithAssessmentSchema = dashboardCourseSchema.extend({ subjectAssessment: subjectAssessmentSummarySchema.nullable() })
 const courseDetailSchema = courseDetailBaseSchema.extend({ subjectAssessment: subjectAssessmentSummarySchema.nullable() })
@@ -639,7 +641,8 @@ export type StudentDashboard = z.infer<
 >['data']
 export type SubjectAssessmentSummary = z.infer<typeof subjectAssessmentSummarySchema>
 export type SubjectAssessmentAttempt = z.infer<typeof subjectAssessmentAttemptSchema>
-export type SubjectAssessmentResult = z.infer<typeof assessmentResultSchema>
+export type SubjectAssessmentAttemptResponse = z.infer<typeof subjectAssessmentAttemptResponseSchema>
+export type SubjectAssessmentResult = z.infer<typeof subjectAssessmentResultSchema>
 export type SubjectAssessmentReview = z.infer<typeof assessmentReviewSchema>
 export type CourseProgress = z.infer<typeof courseProgressSchema>
 export type CurriculumLesson = z.infer<typeof curriculumLessonSchema>
@@ -769,6 +772,13 @@ async function request<T>(
   const result = schema.safeParse(body)
 
   if (!result.success) {
+    if (import.meta.env.DEV) {
+      console.error('API response schema validation failed.', {
+        path,
+        status: response.status,
+        issues: result.error.issues,
+      })
+    }
     throw new ApiClientError(
       'The API returned an unexpected response.',
       'INVALID_API_RESPONSE',
@@ -1995,17 +2005,17 @@ export function fetchSubjectAssessment(slug: string, signal?: AbortSignal): Prom
 export function startSubjectAssessment(slug: string): Promise<SubjectAssessmentAttempt> {
   return request(`/api/student/subject-assessments/${encodeURIComponent(slug)}/attempts`, success(subjectAssessmentAttemptSchema), { method: 'POST' }).then((response) => response.data)
 }
-export function fetchSubjectAssessmentAttempt(id: string, signal?: AbortSignal): Promise<SubjectAssessmentAttempt> {
-  return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}`, success(subjectAssessmentAttemptSchema), { signal }).then((response) => response.data)
+export function fetchSubjectAssessmentAttempt(id: string, signal?: AbortSignal): Promise<SubjectAssessmentAttemptResponse> {
+  return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}`, success(subjectAssessmentAttemptResponseSchema), { signal }).then((response) => response.data)
 }
 export function saveSubjectAssessmentChoice(attemptId: string, questionId: string, choiceId: string): Promise<void> {
   return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(attemptId)}/answers/${encodeURIComponent(questionId)}`, success(z.object({ saved: z.literal(true), answeredCount: z.number(), totalCount: z.number() })), { method: 'PUT', body: JSON.stringify({ selectedChoicePublicId: choiceId }) }).then(() => undefined)
 }
 export function submitSubjectAssessment(id: string): Promise<SubjectAssessmentResult> {
-  return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}/submit`, success(assessmentResultSchema), { method: 'POST' }).then((response) => response.data)
+  return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}/submit`, success(subjectAssessmentResultSchema), { method: 'POST' }).then((response) => response.data)
 }
 export function fetchSubjectAssessmentResult(id: string, signal?: AbortSignal): Promise<SubjectAssessmentResult> {
-  return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}/results`, success(assessmentResultSchema), { signal }).then((response) => response.data)
+  return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}/results`, success(subjectAssessmentResultSchema), { signal }).then((response) => response.data)
 }
 export function fetchSubjectAssessmentReview(id: string, signal?: AbortSignal): Promise<SubjectAssessmentReview> {
   return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}/review`, success(assessmentReviewSchema), { signal }).then((response) => response.data)

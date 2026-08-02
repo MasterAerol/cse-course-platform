@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
 import {
@@ -7,6 +7,10 @@ import {
   submitSubjectAssessment,
   type SubjectAssessmentAttempt,
 } from '../lib/api'
+import {
+  getSubjectAssessmentResultUrl,
+  getSubjectAssessmentSubmitError,
+} from '../lib/subject-assessment-submit'
 
 export function SubjectAssessmentAttemptPage() {
   const { attemptPublicId = '' } = useParams()
@@ -16,6 +20,7 @@ export function SubjectAssessmentAttemptPage() {
   const [savingQuestionId, setSavingQuestionId] = useState<string | null>(null)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const submitInFlight = useRef(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -23,6 +28,12 @@ export function SubjectAssessmentAttemptPage() {
 
     fetchSubjectAssessmentAttempt(attemptPublicId, controller.signal)
       .then((attempt) => {
+        if ('resultAvailable' in attempt) {
+          void navigate(`/assessment-attempts/${attempt.attempt.publicId}/results`, {
+            replace: true,
+          })
+          return
+        }
         setData(attempt)
         setSavedMessage(
           `Saved ${attempt.answeredCount} of ${attempt.totalCount} answers.`,
@@ -39,7 +50,7 @@ export function SubjectAssessmentAttemptPage() {
       })
 
     return () => controller.abort()
-  }, [attemptPublicId])
+  }, [attemptPublicId, navigate])
 
   async function choose(questionId: string, choiceId: string): Promise<void> {
     if (data === null) return
@@ -79,7 +90,7 @@ export function SubjectAssessmentAttemptPage() {
   }
 
   async function submit(): Promise<void> {
-    if (data === null) return
+    if (data === null || submitInFlight.current) return
 
     const unanswered = data.totalCount - data.answeredCount
     const confirmed = window.confirm(
@@ -88,17 +99,15 @@ export function SubjectAssessmentAttemptPage() {
     if (!confirmed) return
 
     setSubmitting(true)
+    submitInFlight.current = true
     setError(null)
     try {
-      await submitSubjectAssessment(attemptPublicId)
-      await navigate(`/assessment-attempts/${attemptPublicId}/results`)
+      const result = await submitSubjectAssessment(attemptPublicId)
+      await navigate(getSubjectAssessmentResultUrl(result), { replace: true })
     } catch (value: unknown) {
       setSubmitting(false)
-      setError(
-        value instanceof Error
-          ? value.message
-          : 'Assessment could not be submitted.',
-      )
+      submitInFlight.current = false
+      setError(getSubjectAssessmentSubmitError(value))
     }
   }
 

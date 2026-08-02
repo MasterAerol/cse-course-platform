@@ -12,6 +12,7 @@ import {
   validateSubjectAssessmentBlueprint,
 } from '../domain/subject-assessment-blueprint'
 import { scoreAssessment } from '../domain/assessment-scoring'
+import type { SubjectAssessmentResult } from '../../shared/subject-assessment-result.schema'
 import { getGenerator } from '../generators/generator.registry'
 import { createAttemptSeed } from '../generators/generator-random'
 import type {
@@ -149,27 +150,7 @@ export interface SubjectAssessmentAttemptPayload {
   totalCount: number
 }
 
-export interface SubjectAssessmentResultPayload {
-  assessment: {
-    title: string
-    slug: string
-    passingScore: number
-    passingTarget: number
-  }
-  attempt: {
-    publicId: string
-    attemptNumber: number
-    status: string
-    startedAt: string
-    submittedAt: string
-  }
-  totalPoints: number
-  earnedPoints: number
-  scorePercent: number
-  passed: boolean
-  feedback: ReturnType<typeof feedbackLabel>
-  breakdown: SubjectAssessmentBreakdown
-}
+export type SubjectAssessmentResultPayload = SubjectAssessmentResult
 
 export interface SubjectAssessmentReviewPayload
   extends SubjectAssessmentResultPayload {
@@ -838,6 +819,7 @@ async function buildResult(
     passed: attempt.passed === 1,
     feedback: feedbackLabel(attempt.score_percent),
     breakdown,
+    resultUrl: `/assessment-attempts/${attempt.public_id}/results`,
   }
 }
 
