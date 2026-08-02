@@ -20,6 +20,10 @@ import { PracticeResultPage } from './pages/PracticeResultPage'
 import { QuizAttemptPage } from './pages/QuizAttemptPage'
 import { QuizResultPage } from './pages/QuizResultPage'
 import { RegistrationPage } from './pages/RegistrationPage'
+import { SubjectAssessmentPage } from './pages/SubjectAssessmentPage'
+import { SubjectAssessmentAttemptPage } from './pages/SubjectAssessmentAttemptPage'
+import { SubjectAssessmentResultPage } from './pages/SubjectAssessmentResultPage'
+import { SubjectAssessmentReviewPage } from './pages/SubjectAssessmentReviewPage'
 
 export function App() {
   return (
@@ -35,6 +39,10 @@ export function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="assessments/:assessmentSlug" element={<SubjectAssessmentPage />} />
+        <Route path="assessment-attempts/:attemptPublicId" element={<SubjectAssessmentAttemptPage />} />
+        <Route path="assessment-attempts/:attemptPublicId/results" element={<SubjectAssessmentResultPage />} />
+        <Route path="assessment-attempts/:attemptPublicId/review" element={<SubjectAssessmentReviewPage />} />
         <Route
           path="courses/:courseSlug/lessons/:lessonPublicId"
           element={<LessonPage />}

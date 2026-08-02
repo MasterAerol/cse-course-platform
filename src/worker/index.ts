@@ -8,6 +8,7 @@ import { healthRoutes } from './routes/health.routes'
 import { practiceRoutes } from './routes/practice.routes'
 import { quizRoutes } from './routes/quiz.routes'
 import { studentRoutes } from './routes/student.routes'
+import { subjectAssessmentRoutes } from './routes/subject-assessment.routes'
 import type { AppEnv } from './types/app'
 import { AppError } from './utils/app-error'
 import { errorResponse } from './utils/responses'
@@ -28,6 +29,7 @@ app.route('/api/courses', courseRoutes)
 app.route('/api/student', studentRoutes)
 app.route('/api/student', practiceRoutes)
 app.route('/api/student', quizRoutes)
+app.route('/api/student', subjectAssessmentRoutes)
 app.route('/api/dev', devRoutes)
 
 app.notFound((context) =>

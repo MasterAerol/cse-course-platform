@@ -61,6 +61,7 @@ export interface CourseProgressState {
 
 export interface StudentDashboardCourse extends CourseProgressState {
   enrolledAt: string
+  subjectAssessment: import('./subject-assessment.service').SubjectAssessmentSummary | null
 }
 
 export interface StudentDashboard {

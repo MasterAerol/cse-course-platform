@@ -178,7 +178,20 @@ export function DashboardPage() {
                     : '. No access expiration is set.'}
                 </p>
                 {course.enrollment.hasAccess ? (
-                  <ContinueLearningCard progress={course} />
+                  <>
+                    <ContinueLearningCard progress={course} />
+                    {course.subjectAssessment !== null && (
+                      <section className="continue-card assessment-card">
+                        <p className="eyebrow">Subject assessment</p>
+                        <h3>{course.subjectAssessment.assessment.title}</h3>
+                        <p>{course.subjectAssessment.assessment.questionCount} questions · Pass at {course.subjectAssessment.assessment.passingScore}%</p>
+                        <p className="meta-copy">Status: {course.subjectAssessment.state.replace('_', ' ')}{course.subjectAssessment.bestScore === null ? '' : ` · Best ${course.subjectAssessment.bestScore}%`}</p>
+                        <Link className="button-link" to={`/assessments/${course.subjectAssessment.assessment.slug}`}>
+                          {course.subjectAssessment.state === 'in_progress' ? 'Resume assessment' : course.subjectAssessment.attemptCount > 0 ? 'View assessment' : 'Start assessment'}
+                        </Link>
+                      </section>
+                    )}
+                  </>
                 ) : (
                   <section className="continue-card continue-card--muted">
                     <p className="eyebrow">Continue Learning</p>

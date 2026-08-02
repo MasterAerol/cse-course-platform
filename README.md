@@ -565,6 +565,18 @@ node scripts/create-and-publish-simple-interest-topic.mjs --base-url https://<wo
 Remove-Item Env:CSE_SIMPLE_INTEREST_ADMIN_PASSWORD
 ```
 
+## Numerical Ability Subject Assessment
+
+The subject assessment uses dedicated, versioned tables so each submitted attempt retains its immutable 50-question snapshot independently of later generator changes. Apply migration `0013_subject_assessments.sql`, start the integrated server, and publish through the protected admin API:
+
+```powershell
+npm.cmd run db:migrate:local
+$env:CSE_ASSESSMENT_ADMIN_PASSWORD = '<local-admin-password>'
+node scripts/create-and-publish-numerical-ability-assessment.mjs --base-url http://127.0.0.1:5173 --email '<admin-email>' --confirm create-validate-publish-numerical-ability-assessment
+```
+
+The idempotent publisher requires all ten Numerical Ability topics to be published, validates referenced generators, runs the 200-attempt/10,000-question quality gate, and publishes only after all gates pass. Never store the admin password in source control.
+
 ## D1 setup and migrations
 
 Authenticate and create the production database:

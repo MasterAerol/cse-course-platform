@@ -55,6 +55,7 @@ export function generateValidatedQuestion(input: {
   difficulty: GeneratorDifficulty
   position: number
   existingSignatures: ReadonlySet<string>
+  existingPrompts?: ReadonlySet<string>
   maxRetries?: number
 }): GeneratedQuestion {
   const generator = getGenerator(
@@ -87,7 +88,8 @@ export function generateValidatedQuestion(input: {
 
     if (
       validation.valid &&
-      !input.existingSignatures.has(question.metadata.canonicalSignature)
+      !input.existingSignatures.has(question.metadata.canonicalSignature) &&
+      !input.existingPrompts?.has(question.prompt.trim().toLowerCase())
     ) {
       return question
     }

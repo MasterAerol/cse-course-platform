@@ -142,6 +142,34 @@ const dashboardCourseSchema = courseProgressSchema.extend({
   enrolledAt: z.string(),
 })
 
+const assessmentHistorySchema = z.object({
+  attemptPublicId: z.string(), attemptNumber: z.number(), status: z.string(),
+  startedAt: z.string(), submittedAt: z.string().nullable(), earnedPoints: z.number(),
+  totalPoints: z.number(), scorePercent: z.number().nullable(), passed: z.boolean().nullable(),
+  strongestTopic: z.string().nullable(), weakestTopic: z.string().nullable(),
+})
+const subjectAssessmentSummarySchema = z.object({
+  assessment: z.object({ id: z.number(), title: z.string(), slug: z.string(), description: z.string().nullable(), subjectTitle: z.string(), subjectSlug: z.string(), questionCount: z.number(), passingScore: z.number(), maximumAttempts: z.number().nullable(), timeLimitMinutes: z.number().nullable(), blueprintVersion: z.number() }),
+  availability: z.object({ available: z.boolean(), reason: z.string().nullable() }),
+  state: z.enum(['not_started', 'in_progress', 'passed', 'needs_improvement']),
+  inProgressAttemptPublicId: z.string().nullable(), latestScore: z.number().nullable(), bestScore: z.number().nullable(), attemptCount: z.number(), passed: z.boolean(), history: z.array(assessmentHistorySchema),
+})
+const assessmentChoiceSchema = z.object({ publicId: z.string(), text: z.string(), position: z.number() })
+const subjectAssessmentAttemptSchema = z.object({
+  attempt: z.object({ publicId: z.string(), attemptNumber: z.number(), status: z.string(), startedAt: z.string() }),
+  assessment: z.object({ title: z.string(), slug: z.string(), questionCount: z.number(), passingScore: z.number() }),
+  questions: z.array(z.object({ publicId: z.string(), position: z.number(), prompt: z.string(), selectedChoicePublicId: z.string().nullable(), choices: z.array(assessmentChoiceSchema) })), answeredCount: z.number(), totalCount: z.number(),
+})
+const assessmentResultSchema = z.object({
+  assessment: z.object({ title: z.string(), slug: z.string(), passingScore: z.number(), passingTarget: z.number() }),
+  attempt: z.object({ publicId: z.string(), attemptNumber: z.number(), status: z.string(), startedAt: z.string(), submittedAt: z.string() }),
+  totalPoints: z.number(), earnedPoints: z.number(), scorePercent: z.number(), passed: z.boolean(), feedback: z.string(),
+  breakdown: z.object({ topics: z.array(z.object({ topicSlug: z.string(), topicTitle: z.string(), correct: z.number(), total: z.number(), percentage: z.number(), category: z.string() })), strongestTopic: z.object({ topicSlug: z.string(), topicTitle: z.string(), correct: z.number(), total: z.number(), percentage: z.number(), category: z.string() }), weakestTopic: z.object({ topicSlug: z.string(), topicTitle: z.string(), correct: z.number(), total: z.number(), percentage: z.number(), category: z.string() }) }),
+})
+const assessmentReviewSchema = assessmentResultSchema.extend({ questions: z.array(z.object({ publicId: z.string(), position: z.number(), topic: z.object({ slug: z.string(), title: z.string() }), prompt: z.string(), difficulty: z.string(), selectedChoice: assessmentChoiceSchema.nullable(), correctChoice: assessmentChoiceSchema, isCorrect: z.boolean(), unanswered: z.boolean(), explanation: z.string().nullable(), choices: z.array(assessmentChoiceSchema) })) })
+
+const dashboardCourseWithAssessmentSchema = dashboardCourseSchema.extend({ subjectAssessment: subjectAssessmentSummarySchema.nullable() })
+
 const coursesResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
@@ -157,7 +185,7 @@ const courseDetailResponseSchema = z.object({
 const studentDashboardResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
-    courses: z.array(dashboardCourseSchema),
+    courses: z.array(dashboardCourseWithAssessmentSchema),
   }),
 })
 
@@ -608,6 +636,10 @@ export type StudentCourseCurriculum = z.infer<
 export type StudentDashboard = z.infer<
   typeof studentDashboardResponseSchema
 >['data']
+export type SubjectAssessmentSummary = z.infer<typeof subjectAssessmentSummarySchema>
+export type SubjectAssessmentAttempt = z.infer<typeof subjectAssessmentAttemptSchema>
+export type SubjectAssessmentResult = z.infer<typeof assessmentResultSchema>
+export type SubjectAssessmentReview = z.infer<typeof assessmentReviewSchema>
 export type CourseProgress = z.infer<typeof courseProgressSchema>
 export type CurriculumLesson = z.infer<typeof curriculumLessonSchema>
 export type LessonBlock = z.infer<typeof lessonBlockSchema>
@@ -1952,4 +1984,28 @@ export function createAdminOperationalEnrollment(
       body: JSON.stringify(input),
     },
   ).then((response) => response.data.enrollment)
+}
+
+const success = <T extends z.ZodTypeAny>(data: T) => z.object({ success: z.literal(true), data })
+
+export function fetchSubjectAssessment(slug: string, signal?: AbortSignal): Promise<SubjectAssessmentSummary> {
+  return request(`/api/student/subject-assessments/${encodeURIComponent(slug)}`, success(subjectAssessmentSummarySchema), { signal }).then((response) => response.data)
+}
+export function startSubjectAssessment(slug: string): Promise<SubjectAssessmentAttempt> {
+  return request(`/api/student/subject-assessments/${encodeURIComponent(slug)}/attempts`, success(subjectAssessmentAttemptSchema), { method: 'POST' }).then((response) => response.data)
+}
+export function fetchSubjectAssessmentAttempt(id: string, signal?: AbortSignal): Promise<SubjectAssessmentAttempt> {
+  return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}`, success(subjectAssessmentAttemptSchema), { signal }).then((response) => response.data)
+}
+export function saveSubjectAssessmentChoice(attemptId: string, questionId: string, choiceId: string): Promise<void> {
+  return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(attemptId)}/answers/${encodeURIComponent(questionId)}`, success(z.object({ saved: z.literal(true), answeredCount: z.number(), totalCount: z.number() })), { method: 'PUT', body: JSON.stringify({ selectedChoicePublicId: choiceId }) }).then(() => undefined)
+}
+export function submitSubjectAssessment(id: string): Promise<SubjectAssessmentResult> {
+  return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}/submit`, success(assessmentResultSchema), { method: 'POST' }).then((response) => response.data)
+}
+export function fetchSubjectAssessmentResult(id: string, signal?: AbortSignal): Promise<SubjectAssessmentResult> {
+  return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}/results`, success(assessmentResultSchema), { signal }).then((response) => response.data)
+}
+export function fetchSubjectAssessmentReview(id: string, signal?: AbortSignal): Promise<SubjectAssessmentReview> {
+  return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}/review`, success(assessmentReviewSchema), { signal }).then((response) => response.data)
 }
