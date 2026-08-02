@@ -100,6 +100,15 @@ type PracticeGeneratorSlug =
   | 'average-after-removing'
   | 'average-age'
   | 'average-score-salary'
+  | 'consecutive-integers'
+  | 'consecutive-odd-even-integers'
+  | 'sum-difference-numbers'
+  | 'product-quotient-numbers'
+  | 'two-digit-number-problems'
+  | 'reversed-digit-problems'
+  | 'remainder-number-problems'
+  | 'fractional-part-number-problems'
+  | 'mixed-number-relationships'
 
 export interface PracticeSetGeneratorConfigRow {
   practice_set_id: number

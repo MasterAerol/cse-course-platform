@@ -5,6 +5,7 @@ import { fractionGenerators } from './fractions/fraction-generators'
 import { decimalGenerators } from './decimals/decimal-generators'
 import { ratioGenerators } from './ratios/ratio-generators'
 import { averageGenerators } from './averages/average-generators'
+import { numberProblemGenerators } from './number-problems/number-problem-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -21,6 +22,7 @@ const generators = [
   ...decimalGenerators,
   ...ratioGenerators,
   ...averageGenerators,
+  ...numberProblemGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(

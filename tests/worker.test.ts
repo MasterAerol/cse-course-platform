@@ -54,6 +54,21 @@ import {
   sumValues,
   weightedMean,
 } from '../src/worker/domain/averages/average-math'
+import {
+  consecutiveSequence,
+  constructTwoDigitNumber,
+  divideByRational,
+  hasParity,
+  hasRemainder,
+  isConsecutiveParitySequence,
+  quotientAndRemainder,
+  rational,
+  rationalToInteger,
+  reverseTwoDigitNumber,
+  smallestPositiveWithRemainders,
+  solveLinearPair,
+  uniqueIntegerSolutions,
+} from '../src/worker/domain/number-problems/number-problem-math'
 import { parseLessonBlock } from '../src/worker/schemas/lesson-block.schemas'
 import type { Bindings } from '../src/worker/types/bindings'
 import type {
@@ -1420,6 +1435,18 @@ const averageGeneratorSlugs = new Set<GeneratorSlug>([
   'average-score-salary',
 ])
 
+const numberProblemGeneratorSlugs = new Set<GeneratorSlug>([
+  'consecutive-integers',
+  'consecutive-odd-even-integers',
+  'sum-difference-numbers',
+  'product-quotient-numbers',
+  'two-digit-number-problems',
+  'reversed-digit-problems',
+  'remainder-number-problems',
+  'fractional-part-number-problems',
+  'mixed-number-relationships',
+])
+
 function registeredPercentageGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     percentageGeneratorSlugs.has(generator.slug),
@@ -1447,6 +1474,12 @@ function registeredRatioGenerators() {
 function registeredAverageGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     averageGeneratorSlugs.has(generator.slug),
+  )
+}
+
+function registeredNumberProblemGenerators() {
+  return getRegisteredGenerators().filter((generator) =>
+    numberProblemGeneratorSlugs.has(generator.slug),
   )
 }
 
@@ -1618,6 +1651,38 @@ function expectAverageGeneratedQuestionValid(question: GeneratedQuestion): void 
 
   for (const choice of question.choices) {
     expect(Number.isFinite(choice.numericValue)).toBe(true)
+    if (!choice.isCorrect) {
+      expect(choice.mistakeType).not.toBeNull()
+      expect(choice.distractorType).toBe(choice.mistakeType)
+      expect(choice.derivation?.operation).toEqual(expect.any(String))
+      expect(choice.derivation?.inputs.length).toBeGreaterThan(0)
+      expect(choice.qualityScore).toBeGreaterThanOrEqual(35)
+    }
+  }
+}
+
+function expectNumberProblemGeneratedQuestionValid(question: GeneratedQuestion): void {
+  const generator = getRegisteredGenerators().find(
+    (item) => item.slug === question.generatorSlug && item.version === question.generatorVersion,
+  )
+  const correctChoices = question.choices.filter((choice) => choice.isCorrect)
+  const identities = question.parameters.choiceIdentities
+
+  expect(generator?.validate(question)).toEqual({ valid: true, reason: null })
+  expect(question.choices).toHaveLength(4)
+  expect(correctChoices).toHaveLength(1)
+  expect(new Set(question.choices.map((choice) => choice.text)).size).toBe(4)
+  expect(new Set(question.choices.map((choice) => choice.numericValue)).size).toBe(4)
+  expect(Array.isArray(identities)).toBe(true)
+  expect(new Set(identities as string[]).size).toBe(4)
+  expect(identities).toContain(question.parameters.correctIdentity)
+  expect(correctChoices[0]?.text).toBe(question.explanation.finalAnswer)
+  expect(question.metadata.canonicalSignature).toContain(question.generatorSlug)
+  expect(question.prompt.trim().length).toBeGreaterThan(20)
+
+  for (const choice of question.choices) {
+    expect(Number.isFinite(choice.numericValue)).toBe(true)
+    expect(Number.isInteger(choice.numericValue)).toBe(true)
     if (!choice.isCorrect) {
       expect(choice.mistakeType).not.toBeNull()
       expect(choice.distractorType).toBe(choice.mistakeType)
@@ -4506,6 +4571,106 @@ describe('Dynamic average generator engine', () => {
       const question = generateValidatedQuestion({
         attemptSeed: 'average-duplicate-prevention',
         generatorSlug: 'finding-average',
+        generatorVersion: 1,
+        difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard',
+        position: index + 1,
+        existingSignatures: signatures,
+      })
+      signatures.add(question.metadata.canonicalSignature)
+    }
+    expect(signatures.size).toBe(5)
+  })
+})
+
+describe('Dynamic number-problem generator engine', () => {
+  it('performs exact integer, digit, remainder, and rational arithmetic', () => {
+    expect(consecutiveSequence(5, 4)).toEqual([5, 6, 7, 8])
+    expect(consecutiveSequence(3, 3, 2)).toEqual([3, 5, 7])
+    expect(hasParity(-3, 'odd')).toBe(true)
+    expect(hasParity(8, 'even')).toBe(true)
+    expect(isConsecutiveParitySequence([-3, -1, 1], 'odd')).toBe(true)
+    expect(solveLinearPair(
+      { xCoefficient: 1, yCoefficient: 1, constant: 42 },
+      { xCoefficient: 1, yCoefficient: -1, constant: 8 },
+    )).toEqual({ x: 25, y: 17 })
+    expect(constructTwoDigitNumber(7, 4)).toBe(74)
+    expect(reverseTwoDigitNumber(74)).toBe(47)
+    expect(quotientAndRemainder(38, 5)).toEqual({ quotient: 7, remainder: 3 })
+    expect(hasRemainder(38, 5, 3)).toBe(true)
+    expect(smallestPositiveWithRemainders([
+      { divisor: 4, remainder: 2 },
+      { divisor: 3, remainder: 1 },
+    ])).toBe(10)
+    expect(rational(6, 8)).toEqual({ numerator: 3, denominator: 4 })
+    expect(divideByRational(45, rational(3, 4))).toEqual({ numerator: 60, denominator: 1 })
+    expect(rationalToInteger(rational(60, 1))).toBe(60)
+    expect(uniqueIntegerSolutions(1, 20, (value) => value % 6 === 2)).toEqual([2, 8, 14, 20])
+  })
+
+  it('rejects invalid number-problem utility inputs', () => {
+    expect(() => consecutiveSequence(1, 0)).toThrow('positive integer')
+    expect(() => constructTwoDigitNumber(0, 8)).toThrow('Invalid')
+    expect(() => reverseTwoDigitNumber(40)).toThrow('leading-zero')
+    expect(() => quotientAndRemainder(10, 0)).toThrow('positive integer')
+    expect(() => rational(1, 0)).toThrow('cannot be zero')
+    expect(() => uniqueIntegerSolutions(5, 2, () => true)).toThrow('Minimum')
+  })
+
+  it('registers nine versioned number-problem generators', () => {
+    const generators = registeredNumberProblemGenerators()
+    expect(generators.map((generator) => generator.slug)).toEqual([
+      'consecutive-integers',
+      'consecutive-odd-even-integers',
+      'sum-difference-numbers',
+      'product-quotient-numbers',
+      'two-digit-number-problems',
+      'reversed-digit-problems',
+      'remainder-number-problems',
+      'fractional-part-number-problems',
+      'mixed-number-relationships',
+    ])
+    for (const generator of generators) {
+      expect(generator.version).toBe(1)
+      expect(generator.supportedDifficulties).toEqual(['easy', 'medium', 'hard'])
+    }
+  })
+
+  it('is deterministic and preserves versioned immutable snapshots', () => {
+    for (const generator of registeredNumberProblemGenerators()) {
+      const first = generator.generate({ seed: `number-problem-deterministic-${generator.slug}`, difficulty: 'medium' })
+      const second = generator.generate({ seed: `number-problem-deterministic-${generator.slug}`, difficulty: 'medium' })
+      const different = generator.generate({ seed: `number-problem-different-${generator.slug}`, difficulty: 'medium' })
+      expect(first).toEqual(second)
+      expect(JSON.stringify(first)).not.toBe(JSON.stringify(different))
+      expect(first.generatorVersion).toBe(1)
+    }
+  })
+
+  it('validates 1,000 mathematically correct questions per number-problem generator', () => {
+    const difficulties: readonly GeneratorDifficulty[] = ['easy', 'medium', 'hard']
+    for (const generator of registeredNumberProblemGenerators()) {
+      for (let index = 0; index < 1_000; index += 1) {
+        const difficulty = difficulties[index % difficulties.length]
+        const question = generateValidatedQuestion({
+          attemptSeed: `number-problem-math-validation-${generator.slug}-${index}`,
+          generatorSlug: generator.slug,
+          generatorVersion: generator.version,
+          difficulty,
+          position: index + 1,
+          existingSignatures: new Set<string>(),
+        })
+        expectNumberProblemGeneratedQuestionValid(question)
+        expect(question.difficulty).toBe(difficulty)
+      }
+    }
+  })
+
+  it('prevents duplicate number-problem snapshots within one attempt', () => {
+    const signatures = new Set<string>()
+    for (let index = 0; index < 5; index += 1) {
+      const question = generateValidatedQuestion({
+        attemptSeed: 'number-problem-duplicate-prevention',
+        generatorSlug: 'mixed-number-relationships',
         generatorVersion: 1,
         difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard',
         position: index + 1,

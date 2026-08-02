@@ -410,6 +410,36 @@ For production, deploy the same reviewed revision first, then run the confirmed
 script against the live Worker URL using an environment-supplied password or an
 admin-controlled session cookie. The script contains no credentials.
 
+## Number Problems automatic publication
+
+The Number Problems topic is created through the authenticated admin API and
+the existing content tables, so it does not require a content migration. The
+idempotent workflow creates 12 lessons, nine generated practice configurations,
+an eight-question fixed practice, and a 15-question topic quiz as draft content.
+
+Before mutating content, the script runs 1,000 Workers-runtime generations for
+each of the nine Number Problems generators. Stored blocks, configurations, and
+fixed assessments are then validated before practice sets, quiz, lessons, and
+topic are published in that order. A publication failure restores only statuses
+changed during that run and preserves content and audit records.
+
+With the integrated local server running:
+
+```bash
+CSE_NUMBER_PROBLEMS_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-number-problems-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-number-problems
+```
+
+An existing admin session cookie may be used instead:
+
+```bash
+node scripts/create-and-publish-number-problems-topic.mjs --base-url http://127.0.0.1:5173 --cookie "cse_session=<cookie-value>" --confirm create-validate-publish-number-problems
+```
+
+For production, deploy the reviewed generator revision first and run the same
+confirmed command against the live Worker origin. Supply credentials through
+the environment or an administrator-controlled session cookie; the script does
+not contain credentials.
+
 ## D1 setup and migrations
 
 Authenticate and create the production database:
