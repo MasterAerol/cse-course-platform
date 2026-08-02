@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import { useAuth } from '../auth/use-auth'
 import { CurriculumSubject } from '../components/CurriculumSubject'
 import { EnrollmentBadge } from '../components/EnrollmentBadge'
+import { SubjectAssessmentCard } from '../components/SubjectAssessmentCard'
 import { fetchCourseDetail, type CourseDetail } from '../lib/api'
 
 type DetailState =
@@ -92,11 +93,15 @@ export function CourseDetailPage() {
           <section className="curriculum-panel">
             <h2>Curriculum</h2>
             {state.course.curriculum.map((subject) => (
-              <CurriculumSubject
-                key={subject.slug}
-                courseSlug={state.course.slug}
-                subject={subject}
-              />
+              <div key={subject.slug}>
+                <CurriculumSubject
+                  courseSlug={state.course.slug}
+                  subject={subject}
+                />
+                {state.course.subjectAssessment?.assessment.subjectSlug === subject.slug && (
+                  <SubjectAssessmentCard summary={state.course.subjectAssessment} />
+                )}
+              </div>
             ))}
             {user === null && (
               <p className="meta-copy">

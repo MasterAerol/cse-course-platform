@@ -34,6 +34,7 @@ export interface CurriculumSubjectSummary {
 export interface CourseDetail extends CourseSummary {
   description: string | null
   curriculum: CurriculumSubjectSummary[]
+  subjectAssessment: import('./subject-assessment.service').SubjectAssessmentSummary | null
 }
 
 export interface ContinueLesson {

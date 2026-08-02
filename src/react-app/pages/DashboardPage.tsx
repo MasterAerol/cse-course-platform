@@ -5,6 +5,7 @@ import { useAuth } from '../auth/use-auth'
 import { ContinueLearningCard } from '../components/ContinueLearningCard'
 import { EnrollmentBadge } from '../components/EnrollmentBadge'
 import { ProgressBar } from '../components/ProgressBar'
+import { SubjectAssessmentCard } from '../components/SubjectAssessmentCard'
 import {
   fetchStudentDashboard,
   type StudentDashboard,
@@ -181,15 +182,7 @@ export function DashboardPage() {
                   <>
                     <ContinueLearningCard progress={course} />
                     {course.subjectAssessment !== null && (
-                      <section className="continue-card assessment-card">
-                        <p className="eyebrow">Subject assessment</p>
-                        <h3>{course.subjectAssessment.assessment.title}</h3>
-                        <p>{course.subjectAssessment.assessment.questionCount} questions · Pass at {course.subjectAssessment.assessment.passingScore}%</p>
-                        <p className="meta-copy">Status: {course.subjectAssessment.state.replace('_', ' ')}{course.subjectAssessment.bestScore === null ? '' : ` · Best ${course.subjectAssessment.bestScore}%`}</p>
-                        <Link className="button-link" to={`/assessments/${course.subjectAssessment.assessment.slug}`}>
-                          {course.subjectAssessment.state === 'in_progress' ? 'Resume assessment' : course.subjectAssessment.attemptCount > 0 ? 'View assessment' : 'Start assessment'}
-                        </Link>
-                      </section>
+                      <SubjectAssessmentCard summary={course.subjectAssessment} />
                     )}
                   </>
                 ) : (

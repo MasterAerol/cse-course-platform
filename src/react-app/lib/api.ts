@@ -110,7 +110,7 @@ const curriculumSubjectSchema = z.object({
   topics: z.array(curriculumTopicSchema),
 })
 
-const courseDetailSchema = courseSummarySchema.extend({
+const courseDetailBaseSchema = courseSummarySchema.extend({
   description: z.string().nullable(),
   curriculum: z.array(curriculumSubjectSchema),
 })
@@ -149,7 +149,7 @@ const assessmentHistorySchema = z.object({
   strongestTopic: z.string().nullable(), weakestTopic: z.string().nullable(),
 })
 const subjectAssessmentSummarySchema = z.object({
-  assessment: z.object({ id: z.number(), title: z.string(), slug: z.string(), description: z.string().nullable(), subjectTitle: z.string(), subjectSlug: z.string(), questionCount: z.number(), passingScore: z.number(), maximumAttempts: z.number().nullable(), timeLimitMinutes: z.number().nullable(), blueprintVersion: z.number() }),
+  assessment: z.object({ publicId: z.string(), title: z.string(), slug: z.string(), description: z.string().nullable(), subjectTitle: z.string(), subjectSlug: z.string(), questionCount: z.number(), passingScore: z.number(), maximumAttempts: z.number().nullable(), timeLimitMinutes: z.number().nullable(), blueprintVersion: z.number(), status: z.literal('published') }),
   availability: z.object({ available: z.boolean(), reason: z.string().nullable() }),
   state: z.enum(['not_started', 'in_progress', 'passed', 'needs_improvement']),
   inProgressAttemptPublicId: z.string().nullable(), latestScore: z.number().nullable(), bestScore: z.number().nullable(), attemptCount: z.number(), passed: z.boolean(), history: z.array(assessmentHistorySchema),
@@ -169,6 +169,7 @@ const assessmentResultSchema = z.object({
 const assessmentReviewSchema = assessmentResultSchema.extend({ questions: z.array(z.object({ publicId: z.string(), position: z.number(), topic: z.object({ slug: z.string(), title: z.string() }), prompt: z.string(), difficulty: z.string(), selectedChoice: assessmentChoiceSchema.nullable(), correctChoice: assessmentChoiceSchema, isCorrect: z.boolean(), unanswered: z.boolean(), explanation: z.string().nullable(), choices: z.array(assessmentChoiceSchema) })) })
 
 const dashboardCourseWithAssessmentSchema = dashboardCourseSchema.extend({ subjectAssessment: subjectAssessmentSummarySchema.nullable() })
+const courseDetailSchema = courseDetailBaseSchema.extend({ subjectAssessment: subjectAssessmentSummarySchema.nullable() })
 
 const coursesResponseSchema = z.object({
   success: z.literal(true),

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { env } from 'cloudflare:workers'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
   generateSubjectAssessmentQuestions,
@@ -8,6 +9,15 @@ import {
 } from '../src/worker/domain/subject-assessment-blueprint'
 import { calculateSubjectAssessmentBreakdown } from '../src/worker/domain/subject-assessment-results'
 import { scoreAssessment } from '../src/worker/domain/assessment-scoring'
+import {
+  findPublishedSubjectAssessmentForCourse,
+} from '../src/worker/repositories/subject-assessment.repository'
+import {
+  getCourseDetailSubjectAssessment,
+  getSubjectAssessmentAttempt,
+  saveAdminSubjectAssessment,
+  startSubjectAssessmentAttempt,
+} from '../src/worker/services/subject-assessment.service'
 
 describe('Numerical Ability subject assessment quality gate', () => {
   it('validates the versioned 50-question, ten-topic blueprint', () => {
@@ -21,7 +31,7 @@ describe('Numerical Ability subject assessment quality gate', () => {
   })
 
   it('rejects duplicate topics, invalid counts, and unregistered generator versions', () => {
-    const duplicate = { ...numericalAbilityBlueprintV1, topics: [...numericalAbilityBlueprintV1.topics.slice(0, 9), numericalAbilityBlueprintV1.topics[0]!] }
+    const duplicate = { ...numericalAbilityBlueprintV1, topics: [...numericalAbilityBlueprintV1.topics.slice(0, 9), numericalAbilityBlueprintV1.topics[0]] }
     expect(validateSubjectAssessmentBlueprint(duplicate).valid).toBe(false)
     const invalidCount = { ...numericalAbilityBlueprintV1, totalQuestions: 49 }
     expect(validateSubjectAssessmentBlueprint(invalidCount).valid).toBe(false)
@@ -73,5 +83,144 @@ describe('Numerical Ability subject assessment quality gate', () => {
     expect(scoreAssessment(questions, questions.map((question, index) => answerFor(question, index < 35)), 70)).toMatchObject({ earnedPoints: 35, scorePercent: 70, passed: true })
     expect(scoreAssessment(questions, questions.map((question, index) => answerFor(question, index < 34)), 70)).toMatchObject({ earnedPoints: 34, scorePercent: 68, passed: false })
     expect(scoreAssessment(questions, [], 70)).toMatchObject({ earnedPoints: 0, scorePercent: 0, passed: false })
+  })
+})
+
+describe('subject assessment discovery and learner state', () => {
+  let courseId: number
+  let assessmentId: number
+
+  async function createLearner(suffix: string): Promise<number> {
+    const result = await env.DB.prepare(
+      `INSERT INTO users (public_id, email, password_hash, first_name, last_name)
+       VALUES (?1, ?2, 'test-only', 'Assessment', 'Learner')`,
+    ).bind(`assessment-learner-${suffix}`, `assessment-${suffix}@example.test`).run()
+    const userId = Number(result.meta.last_row_id)
+    await env.DB.prepare(
+      `INSERT INTO course_enrollments (user_id, course_id, enrollment_status)
+       VALUES (?1, ?2, 'active')`,
+    ).bind(userId, courseId).run()
+    return userId
+  }
+
+  beforeAll(async () => {
+    const course = await env.DB.prepare(
+      "SELECT id FROM courses WHERE slug = 'cse-professional'",
+    ).first<{ id: number }>()
+    if (course === null) throw new Error('Seeded course is missing.')
+    courseId = course.id
+    const subject = await env.DB.prepare(
+      "SELECT id FROM subjects WHERE course_id = ?1 AND slug = 'numerical-ability'",
+    ).bind(courseId).first<{ id: number }>()
+    if (subject === null) throw new Error('Seeded subject is missing.')
+    const existingTopics = await env.DB.prepare(
+      'SELECT slug FROM topics WHERE subject_id = ?1',
+    ).bind(subject.id).all<{ slug: string }>()
+    const existingSlugs = new Set(existingTopics.results.map((topic) => topic.slug))
+    for (const topic of numericalAbilityBlueprintV1.topics) {
+      if (!existingSlugs.has(topic.topicSlug)) {
+        await env.DB.prepare(
+          `INSERT INTO topics (subject_id, title, slug, position, status)
+           VALUES (?1, ?2, ?3, ?4, 'published')`,
+        ).bind(subject.id, topic.topicTitle, topic.topicSlug, topic.position).run()
+      } else {
+        await env.DB.prepare(
+          "UPDATE topics SET status = 'published' WHERE subject_id = ?1 AND slug = ?2",
+        ).bind(subject.id, topic.topicSlug).run()
+      }
+    }
+
+    const adminResult = await env.DB.prepare(
+      `INSERT INTO users (public_id, email, password_hash, first_name, last_name, role)
+       VALUES ('assessment-admin', 'assessment-admin@example.test', 'test-only', 'Assessment', 'Admin', 'admin')`,
+    ).run()
+    const adminId = Number(adminResult.meta.last_row_id)
+    await saveAdminSubjectAssessment(env.DB, {
+      id: 'assessment-admin',
+      internalUserId: adminId,
+      email: 'assessment-admin@example.test',
+      firstName: 'Assessment',
+      lastName: 'Admin',
+      role: 'admin',
+    }, {
+      title: 'Numerical Ability Subject Assessment',
+      slug: 'numerical-ability-subject-assessment',
+      description: 'A cumulative Numerical Ability assessment.',
+      position: 1,
+      passingScore: 70,
+      questionCount: 50,
+      maximumAttempts: null,
+      timeLimitMinutes: null,
+      showExplanations: true,
+      status: 'published',
+      blueprint: numericalAbilityBlueprintV1,
+    })
+    const stored = await env.DB.prepare(
+      "SELECT id FROM subject_assessments WHERE slug = 'numerical-ability-subject-assessment'",
+    ).first<{ id: number }>()
+    const blueprint = stored === null ? null : await env.DB.prepare(
+      'SELECT id FROM subject_assessment_blueprints WHERE assessment_id = ?1 AND version = 1',
+    ).bind(stored.id).first<{ id: number }>()
+    if (stored === null || blueprint === null) throw new Error('Assessment fixture is missing.')
+    assessmentId = stored.id
+  })
+
+  it('uses the subject relationship and hides a draft assessment', async () => {
+    const published = await findPublishedSubjectAssessmentForCourse(env.DB, courseId)
+    expect(published).toMatchObject({
+      subject_slug: 'numerical-ability',
+      course_slug: 'cse-professional',
+      status: 'published',
+    })
+    await env.DB.prepare('UPDATE subject_assessments SET status = ?1 WHERE id = ?2').bind('draft', assessmentId).run()
+    expect(await findPublishedSubjectAssessmentForCourse(env.DB, courseId)).toBeNull()
+    await env.DB.prepare('UPDATE subject_assessments SET status = ?1 WHERE id = ?2').bind('published', assessmentId).run()
+  })
+
+  it('returns a published assessment for an enrolled learner with zero attempts', async () => {
+    const userId = await createLearner('zero')
+    const summary = await getCourseDetailSubjectAssessment(env.DB, userId, courseId)
+    expect(summary?.assessment.publicId).toEqual(expect.stringContaining('subject-assessment-'))
+    expect(summary).toMatchObject({
+      assessment: { subjectSlug: 'numerical-ability', questionCount: 50, passingScore: 70, status: 'published' },
+      availability: { available: true },
+      state: 'not_started',
+      attemptCount: 0,
+    })
+  })
+
+  it.each([
+    ['in_progress', 'in_progress', null, 'in_progress'],
+    ['failed', 'submitted', 0, 'needs_improvement'],
+    ['passed', 'submitted', 1, 'passed'],
+  ] as const)('maps a %s learner attempt to the card state', async (suffix, status, passed, expectedState) => {
+    const userId = await createLearner(suffix)
+    const attempt = await startSubjectAssessmentAttempt(
+      env.DB,
+      userId,
+      'numerical-ability-subject-assessment',
+    )
+    if (status === 'submitted') {
+      await env.DB.prepare(
+        `UPDATE subject_assessment_attempts
+         SET status = 'submitted', earned_points = ?1, score_percent = ?2,
+             passed = ?3, submitted_at = CURRENT_TIMESTAMP
+         WHERE public_id = ?4`,
+      ).bind(passed === 1 ? 40 : 20, passed === 1 ? 80 : 40, passed, attempt.attempt.publicId).run()
+    }
+    const summary = await getCourseDetailSubjectAssessment(env.DB, userId, courseId)
+    expect(summary?.state).toBe(expectedState)
+    if (status === 'in_progress') expect(summary?.inProgressAttemptPublicId).toBe(attempt.attempt.publicId)
+  })
+
+  it('does not allow a learner to retrieve another learner’s attempt', async () => {
+    const ownerId = await createLearner('owner')
+    const otherId = await createLearner('other')
+    const attempt = await startSubjectAssessmentAttempt(
+      env.DB,
+      ownerId,
+      'numerical-ability-subject-assessment',
+    )
+    await expect(getSubjectAssessmentAttempt(env.DB, otherId, attempt.attempt.publicId)).rejects.toMatchObject({ status: 403 })
   })
 })

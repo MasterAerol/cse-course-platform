@@ -105,7 +105,7 @@ export interface SubjectAssessmentHistoryItem {
 
 export interface SubjectAssessmentSummary {
   assessment: {
-    id: number
+    publicId: string
     title: string
     slug: string
     description: string | null
@@ -116,6 +116,7 @@ export interface SubjectAssessmentSummary {
     maximumAttempts: number | null
     timeLimitMinutes: number | null
     blueprintVersion: number
+    status: 'published'
   }
   availability: {
     available: boolean
@@ -551,7 +552,7 @@ export async function getSubjectAssessmentSummary(
 
   return {
     assessment: {
-      id: assessment.id,
+      publicId: assessment.public_id,
       title: assessment.title,
       slug: assessment.slug,
       description: assessment.description,
@@ -562,6 +563,7 @@ export async function getSubjectAssessmentSummary(
       maximumAttempts: assessment.maximum_attempts,
       timeLimitMinutes: assessment.time_limit_minutes,
       blueprintVersion: assessment.current_blueprint_version,
+      status: 'published',
     },
     availability: {
       available: unavailableReason === null,
@@ -582,6 +584,62 @@ export async function getSubjectAssessmentSummary(
     passed,
     history,
   }
+}
+
+function lockedSubjectAssessmentSummary(
+  assessment: SubjectAssessmentRow,
+  reason: string,
+): SubjectAssessmentSummary {
+  return {
+    assessment: {
+      publicId: assessment.public_id,
+      title: assessment.title,
+      slug: assessment.slug,
+      description: assessment.description,
+      subjectTitle: assessment.subject_title,
+      subjectSlug: assessment.subject_slug,
+      questionCount: assessment.question_count,
+      passingScore: assessment.passing_score,
+      maximumAttempts: assessment.maximum_attempts,
+      timeLimitMinutes: assessment.time_limit_minutes,
+      blueprintVersion: assessment.current_blueprint_version,
+      status: 'published',
+    },
+    availability: { available: false, reason },
+    state: 'not_started',
+    inProgressAttemptPublicId: null,
+    latestScore: null,
+    bestScore: null,
+    attemptCount: 0,
+    passed: false,
+    history: [],
+  }
+}
+
+export async function getCourseDetailSubjectAssessment(
+  database: D1Database,
+  userId: number | null,
+  courseId: number,
+): Promise<SubjectAssessmentSummary | null> {
+  const assessment = await findPublishedSubjectAssessmentForCourse(database, courseId)
+  if (assessment === null) return null
+
+  if (userId === null) {
+    return lockedSubjectAssessmentSummary(
+      assessment,
+      'Sign in with an active enrollment to start this assessment.',
+    )
+  }
+
+  const enrollment = await findCourseEnrollmentById(database, userId, courseId)
+  if (enrollment === null || enrollment.has_active_access !== 1) {
+    return lockedSubjectAssessmentSummary(
+      assessment,
+      'An active course enrollment is required.',
+    )
+  }
+
+  return getSubjectAssessmentSummary(database, userId, assessment.slug)
 }
 
 export async function getDashboardSubjectAssessment(
