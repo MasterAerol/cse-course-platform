@@ -112,6 +112,15 @@ export type GeneratorSlug =
   | 'interleaved-two-pattern-series'
   | 'missing-term-series'
   | 'mixed-number-series'
+  | 'forward-letter-series'
+  | 'backward-letter-series'
+  | 'skipping-letter-series'
+  | 'alternating-letter-series'
+  | 'increasing-gap-letter-series'
+  | 'grouped-letter-series'
+  | 'letter-number-series'
+  | 'missing-term-letter-series'
+  | 'mixed-letter-series'
 
 export type AnswerKind =
   | 'number'
