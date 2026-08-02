@@ -470,6 +470,26 @@ An existing administrator session cookie may be used instead:
 node scripts/create-and-publish-age-problems-topic.mjs --base-url http://127.0.0.1:5173 --cookie "cse_session=<cookie-value>" --confirm create-validate-publish-age-problems
 ```
 
+## Work and Rate Problems automatic publication
+
+Work and Rate Problems is created through the admin API by an idempotent draft → validate → publish script. It requires the published Age Problems topic, creates exactly 12 sequential lessons, configures nine version-1 generated practices (2 easy, 2 medium, 1 hard), an 8-question fixed practice, and a 15-question topic quiz. Before changing D1 content it runs the focused 9,000-question exact-rational generator quality gate. Publication proceeds assessments → lessons → topic; failures roll back only statuses changed by that run.
+
+Use a local or deployed admin account without placing credentials in source control:
+
+```powershell
+$env:CSE_WORK_RATE_ADMIN_PASSWORD = '<admin-password>'
+node scripts/create-and-publish-work-rate-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-work-rate
+Remove-Item Env:CSE_WORK_RATE_ADMIN_PASSWORD
+```
+
+An existing authenticated admin cookie may be supplied instead:
+
+```powershell
+node scripts/create-and-publish-work-rate-topic.mjs --base-url http://127.0.0.1:5173 --cookie "cse_session=<cookie-value>" --confirm create-validate-publish-work-rate
+```
+
+The generator domain represents the whole job as the reduced fraction `1/1`. Rates, phase work, remaining work, and durations stay as reduced integer fractions until display; drains use a negative contribution and required completion is rejected unless the net rate is positive. No D1 migration is needed for this topic because the existing content, practice, quiz, snapshot, and audit schemas are reused.
+
 For production, deploy the reviewed revision first and run the same confirmed
 command against the live Worker origin. Keep the administrator password in an
 environment variable or use an administrator-controlled session cookie; the

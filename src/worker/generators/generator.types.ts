@@ -57,6 +57,15 @@ export type GeneratorSlug =
   | 'parent-child-ages'
   | 'sibling-group-ages'
   | 'mixed-age-relationships'
+  | 'individual-work-rate'
+  | 'combined-work-rate'
+  | 'worker-joins-later'
+  | 'worker-leaves-early'
+  | 'pipes-filling'
+  | 'pipes-filling-draining'
+  | 'efficiency-work-rates'
+  | 'unknown-work-time'
+  | 'mixed-work-rate'
 
 export type AnswerKind =
   | 'number'

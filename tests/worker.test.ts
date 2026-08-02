@@ -88,6 +88,21 @@ import {
   validateParentChildAges,
 } from '../src/worker/domain/age-problems/age-problem-validation'
 import { recomputeAgeProblemAnswer } from '../src/worker/generators/age-problems/age-problem-generators'
+import {
+  WHOLE_JOB,
+  combinedRates as combineWorkRates,
+  evaluateWorkTimeline,
+  individualRate,
+  opposingNetRate,
+  rateFromWorkAndTime,
+  rational as workRational,
+  remainingWork,
+  solveUnknownRate,
+  timeFromWorkAndRate,
+  workFromRateAndTime,
+} from '../src/worker/domain/work-rates/work-rate-math'
+import { validateTimeline } from '../src/worker/domain/work-rates/work-rate-validation'
+import { recomputeWorkRateAnswer } from '../src/worker/generators/work-rates/work-rate-generators'
 import { parseLessonBlock } from '../src/worker/schemas/lesson-block.schemas'
 import type { Bindings } from '../src/worker/types/bindings'
 import type {
@@ -1478,6 +1493,18 @@ const ageProblemGeneratorSlugs = new Set<GeneratorSlug>([
   'mixed-age-relationships',
 ])
 
+const workRateGeneratorSlugs = new Set<GeneratorSlug>([
+  'individual-work-rate',
+  'combined-work-rate',
+  'worker-joins-later',
+  'worker-leaves-early',
+  'pipes-filling',
+  'pipes-filling-draining',
+  'efficiency-work-rates',
+  'unknown-work-time',
+  'mixed-work-rate',
+])
+
 function registeredPercentageGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     percentageGeneratorSlugs.has(generator.slug),
@@ -1517,6 +1544,12 @@ function registeredNumberProblemGenerators() {
 function registeredAgeProblemGenerators() {
   return getRegisteredGenerators().filter((generator) =>
     ageProblemGeneratorSlugs.has(generator.slug),
+  )
+}
+
+function registeredWorkRateGenerators() {
+  return getRegisteredGenerators().filter((generator) =>
+    workRateGeneratorSlugs.has(generator.slug),
   )
 }
 
@@ -4865,6 +4898,97 @@ describe('Dynamic age-problem generator engine', () => {
       const question = generateValidatedQuestion({
         attemptSeed: 'age-problem-duplicate-prevention',
         generatorSlug: 'mixed-age-relationships',
+        generatorVersion: 1,
+        difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard',
+        position: index + 1,
+        existingSignatures: signatures,
+      })
+      signatures.add(question.metadata.canonicalSignature)
+    }
+    expect(signatures.size).toBe(5)
+  })
+})
+
+describe('Dynamic work-rate generator engine', () => {
+  it('performs exact work, rate, time, net-rate, and timeline calculations', () => {
+    expect(rateFromWorkAndTime(WHOLE_JOB, workRational(8))).toEqual(workRational(1, 8))
+    expect(workFromRateAndTime(workRational(1, 8), workRational(3))).toEqual(workRational(3, 8))
+    expect(timeFromWorkAndRate(workRational(3, 4), workRational(1, 8))).toEqual(workRational(6))
+    expect(combineWorkRates([individualRate(workRational(6)), individualRate(workRational(3))])).toEqual(workRational(1, 2))
+    expect(opposingNetRate([workRational(1, 6)], [workRational(1, 12)])).toEqual(workRational(1, 12))
+    expect(remainingWork(workRational(3, 8))).toEqual(workRational(5, 8))
+    expect(solveUnknownRate(workRational(1, 4), [workRational(1, 6)])).toEqual(workRational(1, 12))
+    const phases = [
+      { label: 'solo', rate: workRational(1, 8), time: workRational(2) },
+      { label: 'together', rate: workRational(3, 8), time: workRational(2) },
+    ]
+    expect(evaluateWorkTimeline(phases).completed).toEqual(WHOLE_JOB)
+    expect(validateTimeline(phases, true)).toBe(true)
+  })
+
+  it('rejects invalid rates, impossible net rates, and invalid phase totals', () => {
+    expect(() => rateFromWorkAndTime(WHOLE_JOB, workRational(0))).toThrow('positive')
+    expect(() => opposingNetRate([workRational(1, 12)], [workRational(1, 6)])).toThrow('positive')
+    expect(() => remainingWork(workRational(5, 4))).toThrow('between zero and one')
+    expect(() => solveUnknownRate(workRational(1, 8), [workRational(1, 6)])).toThrow('positive')
+    expect(validateTimeline([
+      { label: 'too much', rate: workRational(1), time: workRational(2) },
+    ], false)).toBe(false)
+  })
+
+  it('registers nine versioned work-rate generators', () => {
+    const generators = registeredWorkRateGenerators()
+    expect(generators.map((generator) => generator.slug)).toEqual([...workRateGeneratorSlugs])
+    expect(generators).toHaveLength(9)
+    for (const generator of generators) {
+      expect(generator.version).toBe(1)
+      expect(generator.supportedDifficulties).toEqual(['easy', 'medium', 'hard'])
+    }
+  })
+
+  it('is deterministic and preserves immutable versioned snapshots', () => {
+    for (const generator of registeredWorkRateGenerators()) {
+      const first = generator.generate({ seed: `work-rate-stable-${generator.slug}`, difficulty: 'medium' })
+      const second = generator.generate({ seed: `work-rate-stable-${generator.slug}`, difficulty: 'medium' })
+      expect(first).toEqual(second)
+      expect(first.generatorVersion).toBe(1)
+    }
+  })
+
+  it('validates 1,000 independently recomputed questions per work-rate generator', () => {
+    const difficulties: readonly GeneratorDifficulty[] = ['easy', 'medium', 'hard']
+    for (const generator of registeredWorkRateGenerators()) {
+      for (let index = 0; index < 1_000; index += 1) {
+        const question = generateValidatedQuestion({
+          attemptSeed: `work-rate-validation-${generator.slug}-${index}`,
+          generatorSlug: generator.slug,
+          generatorVersion: 1,
+          difficulty: difficulties[index % difficulties.length],
+          position: index + 1,
+          existingSignatures: new Set<string>(),
+        })
+        const correct = question.choices.find((choice) => choice.isCorrect)
+        const recomputed = recomputeWorkRateAnswer(question)
+        expect(generator.validate(question)).toEqual({ valid: true, reason: null })
+        expect(question.choices).toHaveLength(4)
+        expect(question.choices.filter((choice) => choice.isCorrect)).toHaveLength(1)
+        expect(new Set(question.choices.map((choice) => choice.text)).size).toBe(4)
+        expect(new Set(question.choices.map((choice) => choice.numericValue)).size).toBe(4)
+        expect(question.choices.filter((choice) => !choice.isCorrect).every((choice) => choice.mistakeType !== null && choice.derivation !== null)).toBe(true)
+        expect(correct?.numericValue).toBeCloseTo(recomputed.numerator / recomputed.denominator, 8)
+        expect(correct?.text).toBe(question.explanation.finalAnswer)
+        expect(question.prompt).not.toMatch(/NaN|Infinity/u)
+        expect(question.explanation.steps.join(' ')).not.toMatch(/NaN|Infinity/u)
+      }
+    }
+  }, 20_000)
+
+  it('prevents duplicate work-rate snapshots within one attempt', () => {
+    const signatures = new Set<string>()
+    for (let index = 0; index < 5; index += 1) {
+      const question = generateValidatedQuestion({
+        attemptSeed: 'work-rate-duplicate-prevention',
+        generatorSlug: 'mixed-work-rate',
         generatorVersion: 1,
         difficulty: index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard',
         position: index + 1,
