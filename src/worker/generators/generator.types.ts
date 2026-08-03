@@ -157,6 +157,15 @@ export type GeneratorSlug =
   | 'schedule-slot-arrangement'
   | 'object-shelf-arrangement'
   | 'mixed-seating-arrangement'
+  | 'table-interpretation'
+  | 'bar-chart-interpretation'
+  | 'line-graph-interpretation'
+  | 'pie-chart-interpretation'
+  | 'percentage-ratio-data'
+  | 'totals-differences-comparisons'
+  | 'average-weighted-data'
+  | 'multi-step-data-interpretation'
+  | 'mixed-data-interpretation'
 
 export type AnswerKind =
   | 'number'
