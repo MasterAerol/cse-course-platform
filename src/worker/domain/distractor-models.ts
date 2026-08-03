@@ -383,6 +383,23 @@ export type DistractorMistakeType =
   | 'ranking_used_rank_difference'
   | 'ranking_wrong_above_below'
   | 'ranking_wrong_movement_direction'
+  | 'syllogism_converse_error'
+  | 'syllogism_inverse_error'
+  | 'syllogism_unsupported_existence'
+  | 'syllogism_skipped_relation'
+  | 'syllogism_reversed_subset'
+  | 'syllogism_unsupported_disjointness'
+  | 'syllogism_disjointness_as_nonexistence'
+  | 'syllogism_quantifier_strengthening'
+  | 'syllogism_quantifier_weakening'
+  | 'syllogism_lost_existential_witness'
+  | 'syllogism_unsupported_overlap'
+  | 'syllogism_possible_as_definite'
+  | 'syllogism_not_definite_as_impossible'
+  | 'syllogism_ignored_negative_premise'
+  | 'syllogism_invalid_either_or_pair'
+  | 'syllogism_either_or_one_follows'
+  | 'syllogism_either_or_not_exhaustive'
 
 export interface DistractorDerivation {
   operation: string

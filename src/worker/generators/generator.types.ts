@@ -139,6 +139,15 @@ export type GeneratorSlug =
   | 'multi-rank-comparison'
   | 'queue-line-ranking'
   | 'mixed-ordering-ranking'
+  | 'universal-affirmative-syllogism'
+  | 'universal-negative-syllogism'
+  | 'particular-affirmative-syllogism'
+  | 'mixed-quantifier-syllogism'
+  | 'valid-conclusion-syllogism'
+  | 'venn-diagram-syllogism'
+  | 'possibility-conclusion-syllogism'
+  | 'either-or-syllogism'
+  | 'mixed-syllogism'
 
 export type AnswerKind =
   | 'number'
