@@ -202,6 +202,15 @@ export type GeneratorSlug =
   | 'tone-formality-completion'
   | 'double-blank-completion'
   | 'mixed-sentence-completion'
+  | 'part-of-speech-usage'
+  | 'verb-tense-consistency'
+  | 'article-determiner-usage'
+  | 'preposition-usage'
+  | 'conjunction-usage'
+  | 'comparative-superlative-usage'
+  | 'commonly-misused-expression'
+  | 'correct-sentence-usage'
+  | 'mixed-grammar-usage'
 
 export type AnswerKind =
   | 'number'

@@ -473,6 +473,18 @@ export type DistractorMistakeType =
   | 'sentence_nonparallel_form'
   | 'sentence_first_blank_only'
   | 'sentence_second_blank_only'
+  | 'grammar_wrong_part_of_speech'
+  | 'grammar_wrong_tense'
+  | 'grammar_tense_shift'
+  | 'grammar_wrong_article'
+  | 'grammar_wrong_determiner'
+  | 'grammar_wrong_preposition'
+  | 'grammar_wrong_conjunction'
+  | 'grammar_double_conjunction'
+  | 'grammar_comparison_error'
+  | 'grammar_countability_error'
+  | 'grammar_confused_word'
+  | 'grammar_semantic_mismatch'
 
 export interface DistractorDerivation {
   operation: string

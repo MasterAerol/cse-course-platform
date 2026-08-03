@@ -23,6 +23,7 @@ import { vocabularyGenerators } from './vocabulary/vocabulary-generators'
 import { synonymsAntonymsGenerators } from './synonyms-antonyms/synonyms-antonyms-generators'
 import { contextCluesGenerators } from './context-clues/context-clues-generators'
 import { sentenceCompletionGenerators } from './sentence-completion/sentence-completion-generators'
+import { grammarUsageGenerators } from './grammar-usage/grammar-usage-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -57,6 +58,7 @@ const generators = [
   ...synonymsAntonymsGenerators,
   ...contextCluesGenerators,
   ...sentenceCompletionGenerators,
+  ...grammarUsageGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(

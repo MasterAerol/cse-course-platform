@@ -1,0 +1,4 @@
+import type { GrammarUsageMistakeType } from './grammar-usage.types'
+export interface GrammarDistractor { text: string; mistakeType: GrammarUsageMistakeType; qualityScore: number }
+export function grammarDistractor(text: string, mistakeType: GrammarUsageMistakeType): GrammarDistractor { return { text, mistakeType, qualityScore: 0.9 } }
+export function selectGrammarDistractors(correct: string, candidates: readonly GrammarDistractor[]): GrammarDistractor[] { const seen = new Set([correct.trim().toLowerCase()]); const selected: GrammarDistractor[] = []; for (const candidate of candidates) { const key = candidate.text.trim().toLowerCase(); if (!seen.has(key)) { seen.add(key); selected.push(candidate) } if (selected.length === 3) break } if (selected.length !== 3) throw new Error('Grammar usage requires three documented distractors.'); return selected }
