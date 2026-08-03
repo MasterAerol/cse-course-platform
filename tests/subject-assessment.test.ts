@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
+  analyticalAbilityBlueprintV1,
   generateSubjectAssessmentQuestions,
   isGeneratorAllowedForTopic,
   numericalAbilityBlueprintV1,
@@ -197,6 +198,41 @@ describe('subject assessment discovery and learner state', () => {
       status: 'published',
       blueprint: numericalAbilityBlueprintV1,
     })
+    await env.DB.prepare(
+      'INSERT OR IGNORE INTO subjects (course_id, title, slug, position, status) VALUES (?1, ?2, ?3, (SELECT COALESCE(MAX(position), 0) + 1 FROM subjects WHERE course_id = ?1), ?4)',
+    ).bind(courseId, 'Analytical Ability', 'analytical-ability', 'published').run()
+    const analyticalSubject = await env.DB.prepare(
+      'SELECT id FROM subjects WHERE course_id = ?1 AND slug = ?2',
+    ).bind(courseId, 'analytical-ability').first<{ id: number }>()
+    if (analyticalSubject === null) throw new Error('Analytical subject is missing.')
+    const analyticalTopics = await env.DB.prepare(
+      'SELECT slug FROM topics WHERE subject_id = ?1',
+    ).bind(analyticalSubject.id).all<{ slug: string }>()
+    const analyticalSlugs = new Set(analyticalTopics.results.map((topic) => topic.slug))
+    for (const topic of analyticalAbilityBlueprintV1.topics) {
+      if (!analyticalSlugs.has(topic.topicSlug)) {
+        await env.DB.prepare(
+          'INSERT INTO topics (subject_id, title, slug, position, status) VALUES (?1, ?2, ?3, ?4, ?5)',
+        ).bind(analyticalSubject.id, topic.topicTitle, topic.topicSlug, topic.position, 'published').run()
+      } else {
+        await env.DB.prepare(
+          'UPDATE topics SET status = ?1 WHERE subject_id = ?2 AND slug = ?3',
+        ).bind('published', analyticalSubject.id, topic.topicSlug).run()
+      }
+    }
+    await saveAdminSubjectAssessment(env.DB, {
+      id: 'assessment-admin', internalUserId: adminId,
+      email: 'assessment-admin@example.test', firstName: 'Assessment',
+      lastName: 'Admin', role: 'admin',
+    }, {
+      title: 'Analytical Ability Subject Assessment',
+      slug: 'analytical-ability-subject-assessment',
+      description: 'A cumulative Analytical Ability assessment.',
+      position: 10, passingScore: 70, questionCount: 45,
+      maximumAttempts: null, timeLimitMinutes: null,
+      showExplanations: true, status: 'published',
+      blueprint: analyticalAbilityBlueprintV1,
+    })
     const stored = await env.DB.prepare(
       "SELECT id FROM subject_assessments WHERE slug = 'numerical-ability-subject-assessment'",
     ).first<{ id: number }>()
@@ -215,7 +251,9 @@ describe('subject assessment discovery and learner state', () => {
       status: 'published',
     })
     await env.DB.prepare('UPDATE subject_assessments SET status = ?1 WHERE id = ?2').bind('draft', assessmentId).run()
-    expect(await findPublishedSubjectAssessmentForCourse(env.DB, courseId)).toBeNull()
+    expect(await findPublishedSubjectAssessmentForCourse(env.DB, courseId)).toMatchObject({
+      subject_slug: 'analytical-ability',
+    })
     await env.DB.prepare('UPDATE subject_assessments SET status = ?1 WHERE id = ?2').bind('published', assessmentId).run()
   })
 
@@ -281,6 +319,17 @@ describe('subject assessment discovery and learner state', () => {
       passed: true,
       resultUrl: `/assessment-attempts/${attempt.attempt.publicId}/results`,
     })
+    expect(result.breakdown.topics).toHaveLength(10)
+  })
+
+  it('submits all 45 answered Analytical snapshots with nine topic results', async () => {
+    const userId = await createLearner('analytical-all')
+    const attempt = await startSubjectAssessmentAttempt(env.DB, userId, 'analytical-ability-subject-assessment')
+    expect(attempt.questions).toHaveLength(45)
+    await answerAttempt(userId, attempt.attempt.publicId, 45, 45)
+    const result = await submitSubjectAssessmentAttempt(env.DB, userId, attempt.attempt.publicId)
+    expect(result).toMatchObject({ earnedPoints: 45, totalPoints: 45, scorePercent: 100, passed: true })
+    expect(result.breakdown.topics).toHaveLength(9)
   })
 
   it('counts unanswered questions as zero', async () => {
@@ -292,12 +341,38 @@ describe('subject assessment discovery and learner state', () => {
     expect(result.breakdown.unansweredCount).toBe(40)
   })
 
+  it('allows unanswered Analytical questions and enforces 32 of 45', async () => {
+    const passId = await createLearner('analytical-pass')
+    const passAttempt = await startSubjectAssessmentAttempt(env.DB, passId, 'analytical-ability-subject-assessment')
+    await answerAttempt(passId, passAttempt.attempt.publicId, 32, 32)
+    const passed = await submitSubjectAssessmentAttempt(env.DB, passId, passAttempt.attempt.publicId)
+    expect(passed).toMatchObject({ earnedPoints: 32, totalPoints: 45, scorePercent: 71, passed: true })
+    expect(passed.breakdown.unansweredCount).toBe(13)
+    const failId = await createLearner('analytical-fail')
+    const failAttempt = await startSubjectAssessmentAttempt(env.DB, failId, 'analytical-ability-subject-assessment')
+    await answerAttempt(failId, failAttempt.attempt.publicId, 31, 31)
+    const failed = await submitSubjectAssessmentAttempt(env.DB, failId, failAttempt.attempt.publicId)
+    expect(failed).toMatchObject({ earnedPoints: 31, totalPoints: 45, scorePercent: 69, passed: false })
+    expect(failed.breakdown.unansweredCount).toBe(14)
+  })
+
   it('passes at the exact 35 of 50 boundary', async () => {
     const userId = await createLearner('submit-boundary')
     const attempt = await startSubjectAssessmentAttempt(env.DB, userId, 'numerical-ability-subject-assessment')
     await answerAttempt(userId, attempt.attempt.publicId, 35)
     const result = await submitSubjectAssessmentAttempt(env.DB, userId, attempt.attempt.publicId)
     expect(result).toMatchObject({ earnedPoints: 35, scorePercent: 70, passed: true })
+  })
+
+  it('rejects an Analytical attempt with only 44 snapshots', async () => {
+    const userId = await createLearner('analytical-incomplete')
+    const attempt = await startSubjectAssessmentAttempt(env.DB, userId, 'analytical-ability-subject-assessment')
+    await env.DB.prepare(
+      'DELETE FROM subject_assessment_question_snapshots WHERE attempt_id = (SELECT id FROM subject_assessment_attempts WHERE public_id = ?1) AND source_position = 45',
+    ).bind(attempt.attempt.publicId).run()
+    await expect(submitSubjectAssessmentAttempt(env.DB, userId, attempt.attempt.publicId)).rejects.toMatchObject({
+      status: 409, code: 'ASSESSMENT_SNAPSHOT_INVALID',
+    })
   })
 
   it('is idempotent and keeps submitted answers immutable', async () => {

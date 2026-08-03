@@ -840,8 +840,29 @@ export async function submitSubjectAssessmentAttempt(
     ),
     findSubjectAssessmentAnswers(database, attempt.id),
   ])
-  if (questions.length !== 50) {
+  if (
+    attempt.question_count !== attempt.blueprint_total_questions ||
+    questions.length !== attempt.question_count
+  ) {
     throw new AppError(409, 'ASSESSMENT_SNAPSHOT_INVALID', 'This assessment attempt is incomplete.')
+  }
+  const questionById = new Map(
+    questions.map((question) => [question.id, question]),
+  )
+  const hasMalformedAnswer = answers.some((answer) => {
+    const question = questionById.get(answer.snapshot_id)
+    return (
+      question === undefined ||
+      (
+        answer.selected_choice_id !== null &&
+        !question.choices.some(
+          (choice) => choice.id === answer.selected_choice_id,
+        )
+      )
+    )
+  })
+  if (hasMalformedAnswer) {
+    throw new AppError(409, 'ASSESSMENT_ANSWER_INVALID', 'A saved assessment answer is invalid.')
   }
   const score = scoreAssessment(
     questions.map((question) => ({

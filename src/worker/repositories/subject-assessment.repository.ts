@@ -69,6 +69,7 @@ export interface SubjectAssessmentAttemptRow {
   question_count: number
   show_explanations: 0 | 1
   blueprint_version: number
+  blueprint_total_questions: number
   subject_title: string
   subject_slug: string
   course_id: number
@@ -491,6 +492,7 @@ const attemptSelect = `subject_assessment_attempts.id,
   subject_assessments.question_count,
   subject_assessments.show_explanations,
   subject_assessment_blueprints.version AS blueprint_version,
+  subject_assessment_blueprints.total_questions AS blueprint_total_questions,
   subjects.title AS subject_title,
   subjects.slug AS subject_slug,
   courses.id AS course_id,
