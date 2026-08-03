@@ -24,6 +24,7 @@ import { synonymsAntonymsGenerators } from './synonyms-antonyms/synonyms-antonym
 import { contextCluesGenerators } from './context-clues/context-clues-generators'
 import { sentenceCompletionGenerators } from './sentence-completion/sentence-completion-generators'
 import { grammarUsageGenerators } from './grammar-usage/grammar-usage-generators'
+import { subjectVerbAgreementGenerators } from './subject-verb-agreement/subject-verb-agreement-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -59,6 +60,7 @@ const generators = [
   ...contextCluesGenerators,
   ...sentenceCompletionGenerators,
   ...grammarUsageGenerators,
+  ...subjectVerbAgreementGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(

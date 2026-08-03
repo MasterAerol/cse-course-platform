@@ -1,0 +1,23 @@
+import type { AgreementEntry, SubjectNumber, SubjectPerson } from './subject-verb-agreement.types'
+
+const singularIndefinites = new Set(['each', 'either', 'neither', 'everyone', 'everybody', 'anyone', 'anybody', 'someone', 'somebody', 'no one', 'nobody'])
+const pluralIndefinites = new Set(['both', 'few', 'many', 'several'])
+const contextIndefinites = new Set(['all', 'any', 'most', 'none', 'some'])
+const specialNumbers = new Map<string, SubjectNumber>([['news_singular', 'singular'], ['field_singular', 'singular'], ['plural_only', 'plural'], ['pair_of', 'singular'], ['one_of', 'singular'], ['more_than_one', 'singular'], ['a_number_of', 'plural'], ['the_number_of', 'singular']])
+
+export function normalizeAgreementText(value: string): string { return value.trim().toLowerCase().replaceAll(/\s+/gu, ' ') }
+export function reconstructAgreementSentence(entry: AgreementEntry, choice: string): string { return entry.sentenceTemplate.replace('____', choice) }
+export function classifySubjectNumber(entry: AgreementEntry): SubjectNumber { return entry.subjectNumber }
+export function classifySubjectPerson(entry: AgreementEntry): SubjectPerson { return entry.subjectPerson }
+export function selectSimplePresentForm(lemma: string, number: SubjectNumber, person: SubjectPerson): string { if (lemma === 'be') return number === 'singular' && person === 'third' ? 'is' : 'are'; if (lemma === 'have') return number === 'singular' && person === 'third' ? 'has' : 'have'; if (lemma === 'do') return number === 'singular' && person === 'third' ? 'does' : 'do'; if (number !== 'singular' || person !== 'third') return lemma; if (/[^aeiou]y$/iu.test(lemma)) return `${lemma.slice(0, -1)}ies`; if (/(?:s|sh|ch|x|z|o)$/iu.test(lemma)) return `${lemma}es`; return `${lemma}s` }
+export function verbFormValid(entry: AgreementEntry): boolean { return selectSimplePresentForm(entry.verbLemma, entry.subjectNumber, entry.subjectPerson) === entry.correctForm }
+export function compoundSubjectValid(entry: AgreementEntry): boolean { if (entry.skill !== 'compound') return true; if (/^(?:Every|Each)\b/iu.test(entry.grammaticalSubject)) return entry.subjectNumber === 'singular'; return entry.grammaticalSubject.includes(' and ') && entry.subjectNumber === 'plural' }
+export function proximityAgreementValid(entry: AgreementEntry): boolean { return entry.skill !== 'proximity' || entry.nearerSubjectNumber === entry.subjectNumber }
+export function classifyIndefinitePronoun(pronoun: string): 'singular' | 'plural' | 'context' | null { const normalized = normalizeAgreementText(pronoun); if (singularIndefinites.has(normalized)) return 'singular'; if (pluralIndefinites.has(normalized)) return 'plural'; if (contextIndefinites.has(normalized)) return 'context'; return null }
+export function indefinitePronounValid(entry: AgreementEntry): boolean { if (entry.skill !== 'indefinite' || entry.indefiniteClass === null) return entry.skill !== 'indefinite'; const first = normalizeAgreementText(entry.grammaticalSubject).split(' of ')[0] ?? ''; return classifyIndefinitePronoun(first) === entry.indefiniteClass && (entry.indefiniteClass !== 'context' || entry.controllingNoun !== null) }
+export function collectiveQuantityValid(entry: AgreementEntry): boolean { if (entry.skill !== 'collective_quantity') return true; if (entry.collectiveAsUnit !== null) return entry.collectiveAsUnit && entry.subjectNumber === 'singular'; return entry.controllingNoun !== null }
+export function interveningPhraseValid(entry: AgreementEntry): boolean { return entry.skill !== 'intervening' || entry.controllingNoun !== null && normalizeAgreementText(entry.grammaticalSubject).includes(normalizeAgreementText(entry.controllingNoun)) }
+export function invertedSubjectValid(entry: AgreementEntry): boolean { return entry.skill !== 'inverted' || entry.invertedSubject !== null && normalizeAgreementText(entry.invertedSubject) === normalizeAgreementText(entry.grammaticalSubject) }
+export function specialCaseValid(entry: AgreementEntry): boolean { return entry.skill !== 'special' || entry.specialCase !== null && specialNumbers.get(entry.specialCase) === entry.subjectNumber }
+export function agreementSentenceValid(entry: AgreementEntry): boolean { const sentence = reconstructAgreementSentence(entry, entry.correctForm); return sentence === entry.completedSentence && sentence.length >= 24 && /[.!?]$/u.test(sentence) && !sentence.includes('____') }
+export function agreementAnswerMatches(entry: AgreementEntry, choice: string): boolean { return normalizeAgreementText(choice) === normalizeAgreementText(entry.correctForm) && reconstructAgreementSentence(entry, choice) === entry.completedSentence }

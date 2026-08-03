@@ -211,6 +211,15 @@ export type GeneratorSlug =
   | 'commonly-misused-expression'
   | 'correct-sentence-usage'
   | 'mixed-grammar-usage'
+  | 'basic-subject-verb-agreement'
+  | 'compound-subject-agreement'
+  | 'either-or-neither-nor-agreement'
+  | 'indefinite-pronoun-agreement'
+  | 'collective-quantity-agreement'
+  | 'intervening-phrase-agreement'
+  | 'inverted-sentence-agreement'
+  | 'special-case-agreement'
+  | 'mixed-subject-verb-agreement'
 
 export type AnswerKind =
   | 'number'

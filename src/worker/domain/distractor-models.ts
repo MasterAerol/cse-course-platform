@@ -485,6 +485,17 @@ export type DistractorMistakeType =
   | 'grammar_countability_error'
   | 'grammar_confused_word'
   | 'grammar_semantic_mismatch'
+  | 'agreement_nearest_noun'
+  | 'agreement_singular_for_plural'
+  | 'agreement_plural_for_singular'
+  | 'agreement_wrong_proximity'
+  | 'agreement_indefinite_as_plural'
+  | 'agreement_and_as_or'
+  | 'agreement_along_with_as_and'
+  | 'agreement_collective_as_plural'
+  | 'agreement_quantity_as_plural'
+  | 'agreement_always_there_is'
+  | 'agreement_final_s'
 
 export interface DistractorDerivation {
   operation: string
