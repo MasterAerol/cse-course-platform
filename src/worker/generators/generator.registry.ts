@@ -15,6 +15,7 @@ import { analogyClassificationGenerators } from './analogy-classification/analog
 import { numberSeriesGenerators } from './number-series/number-series-generators'
 import { letterSeriesGenerators } from './letter-series/letter-series-generators'
 import { codingDecodingGenerators } from './coding-decoding/coding-decoding-generators'
+import { orderingRankingGenerators } from './ordering-ranking/ordering-ranking-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -41,6 +42,7 @@ const generators = [
   ...numberSeriesGenerators,
   ...letterSeriesGenerators,
   ...codingDecodingGenerators,
+  ...orderingRankingGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(

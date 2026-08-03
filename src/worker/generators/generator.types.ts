@@ -130,6 +130,15 @@ export type GeneratorSlug =
   | 'infer-coding-rule'
   | 'multi-step-coding-rules'
   | 'mixed-coding-decoding'
+  | 'left-right-ranking'
+  | 'total-from-two-ranks'
+  | 'rearranged-position'
+  | 'comparative-ordering'
+  | 'before-after-order'
+  | 'middle-position'
+  | 'multi-rank-comparison'
+  | 'queue-line-ranking'
+  | 'mixed-ordering-ranking'
 
 export type AnswerKind =
   | 'number'
