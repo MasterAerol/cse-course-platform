@@ -1,0 +1,32 @@
+*** Begin Patch
+*** Update File: src/worker/generators/generator.types.ts
+@@
+   | 'mixed-synonyms-antonyms'
++  | 'definition-context-clue'
++  | 'synonym-context-clue'
++  | 'antonym-contrast-clue'
++  | 'example-illustration-clue'
++  | 'cause-effect-context-clue'
++  | 'general-sense-context-clue'
++  | 'multiple-meaning-context-clue'
++  | 'two-sentence-context-clue'
++  | 'mixed-context-clues'
+*** Update File: src/worker/generators/generator.registry.ts
+@@
+ import { synonymsAntonymsGenerators } from './synonyms-antonyms/synonyms-antonyms-generators'
++import { contextCluesGenerators } from './context-clues/context-clues-generators'
+@@
+   ...synonymsAntonymsGenerators,
++  ...contextCluesGenerators,
+*** Update File: src/worker/domain/distractor-models.ts
+@@
+   | 'synant_similar_spelling'
++  | 'context_wrong_sense'
++  | 'context_related_not_equivalent'
++  | 'context_reversed_contrast'
++  | 'context_example_not_category'
++  | 'context_effect_not_meaning'
++  | 'context_wrong_part_of_speech'
++  | 'context_unsupported_familiar_meaning'
++  | 'context_semantic_mismatch'
+*** End Patch

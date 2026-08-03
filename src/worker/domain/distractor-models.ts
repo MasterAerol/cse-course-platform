@@ -455,6 +455,14 @@ export type DistractorMistakeType =
   | 'synant_register_mismatch'
   | 'synant_wrong_sense'
   | 'synant_similar_spelling'
+  | 'context_wrong_sense'
+  | 'context_related_not_equivalent'
+  | 'context_reversed_contrast'
+  | 'context_example_not_category'
+  | 'context_effect_not_meaning'
+  | 'context_wrong_part_of_speech'
+  | 'context_unsupported_familiar_meaning'
+  | 'context_semantic_mismatch'
 
 export interface DistractorDerivation {
   operation: string

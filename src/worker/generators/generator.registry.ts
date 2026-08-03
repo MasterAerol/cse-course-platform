@@ -21,6 +21,7 @@ import { seatingArrangementGenerators } from './seating-arrangements/seating-arr
 import { dataInterpretationGenerators } from './data-interpretation/data-interpretation-generators'
 import { vocabularyGenerators } from './vocabulary/vocabulary-generators'
 import { synonymsAntonymsGenerators } from './synonyms-antonyms/synonyms-antonyms-generators'
+import { contextCluesGenerators } from './context-clues/context-clues-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -53,6 +54,7 @@ const generators = [
   ...dataInterpretationGenerators,
   ...vocabularyGenerators,
   ...synonymsAntonymsGenerators,
+  ...contextCluesGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(

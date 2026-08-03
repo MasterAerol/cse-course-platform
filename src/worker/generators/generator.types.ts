@@ -184,6 +184,15 @@ export type GeneratorSlug =
   | 'formal-informal-equivalent'
   | 'sentence-synonym-antonym'
   | 'mixed-synonyms-antonyms'
+  | 'definition-context-clue'
+  | 'synonym-context-clue'
+  | 'antonym-contrast-clue'
+  | 'example-illustration-clue'
+  | 'cause-effect-context-clue'
+  | 'general-sense-context-clue'
+  | 'multiple-meaning-context-clue'
+  | 'two-sentence-context-clue'
+  | 'mixed-context-clues'
 
 export type AnswerKind =
   | 'number'

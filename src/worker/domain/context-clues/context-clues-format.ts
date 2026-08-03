@@ -1,0 +1,1 @@
+import type{ContextClueType}from'./context-clues.types';export const clueTypeLabel=(x:ContextClueType)=>x.replaceAll('_',' ');export const contextNumericValue=(s:string)=>[...s].reduce((n,c)=>(n*31+(c.codePointAt(0)??0))%1000003,0)
