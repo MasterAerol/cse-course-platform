@@ -121,6 +121,15 @@ export type GeneratorSlug =
   | 'letter-number-series'
   | 'missing-term-letter-series'
   | 'mixed-letter-series'
+  | 'letter-shift-codes'
+  | 'reverse-alphabet-codes'
+  | 'letter-position-codes'
+  | 'word-substitution-codes'
+  | 'symbol-replacement-codes'
+  | 'mixed-letter-number-codes'
+  | 'infer-coding-rule'
+  | 'multi-step-coding-rules'
+  | 'mixed-coding-decoding'
 
 export type AnswerKind =
   | 'number'

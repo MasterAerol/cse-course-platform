@@ -337,6 +337,20 @@ export type DistractorMistakeType =
   | 'letter_wrong_letter_correct_number'
   | 'letter_used_left_side_only'
   | 'letter_used_right_side_only'
+  | 'coding_wrong_direction'
+  | 'coding_wrong_step'
+  | 'coding_reversed_order'
+  | 'coding_no_transformation'
+  | 'coding_wrong_rule_family'
+  | 'coding_wrong_format'
+  | 'coding_used_word_length'
+  | 'coding_reversed_mapping'
+  | 'coding_used_wrong_example'
+  | 'coding_wrong_symbol_mapping'
+  | 'coding_dropped_component'
+  | 'coding_wrong_number_positions'
+  | 'coding_steps_in_wrong_order'
+  | 'coding_stopped_after_first_step'
 
 export interface DistractorDerivation {
   operation: string
