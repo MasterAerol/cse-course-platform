@@ -1,0 +1,91 @@
+export const topicSlug = 'seating-and-arrangement-problems'
+export const topicTitle = 'Seating and Arrangement Problems'
+export const topicDescription = 'A structured course on arranging people or objects in rows, circles, positions, schedules, and simple logical layouts using exact clues.'
+
+export const lessonSpecs = [
+  ['Understanding Arrangements and Positions', 'understanding-arrangements-and-positions', 'reading', 18],
+  ['Linear Seating in One Row', 'linear-seating-in-one-row', 'practice', 16],
+  ['Left, Right, and Immediate Neighbors', 'left-right-and-immediate-neighbors', 'practice', 16],
+  ['People Between and Fixed Gaps', 'people-between-and-fixed-gaps', 'practice', 17],
+  ['Circular Seating Fundamentals', 'circular-seating-fundamentals', 'practice', 18],
+  ['Facing Toward or Away from the Center', 'facing-toward-or-away-from-center', 'practice', 18],
+  ['Position Swaps and Rearrangements', 'position-swaps-and-rearrangements', 'practice', 17],
+  ['Scheduling and Time-Slot Arrangements', 'scheduling-and-time-slot-arrangements', 'practice', 18],
+  ['Object and Shelf Arrangements', 'object-and-shelf-arrangements', 'practice', 16],
+  ['Mixed Seating and Arrangement Problems', 'mixed-seating-and-arrangement-problems', 'practice', 20],
+  ['Mixed Seating and Arrangement Practice', 'mixed-seating-and-arrangement-practice', 'practice', 20],
+  ['Seating and Arrangement Topic Quiz', 'seating-and-arrangement-topic-quiz', 'quiz', 25],
+].map(([title, slug, lessonType, minutes], index) => ({ title, slug, lessonType, minutes, position: index + 1 }))
+
+export const generatedByLesson = {
+  'linear-seating-in-one-row': 'linear-row-seating',
+  'left-right-and-immediate-neighbors': 'left-right-neighbor',
+  'people-between-and-fixed-gaps': 'fixed-gap-seating',
+  'circular-seating-fundamentals': 'circular-seating',
+  'facing-toward-or-away-from-center': 'facing-direction-seating',
+  'position-swaps-and-rearrangements': 'rearrangement-swap',
+  'scheduling-and-time-slot-arrangements': 'schedule-slot-arrangement',
+  'object-and-shelf-arrangements': 'object-shelf-arrangement',
+  'mixed-seating-and-arrangement-problems': 'mixed-seating-arrangement',
+}
+
+const heading = (text, level = 2) => ({ blockType: 'heading', content: { text, level } })
+const paragraph = (text) => ({ blockType: 'paragraph', content: { text } })
+const callout = (title, text, variant = 'info') => ({ blockType: 'callout', content: { title, text, variant } })
+const formula = (expression, description) => ({ blockType: 'formula', content: { expression, description } })
+const example = (title, problem, steps, answer) => ({ blockType: 'example', content: { title, problem, steps, answer } })
+const summary = (items) => ({ blockType: 'summary', content: { items } })
+
+const teaching = {
+  'linear-seating-in-one-row': ['Place fixed seats and ends first, then connect immediate-left or immediate-right pairs.', 'Use one stated viewer perspective throughout.', ['A is at the left end. B is immediately right of A. C is immediately right of B.', ['Place A first.', 'Attach B, then C.', 'The row begins A – B – C.'], 'C is third from the left.'], ['D is left of E, and E is immediately left of F.', ['Keep D somewhere before E.', 'Join E – F as a block.', 'Fit the block without reversing it.'], 'D must be left of both E and F.']],
+  'left-right-and-immediate-neighbors': ['Immediate means adjacent; two places right means an exact position difference of two.', 'People at an end have one neighbor; others have two.', ['A – B – C – D', ['B is one seat right of A.', 'C is two seats right of A.', 'Only adjacent seats are immediate.'], 'B is immediately right of A.'], ['E sits next to F but not G.', ['Reserve one adjacent seat for E and F.', 'Test the other neighbor against G.', 'Reject any layout putting E next to G.'], 'The valid layout satisfies both neighbor rules.']],
+  'people-between-and-fixed-gaps': ['If N people are between two labels, their position difference is N + 1.', 'Do not count either endpoint as a person between.', ['Three people sit between A and B.', ['Convert three between to a difference of four.', 'If A is position 1, B is position 5.', 'Check the three occupied interior seats.'], 'The endpoints are four positions apart.'], ['B is four positions right of A.', ['Add four to A’s position.', 'The three seats strictly inside are between them.', 'Keep the direction rightward.'], 'Three people are between A and B.']],
+  'circular-seating-fundamentals': ['In a circle, the last and first listed seats are adjacent; rotations represent the same arrangement.', 'Fix one person as an anchor, then read the order clockwise.', ['Clockwise: A – B – C – D.', ['Fix A at the top.', 'B is clockwise from A.', 'After D, wrap around to A.'], 'D is immediately counterclockwise from A.'], ['Six people sit equally spaced; A is opposite D.', ['An opposite seat is half a circle away.', 'Half of six is three steps.', 'Count exactly three clockwise seats.'], 'A and D are opposite.']],
+  'facing-toward-or-away-from-center': ['Facing the center: left is clockwise and right is counterclockwise. Facing outward reverses both.', 'Attach orientation to the person whose left or right is queried.', ['A faces the center.', ['Start at A’s seat.', 'For center-facing A, move clockwise for left.', 'Stop after the stated number of seats.'], 'A’s immediate left is the clockwise neighbor.'], ['B faces outward.', ['Start at B.', 'For outward-facing B, move counterclockwise for left.', 'Do not use another person’s orientation.'], 'B’s immediate left is the counterclockwise neighbor.']],
+  'position-swaps-and-rearrangements': ['A swap exchanges two occupants; a move removes one label and shifts every intervening label.', 'Write the complete before and after rows.', ['A – B – C – D; A and D swap.', ['Put D in A’s old seat.', 'Put A in D’s old seat.', 'Leave B and C unchanged.'], 'D – B – C – A.'], ['A – B – C – D; D moves to position 2.', ['Remove D.', 'Insert D after A.', 'Shift B and C one place right.'], 'A – D – B – C.']],
+  'scheduling-and-time-slot-arrangements': ['Treat slots as a left-to-right row: earlier means left, later means right.', 'Fixed slots and not-first/not-last constraints should be applied before weaker order clues.', ['A before B; C is slot 1; B is slot 3.', ['Place C and B.', 'The only open slot before B is slot 2.', 'Put A in slot 2.'], 'C – A – B.'], ['Exactly one task lies between D and E.', ['Their slot difference is two.', 'Test each pair of slots two apart.', 'Apply all other fixed constraints.'], 'D and E are not adjacent.']],
+  'object-and-shelf-arrangements': ['Shelf clues use the same exact row rules; object labels remain distinct even if categories are similar.', 'Never infer size, color, or shape unless the clue states it.', ['Manual is at the left end; Guide is immediately right.', ['Place Manual first.', 'Attach Guide.', 'Fill remaining items using the other clues.'], 'Manual – Guide begins the shelf.'], ['Report is between Folder and Ledger.', ['Place Folder and Ledger on opposite sides.', 'Put Report strictly inside their positions.', 'Check whether “immediately” was stated; here it was not.'], 'Report is somewhere between the two objects.']],
+  'mixed-seating-and-arrangement-problems': ['Mixed problems still have one primary layout: identify it, translate every clue, and rebuild the complete arrangement.', 'A candidate answer is valid only if it satisfies every clue.', ['Row with an end, an immediate pair, and a gap.', ['Place the end.', 'Join the immediate pair.', 'Use N + 1 for the gap.', 'Check every clue against the row.'], 'The surviving arrangement is the answer.'], ['Circle followed by a swap.', ['Normalize the original circle.', 'Apply clockwise and facing rules.', 'Exchange both occupants.', 'Answer from the updated circle.'], 'Use the final, not original, arrangement.']],
+}
+
+function introductionBlocks() {
+  return [heading('Understanding Arrangements and Positions'), paragraph('An arrangement problem places distinct people or objects into positions under exact conditions. Translate each clue into a positional rule and use only the stated information.'), callout('Perspective first', 'For a row, use the stated viewer perspective. For a circle, note clockwise order and whether the relevant person faces the center or outward.', 'important'), heading('Clue translation guide', 3), formula('A immediately left of B', 'The pair is A – B with no occupied seat between them.'), formula('A somewhere left of B', 'A has a smaller position number; other labels may be between them.'), formula('N people between A and B', 'The absolute position difference is N + 1.'), formula('A next to B / adjacent', 'Their seats differ by one in a row; in a circle the first and last seats also touch.'), paragraph('“Between” places one label inside the span of two others. “At one end” means the first or last row position. “Opposite” in an even circle means half the seats away.'), example('Text row diagram', 'A is immediately left of B; C is two places right of A.', ['Write numbered seats: 1  2  3.', 'Place A – B in seats 1–2.', 'Two places right of A is seat 3, so place C there.'], '1:A  2:B  3:C'), example('Text circle diagram', 'Clockwise order is J, K, L, M.', ['Fix J at a reference seat.', 'Continue clockwise J → K → L → M → J.', 'Count half of four seats for the opposite position.'], 'J is opposite L; K is opposite M.'), callout('Strongest clues first', 'Place fixed positions and ends, join immediate pairs, apply exact gaps, then use broader left/right or between clues.', 'info'), callout('Common mistakes', 'Do not confuse immediate with somewhere, reverse direction, count endpoints, ignore circular wraparound, distinguish rotations, misread facing direction, or use only part of the clue set.', 'warning'), summary(['State the perspective.', 'Translate every clue exactly.', 'Place fixed and strongest clues first.', 'Check every final position against every clue.', 'Reject ambiguous or contradictory layouts.'])]
+}
+
+export function blocksFor(slug) {
+  if (slug === 'understanding-arrangements-and-positions') return introductionBlocks()
+  const item = teaching[slug] ?? ['Review exact arrangement rules before attempting the assessment.', 'Use one perspective and check every clue.', ['A is immediately left of B.', ['Join A – B.', 'Do not insert another label.'], 'A and B are adjacent.'], ['One person sits between C and D.', ['Use a position difference of two.', 'Check both possible directions.'], 'C and D are two positions apart.']]
+  return [heading(lessonSpecs.find((lesson) => lesson.slug === slug)?.title ?? topicTitle), paragraph(item[0]), callout('Clue translation', item[1]), heading('Worked examples', 3), example('Example 1', item[2][0], item[2][1], item[2][2]), example('Example 2', item[3][0], item[3][1], item[3][2]), callout('Common mistakes', 'Watch for reversed direction, ignored immediacy, off-by-one gaps, missed wraparound, wrong facing rules, incomplete swaps, and answers that violate one clue.', 'warning'), heading('Practice method', 3), paragraph('Build the layout from the strongest constraints, answer only after checking every clue, and reconstruct the arrangement in the explanation.'), summary(['Fix the perspective.', 'Translate clues.', 'Build the layout.', 'Verify every constraint.', 'Continue to practice.'])]
+}
+
+export const mixedQuestions = [
+  ['A, B, C, and D sit in a row. A is at the left end, B is immediately right of A, and C is immediately right of B. Who is third?', ['C', 'B', 'D', 'A'], 0, 'The row begins A – B – C, so C is third. Distractors model reversal, ignored immediacy, and an end-condition error.'],
+  ['In the row A – B – C – D, who is immediately left of C?', ['B', 'D', 'A', 'C'], 0, 'B occupies the adjacent seat directly left of C. Distractors model reversed direction, nonadjacency, and self-selection.'],
+  ['Exactly two people sit between E and F. What is their position difference?', ['3', '2', '4', '1'], 0, 'Two between means a difference of 2 + 1 = 3. Distractors model off-by-one and endpoint-counting errors.'],
+  ['Clockwise order is J – K – L – M. Who sits opposite J?', ['L', 'K', 'M', 'J'], 0, 'Half of four seats is two steps, placing L opposite J. Distractors model clockwise-neighbor, counterclockwise-neighbor, and self-seat errors.'],
+  ['Clockwise order is P – Q – R – S. P faces the center. Who is immediately to P’s left?', ['Q', 'S', 'R', 'P'], 0, 'For a center-facing person, left is clockwise, so Q is correct. Distractors model reversed direction, wrong opposite, and self-seat errors.'],
+  ['The row is A – B – C – D. A and D swap. Who is first?', ['D', 'A', 'B', 'C'], 0, 'Both occupants exchange positions, producing D – B – C – A. Distractors model using the original row and partial-swap errors.'],
+  ['Tasks are scheduled C – A – B. Which task occurs immediately before B?', ['A', 'C', 'B', 'None'], 0, 'A is directly before B in the schedule. Distractors model reversed order, ignored adjacency, and an unsupported empty slot.'],
+  ['Manual is at the left end, Guide is immediately right of Manual, and Report is immediately right of Guide. Which item is third?', ['Report', 'Guide', 'Manual', 'Cannot be determined'], 0, 'The chain is Manual – Guide – Report. Distractors model reversal, end violation, and ignored combined clues.'],
+]
+
+export const quizQuestions = [
+  ['What does “A is immediately left of B” mean?', ['A is adjacent to B on B’s left.', 'A is anywhere left of B.', 'B is left of A.', 'One person is between A and B.'], 0, 'Immediate means adjacent on the stated side. Distractors model ignored immediacy, reversal, and an invented gap.'],
+  ['A, B, C, D sit in a row. C is fixed in position 2. Who is in position 2?', ['C', 'B', 'A', 'D'], 0, 'A fixed-position clue directly places C in seat 2. Distractors model ignoring the fixed clue.'],
+  ['Which positions are the ends of a six-seat row?', ['1 and 6', '1 and 5', '2 and 6', '2 and 5'], 0, 'The first and last positions are the two ends. Distractors model inclusive-count and interior-seat errors.'],
+  ['In A – B – C – D, which two are C’s immediate neighbors?', ['B and D', 'A and B', 'A and D', 'B and C'], 0, 'The adjacent occupants on both sides of C are B and D. Distractors model nonadjacency and self-selection.'],
+  ['If three people sit between A and B, how far apart are their positions?', ['4', '3', '5', '2'], 0, 'The difference is people between plus one: 3 + 1 = 4. Distractors model off-by-one counting.'],
+  ['A is in position 2 and B is in position 6. How many people can sit strictly between them?', ['3', '4', '2', '5'], 0, 'Positions 3, 4, and 5 lie strictly between 2 and 6. Distractors model counting one or both endpoints.'],
+  ['Clockwise order is A – B – C – D. Who is immediately clockwise from D?', ['A', 'C', 'B', 'D'], 0, 'Circular order wraps from D back to A. Distractors model straight-line and reversed-clockwise errors.'],
+  ['Clockwise order is A – B – C – D. Who is immediately counterclockwise from A?', ['D', 'B', 'C', 'A'], 0, 'Counterclockwise from A wraps to D. Distractors model reversed direction and wrong opposite.'],
+  ['In a six-seat circle, how many steps away is the opposite seat?', ['3', '2', '4', '6'], 0, 'Opposite is half the circle: 6 ÷ 2 = 3 steps. Distractors model neighbor and full-circle counts.'],
+  ['For a person facing the center, left is:', ['Clockwise', 'Counterclockwise', 'Always opposite', 'Undefined'], 0, 'Center-facing left maps to clockwise. Distractors model reversal and ignored orientation.'],
+  ['For a person facing away from the center, left is:', ['Counterclockwise', 'Clockwise', 'Always opposite', 'The viewer’s left'], 0, 'Outward-facing left maps to counterclockwise. Distractors model using the center-facing rule and an outside viewpoint.'],
+  ['A – B – C – D becomes what after A and C swap?', ['C – B – A – D', 'C – A – B – D', 'A – B – C – D', 'A – C – B – D'], 0, 'Exchanging both positions gives C – B – A – D. Distractors model a partial swap, the original row, and a move rather than swap.'],
+  ['Task A is before B, B is before C, and C is in slot 3. Which task is first?', ['A', 'B', 'C', 'Cannot be determined'], 0, 'The chain A before B before C fills slots 1–3. Distractors model reversed order and ignored transitivity.'],
+  ['Manual is at the left end and Guide is immediately right of it. Which shelf beginning is valid?', ['Manual – Guide', 'Guide – Manual', 'Folder – Manual', 'Manual – Folder – Guide'], 0, 'The end and immediate-right clues force Manual – Guide. Distractors model reversal, end violation, and ignored adjacency.'],
+  ['A is at the left end; B is immediately right of A; one person sits between B and D; C is immediately left of D. What is the row?', ['A – B – C – D', 'A – C – B – D', 'D – C – B – A', 'A – B – D – C'], 0, 'A – B fixes the start; one person between B and D places D fourth, and C immediately left of D fills third. Distractors model reversal, an off-by-one gap, and ignored immediacy.'],
+]
+
+export function fixedQuestion([prompt, choices, correctIndex, explanation], position, quiz = false) { return { prompt, explanation, points: 1, position, status: 'active', ...(quiz ? { questionType: 'multiple_choice' } : {}), choices: choices.map((text, index) => ({ text, isCorrect: index === correctIndex, position: index + 1 })) } }
+export function validateQuestions(label, questions, expected) { const failures = []; if (questions.length !== expected) failures.push(`${label} must have ${expected} questions.`); for (const question of questions) { if (question.choices.length !== 4) failures.push(`${label} question ${question.position} must have four choices.`); if (new Set(question.choices.map((choice) => choice.text.trim().toLowerCase().replace(/[.]$/u, ''))).size !== 4) failures.push(`${label} question ${question.position} has duplicate choices.`); if (question.choices.filter((choice) => choice.isCorrect).length !== 1) failures.push(`${label} question ${question.position} must have exactly one correct choice.`); if (!question.explanation.includes('Distractors model')) failures.push(`${label} question ${question.position} must document distractor errors.`) } return failures }

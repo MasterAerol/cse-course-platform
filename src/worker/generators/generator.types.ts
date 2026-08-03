@@ -148,6 +148,15 @@ export type GeneratorSlug =
   | 'possibility-conclusion-syllogism'
   | 'either-or-syllogism'
   | 'mixed-syllogism'
+  | 'linear-row-seating'
+  | 'left-right-neighbor'
+  | 'fixed-gap-seating'
+  | 'circular-seating'
+  | 'facing-direction-seating'
+  | 'rearrangement-swap'
+  | 'schedule-slot-arrangement'
+  | 'object-shelf-arrangement'
+  | 'mixed-seating-arrangement'
 
 export type AnswerKind =
   | 'number'

@@ -17,6 +17,7 @@ import { letterSeriesGenerators } from './letter-series/letter-series-generators
 import { codingDecodingGenerators } from './coding-decoding/coding-decoding-generators'
 import { orderingRankingGenerators } from './ordering-ranking/ordering-ranking-generators'
 import { syllogismGenerators } from './syllogisms/syllogism-generators'
+import { seatingArrangementGenerators } from './seating-arrangements/seating-arrangement-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -45,6 +46,7 @@ const generators = [
   ...codingDecodingGenerators,
   ...orderingRankingGenerators,
   ...syllogismGenerators,
+  ...seatingArrangementGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(
