@@ -1,0 +1,20 @@
+import { describe, expect, it } from 'vitest'
+import { synonymsAntonymsBankV1 } from '../src/worker/domain/synonyms-antonyms/synonyms-antonyms-bank'
+import { compareIntensity, isAntonym, isSynonym, matchesConnotation, matchesFormality, samePartOfSpeech, sameSense, validReplacement } from '../src/worker/domain/synonyms-antonyms/synonyms-antonyms-rules'
+import { uniqueVisibleChoices, validateSynonymAntonymBank } from '../src/worker/domain/synonyms-antonyms/synonyms-antonyms-validation'
+import { generateValidatedQuestion, getGenerator } from '../src/worker/generators/generator.registry'
+import type { GeneratorDifficulty, GeneratorSlug } from '../src/worker/generators/generator.types'
+
+const slugs = ['basic-synonym', 'basic-antonym', 'context-sensitive-synonym', 'context-sensitive-antonym', 'degree-intensity-synonym', 'connotation-tone-synonym', 'formal-informal-equivalent', 'sentence-synonym-antonym', 'mixed-synonyms-antonyms'] as const satisfies readonly GeneratorSlug[]
+
+describe('Synonyms and Antonyms pure utilities', () => {
+  it('keeps the versioned curated relation bank internally valid', () => { expect(synonymsAntonymsBankV1.length).toBeGreaterThanOrEqual(30); expect(validateSynonymAntonymBank()).toEqual([]); expect(new Set(synonymsAntonymsBankV1.map((item) => item.normalized)).size).toBe(synonymsAntonymsBankV1.length) })
+  it('validates senses, parts of speech, direct relations, intensity, tone, and register', () => { expect(sameSense('assist', 'help')).toBe(true); expect(samePartOfSpeech('assist', 'help')).toBe(true); expect(isSynonym('assist', 'help')).toBe(true); expect(isAntonym('expand', 'contract')).toBe(true); expect(compareIntensity('furious', 'angry')).toBe(1); expect(matchesConnotation('economical', 'positive')).toBe(true); expect(matchesFormality('purchase', 'formal')).toBe(true) })
+  it('validates grammatical sentence replacement and visible choices', () => { expect(validReplacement('Staff will assist visitors.', 'assist', 'help')).toBe(true); expect(uniqueVisibleChoices(['assist', 'hinder', 'reply', 'correct'])).toBe(true) })
+})
+
+describe('Synonyms and Antonyms generator registry', () => {
+  it.each(slugs)('registers %s version 1 for all difficulties', (slug) => { const generator = getGenerator(slug, 1); expect(generator).not.toBeNull(); expect(generator?.supportedDifficulties).toEqual(['easy', 'medium', 'hard']) })
+  it('stress-validates 1,000 deterministic questions per generator', () => { for (const slug of slugs) { const generator = getGenerator(slug, 1); if (generator === null) throw new Error(`Missing ${slug}`); for (let index = 0; index < 1_000; index += 1) { const difficulty: GeneratorDifficulty = (['easy', 'medium', 'hard'] as const)[index % 3] ?? 'easy'; const input = { seed: `synant-${slug}-${index}`, difficulty }; const question = generator.generate(input); expect(generator.generate(input)).toEqual(question); const validation = generator.validate(question); if (!validation.valid) throw new Error(`${slug} seed ${index}: ${validation.reason ?? 'unknown'}`); expect(question.choices).toHaveLength(4); expect(new Set(question.choices.map((choice) => choice.text.trim().toLowerCase())).size).toBe(4); expect(question.choices.filter((choice) => choice.isCorrect)).toHaveLength(1); expect(question.choices.filter((choice) => !choice.isCorrect).every((choice) => choice.mistakeType?.startsWith('synant_') === true && choice.derivation !== null)).toBe(true) } } }, 120_000)
+  it.each(slugs)('creates five unique immutable snapshots for %s', (slug) => { const signatures = new Set<string>(), prompts = new Set<string>(); for (let position = 1; position <= 5; position += 1) { const difficulty: GeneratorDifficulty = position <= 2 ? 'easy' : position <= 4 ? 'medium' : 'hard'; const question = generateValidatedQuestion({ attemptSeed: `synant-attempt-${slug}`, generatorSlug: slug, generatorVersion: 1, difficulty, position, existingSignatures: signatures, existingPrompts: prompts }); signatures.add(question.metadata.canonicalSignature); prompts.add(question.prompt.trim().toLowerCase()) } expect(signatures.size).toBe(5); expect(prompts.size).toBe(5) })
+})

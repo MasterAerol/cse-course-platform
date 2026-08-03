@@ -447,6 +447,14 @@ export type DistractorMistakeType =
   | 'vocabulary_alternate_sense'
   | 'vocabulary_confused_partner'
   | 'vocabulary_similar_spelling'
+  | 'synant_related_not_equivalent'
+  | 'synant_wrong_relationship'
+  | 'synant_wrong_part_of_speech'
+  | 'synant_intensity_mismatch'
+  | 'synant_connotation_mismatch'
+  | 'synant_register_mismatch'
+  | 'synant_wrong_sense'
+  | 'synant_similar_spelling'
 
 export interface DistractorDerivation {
   operation: string

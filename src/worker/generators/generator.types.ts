@@ -175,6 +175,15 @@ export type GeneratorSlug =
   | 'definition-example-match'
   | 'commonly-confused-words'
   | 'mixed-vocabulary-word-meaning'
+  | 'basic-synonym'
+  | 'basic-antonym'
+  | 'context-sensitive-synonym'
+  | 'context-sensitive-antonym'
+  | 'degree-intensity-synonym'
+  | 'connotation-tone-synonym'
+  | 'formal-informal-equivalent'
+  | 'sentence-synonym-antonym'
+  | 'mixed-synonyms-antonyms'
 
 export type AnswerKind =
   | 'number'

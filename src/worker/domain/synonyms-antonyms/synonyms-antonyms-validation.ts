@@ -1,0 +1,9 @@
+import { synonymsAntonymsBankV1, findSynonymAntonymEntry } from './synonyms-antonyms-bank'
+import { metadataMatches, samePartOfSpeech } from './synonyms-antonyms-rules'
+import type { SynonymAntonymScenario } from './synonyms-antonyms.types'
+import { normalizeWord } from '../vocabulary/vocabulary-rules'
+
+export function uniqueVisibleChoices(choices: readonly string[]): boolean { return choices.length === 4 && new Set(choices.map(normalizeWord)).size === 4 }
+export function uniqueCorrectAnswer(choices: readonly string[], correct: string): boolean { return choices.filter((item) => normalizeWord(item) === normalizeWord(correct)).length === 1 }
+export function validateSynonymAntonymBank(): string[] { const errors: string[] = []; const seen = new Set<string>(); for (const item of synonymsAntonymsBankV1) { if (seen.has(item.normalized)) errors.push(`Duplicate ${item.word}.`); seen.add(item.normalized); if (!metadataMatches(item, item.partOfSpeech) || item.meaning.length < 6 || item.synonyms.length === 0 || item.antonyms.length === 0) errors.push(`Invalid ${item.word}.`); for (const synonym of item.synonyms) { const linked = findSynonymAntonymEntry(synonym); if (linked !== null && !samePartOfSpeech(item.word, synonym)) errors.push(`Part-of-speech mismatch ${item.word}/${synonym}.`) } } return errors }
+export function validateSynonymAntonymScenario(item: SynonymAntonymScenario): string | null { const choices = [item.correct, ...item.distractors.map((entry) => entry.text)]; if (findSynonymAntonymEntry(item.targetWord) === null) return 'Target is not in bank v1.'; if (!uniqueVisibleChoices(choices) || !uniqueCorrectAnswer(choices, item.correct)) return 'Choices are duplicated or ambiguous.'; if (item.distractors.some((entry) => !entry.mistake.startsWith('synant_'))) return 'Distractor lacks a documented language mistake.'; return null }

@@ -1,0 +1,4 @@
+import type { SynonymAntonymMistakeType } from './synonyms-antonyms.types'
+export interface SynonymAntonymDistractor { text: string; mistakeType: SynonymAntonymMistakeType; qualityScore: number }
+export function synonymAntonymDistractor(text: string, mistakeType: SynonymAntonymMistakeType): SynonymAntonymDistractor { return { text, mistakeType, qualityScore: 0.9 } }
+export function selectSynonymAntonymDistractors(correct: string, candidates: readonly SynonymAntonymDistractor[]): SynonymAntonymDistractor[] { const seen = new Set([correct.trim().toLowerCase()]); const result: SynonymAntonymDistractor[] = []; for (const item of candidates) { const key = item.text.trim().toLowerCase(); if (key.length > 0 && !seen.has(key)) { seen.add(key); result.push(item) } if (result.length === 3) break } if (result.length !== 3) throw new Error('Synonym/antonym question lacks three documented unique distractors.'); return result }
