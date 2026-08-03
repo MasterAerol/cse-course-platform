@@ -439,6 +439,14 @@ export type DistractorMistakeType =
   | 'data_degree_as_percent'
   | 'data_part_to_whole_confusion'
   | 'data_ignored_component'
+  | 'vocabulary_wrong_affix'
+  | 'vocabulary_wrong_base'
+  | 'vocabulary_wrong_part_of_speech'
+  | 'vocabulary_related_not_equivalent'
+  | 'vocabulary_wrong_connotation'
+  | 'vocabulary_alternate_sense'
+  | 'vocabulary_confused_partner'
+  | 'vocabulary_similar_spelling'
 
 export interface DistractorDerivation {
   operation: string

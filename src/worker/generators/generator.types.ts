@@ -166,6 +166,15 @@ export type GeneratorSlug =
   | 'average-weighted-data'
   | 'multi-step-data-interpretation'
   | 'mixed-data-interpretation'
+  | 'root-word-meaning'
+  | 'prefix-meaning'
+  | 'suffix-meaning'
+  | 'word-family-form'
+  | 'denotation-connotation'
+  | 'multiple-meaning-word'
+  | 'definition-example-match'
+  | 'commonly-confused-words'
+  | 'mixed-vocabulary-word-meaning'
 
 export type AnswerKind =
   | 'number'

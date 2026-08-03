@@ -1,0 +1,9 @@
+import { findVocabularyEntry, vocabularyBankV1 } from './vocabulary-bank'
+import { normalizeWord, sentenceIsUsable } from './vocabulary-rules'
+import type { VocabularyEntry, VocabularyScenario } from './vocabulary.types'
+
+export function hasUniqueVisibleChoices(choices: readonly string[]): boolean { return choices.length === 4 && new Set(choices.map(normalizeWord)).size === 4 }
+export function hasUniqueAnswer(choices: readonly string[], answer: string): boolean { return choices.filter((choice) => normalizeWord(choice) === normalizeWord(answer)).length === 1 }
+export function validateVocabularyEntry(entry: VocabularyEntry): boolean { return entry.normalized === normalizeWord(entry.word) && entry.definition.length >= 8 && entry.base.length > 0 && entry.family.length > 0 && entry.senses.length > 0 && sentenceIsUsable(entry.example, entry.word) }
+export function validateVocabularyBank(): string[] { const errors: string[] = []; const words = new Set<string>(); for (const entry of vocabularyBankV1) { if (words.has(entry.normalized)) errors.push(`Duplicate word ${entry.word}.`); words.add(entry.normalized); if (!validateVocabularyEntry(entry)) errors.push(`Invalid metadata for ${entry.word}.`) } return errors }
+export function validateScenario(scenario: VocabularyScenario): string | null { const target = findVocabularyEntry(scenario.targetWord); if (target === null) return 'Target word is not in vocabulary bank v1.'; const choices = [scenario.correct, ...scenario.distractors.map((item) => item.text)]; if (!hasUniqueVisibleChoices(choices) || !hasUniqueAnswer(choices, scenario.correct)) return 'Vocabulary choices are ambiguous or duplicated.'; if (scenario.distractors.some((item) => item.mistake.length === 0)) return 'A distractor lacks a mistake model.'; if (scenario.prompt.length < 12 || scenario.explanation.length < 2) return 'Vocabulary prompt or explanation is incomplete.'; return null }
