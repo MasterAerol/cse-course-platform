@@ -463,6 +463,16 @@ export type DistractorMistakeType =
   | 'context_wrong_part_of_speech'
   | 'context_unsupported_familiar_meaning'
   | 'context_semantic_mismatch'
+  | 'sentence_wrong_part_of_speech'
+  | 'sentence_wrong_tense'
+  | 'sentence_wrong_number'
+  | 'sentence_semantic_mismatch'
+  | 'sentence_wrong_transition'
+  | 'sentence_intensity_mismatch'
+  | 'sentence_tone_formality_mismatch'
+  | 'sentence_nonparallel_form'
+  | 'sentence_first_blank_only'
+  | 'sentence_second_blank_only'
 
 export interface DistractorDerivation {
   operation: string

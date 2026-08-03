@@ -193,6 +193,15 @@ export type GeneratorSlug =
   | 'multiple-meaning-context-clue'
   | 'two-sentence-context-clue'
   | 'mixed-context-clues'
+  | 'grammar-fit-completion'
+  | 'meaning-fit-completion'
+  | 'transition-word-completion'
+  | 'cause-effect-completion'
+  | 'contrast-comparison-completion'
+  | 'parallel-idea-completion'
+  | 'tone-formality-completion'
+  | 'double-blank-completion'
+  | 'mixed-sentence-completion'
 
 export type AnswerKind =
   | 'number'
