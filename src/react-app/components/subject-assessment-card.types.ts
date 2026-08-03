@@ -5,6 +5,7 @@ export interface SubjectAssessmentCardSummary {
     description: string | null
     questionCount: number
     passingScore: number
+    timeLimitMinutes?: number | null
   }
   availability: { available: boolean; reason: string | null }
   state: 'not_started' | 'in_progress' | 'passed' | 'needs_improvement'

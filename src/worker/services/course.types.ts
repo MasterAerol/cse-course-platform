@@ -35,6 +35,7 @@ export interface CourseDetail extends CourseSummary {
   description: string | null
   curriculum: CurriculumSubjectSummary[]
   subjectAssessment: import('./subject-assessment.service').SubjectAssessmentSummary | null
+  subjectAssessments: import('./subject-assessment.service').SubjectAssessmentSummary[]
 }
 
 export interface ContinueLesson {
@@ -63,6 +64,7 @@ export interface CourseProgressState {
 export interface StudentDashboardCourse extends CourseProgressState {
   enrolledAt: string
   subjectAssessment: import('./subject-assessment.service').SubjectAssessmentSummary | null
+  subjectAssessments: import('./subject-assessment.service').SubjectAssessmentSummary[]
 }
 
 export interface StudentDashboard {

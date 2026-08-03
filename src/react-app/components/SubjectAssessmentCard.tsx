@@ -4,11 +4,11 @@ import type { SubjectAssessmentCardSummary } from './subject-assessment-card.typ
 
 function getSubjectAssessmentAction(
   assessment: SubjectAssessmentCardSummary,
-): 'Start Assessment' | 'Resume' | 'Retake' | 'Review' | 'Unavailable' {
+): 'Start Assessment' | 'Resume Assessment' | 'Retake Assessment' | 'Review Result' | 'Unavailable' {
   if (!assessment.availability.available) return 'Unavailable'
-  if (assessment.state === 'in_progress') return 'Resume'
-  if (assessment.state === 'passed') return 'Review'
-  if (assessment.state === 'needs_improvement') return 'Retake'
+  if (assessment.state === 'in_progress') return 'Resume Assessment'
+  if (assessment.state === 'passed') return 'Review Result'
+  if (assessment.state === 'needs_improvement') return 'Retake Assessment'
   return 'Start Assessment'
 }
 
@@ -27,7 +27,7 @@ export function SubjectAssessmentCard({ summary }: { summary: SubjectAssessmentC
       <p className="eyebrow">Subject assessment</p>
       <h3>{summary.assessment.title}</h3>
       {summary.assessment.description !== null && <p>{summary.assessment.description}</p>}
-      <p>{summary.assessment.questionCount} questions · {summary.assessment.passingScore}% passing score</p>
+      <p>{summary.assessment.questionCount} questions · {summary.assessment.passingScore}% passing score · {summary.assessment.timeLimitMinutes === null ? 'No time limit' : `${summary.assessment.timeLimitMinutes} minutes`}</p>
       <p className="meta-copy">
         Status: {summary.state === 'not_started' ? 'Not Started' : summary.state === 'in_progress' ? 'In Progress' : summary.state === 'passed' ? 'Passed' : 'Needs Improvement'}
         {summary.bestScore === null ? '' : ` · Best ${summary.bestScore}%`}

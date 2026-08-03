@@ -180,6 +180,21 @@ export async function findPublishedSubjectAssessmentForCourse(
     .first<SubjectAssessmentRow>()
 }
 
+export async function findPublishedSubjectAssessmentsForCourse(
+  database: D1Database,
+  courseId: number,
+): Promise<SubjectAssessmentRow[]> {
+  const result = await database.prepare(
+    `SELECT ${assessmentSelect}
+    FROM subject_assessments
+    INNER JOIN subjects ON subjects.id = subject_assessments.subject_id AND subjects.status = 'published'
+    INNER JOIN courses ON courses.id = subjects.course_id AND courses.status = 'published'
+    WHERE courses.id = ?1 AND subject_assessments.status = 'published'
+    ORDER BY subjects.position, subject_assessments.position`,
+  ).bind(courseId).all<SubjectAssessmentRow>()
+  return result.results
+}
+
 export async function findSubjectForAssessmentAdmin(
   database: D1Database,
   courseSlug: string,

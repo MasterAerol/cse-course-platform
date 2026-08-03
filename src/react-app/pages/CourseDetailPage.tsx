@@ -98,9 +98,7 @@ export function CourseDetailPage() {
                   courseSlug={state.course.slug}
                   subject={subject}
                 />
-                {state.course.subjectAssessment?.assessment.subjectSlug === subject.slug && (
-                  <SubjectAssessmentCard summary={state.course.subjectAssessment} />
-                )}
+                {state.course.subjectAssessments.filter((assessment) => assessment.assessment.subjectSlug === subject.slug).map((assessment) => <SubjectAssessmentCard key={assessment.assessment.publicId} summary={assessment} />)}
               </div>
             ))}
             {user === null && (

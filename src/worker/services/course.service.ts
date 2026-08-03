@@ -6,7 +6,7 @@ import {
 import { AppError } from '../utils/app-error'
 import { mapCurriculum } from './curriculum.service'
 import { mapCourse, mapEnrollment } from './enrollment.service'
-import { getCourseDetailSubjectAssessment } from './subject-assessment.service'
+import { getCourseDetailSubjectAssessment, getCourseDetailSubjectAssessments } from './subject-assessment.service'
 import type { CourseDetail, CourseSummary } from './course.types'
 
 export type {
@@ -73,6 +73,11 @@ export async function getCourseDetail(
     course.id,
     userId,
   )
+  const subjectAssessments = await getCourseDetailSubjectAssessments(
+    database,
+    userId,
+    course.id,
+  )
 
   return {
     ...mapCourse(course),
@@ -83,5 +88,6 @@ export async function getCourseDetail(
       userId,
       course.id,
     ),
+    subjectAssessments,
   }
 }

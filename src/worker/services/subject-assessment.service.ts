@@ -6,14 +6,14 @@ import {
 import {
   generateSubjectAssessmentQuestions,
   numericalAbilityAssessmentSlug,
-  numericalAbilitySubjectSlug,
-  type NumericalAbilityTopicSlug,
+  analyticalAbilityAssessmentSlug,
+  type SubjectAssessmentTopicSlug,
   type SubjectAssessmentBlueprint,
   validateSubjectAssessmentBlueprint,
 } from '../domain/subject-assessment-blueprint'
 import { scoreAssessment } from '../domain/assessment-scoring'
 import type { SubjectAssessmentResult } from '../../shared/subject-assessment-result.schema'
-import { getGenerator } from '../generators/generator.registry'
+import { getRegisteredGenerators } from '../generators/generator.registry'
 import { createAttemptSeed } from '../generators/generator-random'
 import type {
   GeneratedExplanation,
@@ -27,6 +27,7 @@ import {
   findChoiceInAssessmentSnapshot,
   findMaxSubjectAssessmentAttemptNumber,
   findPublishedSubjectAssessmentForCourse,
+  findPublishedSubjectAssessmentsForCourse,
   findPublishedTopicsForSubject,
   findSnapshotInAttempt,
   findSubjectAssessmentAnswers,
@@ -67,7 +68,7 @@ interface InternalQuestion {
   id: number
   publicId: string
   position: number
-  topicSlug: NumericalAbilityTopicSlug
+  topicSlug: SubjectAssessmentTopicSlug
   topicTitle: string
   topicPosition: number
   generatorSlug: string
@@ -157,7 +158,7 @@ export interface SubjectAssessmentReviewPayload
   questions: Array<{
     publicId: string
     position: number
-    topic: { slug: NumericalAbilityTopicSlug; title: string }
+    topic: { slug: SubjectAssessmentTopicSlug; title: string }
     prompt: string
     difficulty: GeneratorDifficulty
     selectedChoice: { publicId: string; text: string; position: number } | null
@@ -205,38 +206,19 @@ function getGeneratorByInput(slug: string, version: number) {
 }
 
 function getGeneratorFromRegistered(slug: string, version: number) {
-  // Avoid asserting arbitrary client strings into GeneratorSlug.
-  return (
-    getAllRegisteredGeneratorMatches(slug, version)[0] ?? null
-  )
+  return getRegisteredGenerators().find((generator) => generator.slug === slug && generator.version === version) ?? null
 }
-
-function getAllRegisteredGeneratorMatches(slug: string, version: number) {
-  const matches = []
-  for (const topic of storedGeneratorSearchBlueprint.topics) {
-    for (const config of topic.generators) {
-      if (config.slug === slug && config.version === version) {
-        const generator = getGenerator(config.slug, config.version)
-        if (generator !== null) matches.push(generator)
-      }
-    }
-  }
-  return matches
-}
-
-// The search blueprint is assigned after the canonical module has loaded and
-// includes every generator allowed in this subject assessment.
-import { numericalAbilityBlueprintV1 as storedGeneratorSearchBlueprint } from '../domain/subject-assessment-blueprint'
 
 function blueprintFromRows(
   rows: BlueprintTopicGeneratorRow[],
+  subjectSlug: SubjectAssessmentBlueprint['subjectSlug'],
 ): SubjectAssessmentBlueprint {
   const grouped = new Map<number, SubjectAssessmentBlueprint['topics'][number]>()
 
   for (const row of rows) {
     const existing = grouped.get(row.blueprint_topic_id)
     const topic = existing ?? {
-      topicSlug: row.topic_slug as NumericalAbilityTopicSlug,
+      topicSlug: row.topic_slug,
       topicTitle: row.topic_title,
       position: row.topic_position,
       count: row.question_count,
@@ -270,7 +252,7 @@ function blueprintFromRows(
   }
 
   return {
-    subjectSlug: numericalAbilitySubjectSlug,
+    subjectSlug,
     version: first.blueprint_version,
     totalQuestions: first.blueprint_total_questions,
     passingScorePercent: first.blueprint_passing_score,
@@ -290,7 +272,7 @@ function groupQuestions(
       id: row.snapshot_id,
       publicId: row.snapshot_public_id,
       position: row.source_position,
-      topicSlug: row.topic_slug as NumericalAbilityTopicSlug,
+      topicSlug: row.topic_slug,
       topicTitle: row.topic_title,
       topicPosition: row.topic_position,
       generatorSlug: row.generator_slug,
@@ -426,7 +408,10 @@ async function loadValidatedBlueprint(
     assessment.id,
     assessment.current_blueprint_version,
   )
-  const blueprint = blueprintFromRows(rows)
+  const blueprint = blueprintFromRows(
+    rows,
+    assessment.subject_slug as SubjectAssessmentBlueprint['subjectSlug'],
+  )
   const validation = validateSubjectAssessmentBlueprint(blueprint)
   const unpublished = rows
     .filter((row) => row.topic_status !== 'published')
@@ -439,7 +424,7 @@ async function loadValidatedBlueprint(
       !validation.valid
         ? 'The assessment configuration is incomplete.'
         : unpublished.length > 0
-          ? 'All ten Numerical Ability topics must be published.'
+          ? `All ${blueprint.topics.length} ${assessment.subject_title} topics must be published.`
           : null,
   }
 }
@@ -635,6 +620,22 @@ export async function getDashboardSubjectAssessment(
   if (assessment === null) return null
   return getSubjectAssessmentSummary(database, userId, assessment.slug)
 }
+
+async function summariesForCourse(database: D1Database, userId: number | null, courseId: number): Promise<SubjectAssessmentSummary[]> {
+  const assessments = await findPublishedSubjectAssessmentsForCourse(database, courseId)
+  const summaries: SubjectAssessmentSummary[] = []
+  for (const assessment of assessments) {
+    if (userId === null) summaries.push(lockedSubjectAssessmentSummary(assessment, 'Sign in with an active enrollment to start this assessment.'))
+    else {
+      const enrollment = await findCourseEnrollmentById(database, userId, courseId)
+      summaries.push(enrollment === null || enrollment.has_active_access !== 1 ? lockedSubjectAssessmentSummary(assessment, 'An active course enrollment is required.') : await getSubjectAssessmentSummary(database, userId, assessment.slug))
+    }
+  }
+  return summaries
+}
+
+export const getCourseDetailSubjectAssessments = summariesForCourse
+export async function getDashboardSubjectAssessments(database: D1Database, userId: number, courseId: number): Promise<SubjectAssessmentSummary[]> { return summariesForCourse(database, userId, courseId) }
 
 export async function startSubjectAssessmentAttempt(
   database: D1Database,
@@ -962,7 +963,10 @@ export async function getAdminSubjectAssessment(
     assessment.id,
     assessment.current_blueprint_version,
   )
-  const blueprint = blueprintFromRows(rows)
+  const blueprint = blueprintFromRows(
+    rows,
+    assessment.subject_slug as SubjectAssessmentBlueprint['subjectSlug'],
+  )
   return {
     assessment: {
       id: assessment.id,
@@ -990,9 +994,15 @@ async function validateAdminAssessment(
   database: D1Database,
   assessment: SubjectAssessmentRow,
 ): Promise<void> {
+  const expected = assessment.subject_slug === 'numerical-ability'
+    ? { slug: numericalAbilityAssessmentSlug, questions: 50, topics: 10 }
+    : assessment.subject_slug === 'analytical-ability'
+      ? { slug: analyticalAbilityAssessmentSlug, questions: 45, topics: 9 }
+      : null
   if (
-    assessment.slug !== numericalAbilityAssessmentSlug ||
-    assessment.question_count !== 50 ||
+    expected === null ||
+    assessment.slug !== expected.slug ||
+    assessment.question_count !== expected.questions ||
     assessment.passing_score !== 70 ||
     assessment.maximum_attempts !== null ||
     assessment.time_limit_minutes !== null ||
@@ -1030,7 +1040,7 @@ export async function saveAdminSubjectAssessment(
   const subject = await findSubjectForAssessmentAdmin(
     database,
     'cse-professional',
-    numericalAbilitySubjectSlug,
+    input.blueprint.subjectSlug,
   )
   const blueprint = toDomainBlueprint(input.blueprint)
   const validation = validateSubjectAssessmentBlueprint(blueprint)
@@ -1104,5 +1114,6 @@ export async function validateAdminSubjectAssessment(
     throw new AppError(404, 'SUBJECT_ASSESSMENT_NOT_FOUND', 'The assessment was not found.')
   }
   await validateAdminAssessment(database, assessment)
-  return { valid: true, questionCount: assessment.question_count, topicCount: 10 }
+  const rows = await findAssessmentBlueprintRows(database, assessment.id, assessment.current_blueprint_version)
+  return { valid: true, questionCount: assessment.question_count, topicCount: new Set(rows.map((row) => row.topic_slug)).size }
 }

@@ -170,8 +170,8 @@ const subjectAssessmentAttemptResponseSchema = z.union([
 ])
 const assessmentReviewSchema = subjectAssessmentResultSchema.extend({ questions: z.array(z.object({ publicId: z.string(), position: z.number(), topic: z.object({ slug: z.string(), title: z.string() }), prompt: z.string(), difficulty: z.string(), selectedChoice: assessmentChoiceSchema.nullable(), correctChoice: assessmentChoiceSchema, isCorrect: z.boolean(), unanswered: z.boolean(), explanation: z.string().nullable(), choices: z.array(assessmentChoiceSchema) })) })
 
-const dashboardCourseWithAssessmentSchema = dashboardCourseSchema.extend({ subjectAssessment: subjectAssessmentSummarySchema.nullable() })
-const courseDetailSchema = courseDetailBaseSchema.extend({ subjectAssessment: subjectAssessmentSummarySchema.nullable() })
+const dashboardCourseWithAssessmentSchema = dashboardCourseSchema.extend({ subjectAssessment: subjectAssessmentSummarySchema.nullable(), subjectAssessments: z.array(subjectAssessmentSummarySchema) })
+const courseDetailSchema = courseDetailBaseSchema.extend({ subjectAssessment: subjectAssessmentSummarySchema.nullable(), subjectAssessments: z.array(subjectAssessmentSummarySchema) })
 
 const coursesResponseSchema = z.object({
   success: z.literal(true),

@@ -25,18 +25,8 @@ export const saveSubjectAssessmentAnswerSchema = z
   .object({ selectedChoicePublicId: slug })
   .strict()
 
-export const numericalAbilityTopicSlugSchema = z.enum([
-  'percentages',
-  'fractions',
-  'decimals',
-  'ratio-and-proportion',
-  'average',
-  'number-problems',
-  'age-problems',
-  'work-and-rate-problems',
-  'distance-speed-and-time',
-  'simple-interest',
-])
+export const subjectAssessmentTopicSlugSchema = slug
+export const numericalAbilityTopicSlugSchema = subjectAssessmentTopicSlugSchema
 
 const difficultySchema = z
   .object({
@@ -57,7 +47,7 @@ const generatorConfigSchema = z
 
 const topicConfigSchema = z
   .object({
-    topicSlug: numericalAbilityTopicSlugSchema,
+    topicSlug: subjectAssessmentTopicSlugSchema,
     topicTitle: z.string().trim().min(1).max(160),
     position: z.number().int().positive(),
     count: z.number().int().positive(),
@@ -82,7 +72,7 @@ const topicConfigSchema = z
 
 export const subjectAssessmentBlueprintInputSchema = z
   .object({
-    subjectSlug: z.literal('numerical-ability'),
+    subjectSlug: z.enum(['numerical-ability', 'analytical-ability']),
     version: z.number().int().positive(),
     totalQuestions: z.number().int().positive(),
     passingScorePercent: z.number().int().min(0).max(100),

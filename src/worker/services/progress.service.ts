@@ -34,7 +34,7 @@ import {
   type AccessibleLessonContext,
   getAccessibleLessonContext,
 } from './lesson-access.service'
-import { getDashboardSubjectAssessment } from './subject-assessment.service'
+import { getDashboardSubjectAssessment, getDashboardSubjectAssessments } from './subject-assessment.service'
 
 export async function getStudentCourseProgress(
   database: D1Database,
@@ -300,6 +300,9 @@ export async function getStudentDashboard(
         subjectAssessment: enrollmentState.hasAccess
           ? await getDashboardSubjectAssessment(database, userId, enrollment.course_id)
           : null,
+        subjectAssessments: enrollmentState.hasAccess
+          ? await getDashboardSubjectAssessments(database, userId, enrollment.course_id)
+          : [],
         continueLearning: enrollmentState.hasAccess
           ? progress.continueLearning
           : {

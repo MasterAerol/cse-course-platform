@@ -181,9 +181,7 @@ export function DashboardPage() {
                 {course.enrollment.hasAccess ? (
                   <>
                     <ContinueLearningCard progress={course} />
-                    {course.subjectAssessment !== null && (
-                      <SubjectAssessmentCard summary={course.subjectAssessment} />
-                    )}
+                    {course.subjectAssessments.map((assessment) => <SubjectAssessmentCard key={assessment.assessment.publicId} summary={assessment} />)}
                   </>
                 ) : (
                   <section className="continue-card continue-card--muted">

@@ -1,7 +1,7 @@
-import type { NumericalAbilityTopicSlug } from './subject-assessment-blueprint'
+import type { SubjectAssessmentTopicSlug } from './subject-assessment-blueprint'
 
 export interface SubjectAssessmentResultItem {
-  topicSlug: NumericalAbilityTopicSlug
+  topicSlug: SubjectAssessmentTopicSlug
   topicTitle: string
   topicPosition: number
   selectedChoiceId: number | null
@@ -9,7 +9,7 @@ export interface SubjectAssessmentResultItem {
 }
 
 export interface TopicPerformance {
-  topicSlug: NumericalAbilityTopicSlug
+  topicSlug: SubjectAssessmentTopicSlug
   topicTitle: string
   totalQuestions: number
   correctCount: number
@@ -47,7 +47,7 @@ export function calculateSubjectAssessmentBreakdown(
   items: SubjectAssessmentResultItem[],
 ): SubjectAssessmentBreakdown {
   const groups = new Map<
-    NumericalAbilityTopicSlug,
+    SubjectAssessmentTopicSlug,
     SubjectAssessmentResultItem[]
   >()
 
