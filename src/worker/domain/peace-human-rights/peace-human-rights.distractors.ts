@@ -1,0 +1,4 @@
+import type { PeaceHumanRightsDistractor,PeaceHumanRightsMistakeType } from './peace-human-rights.types'
+export interface ScoredPeaceHumanRightsDistractor extends PeaceHumanRightsDistractor{qualityScore:number}
+export function peaceHumanRightsDistractor(text:string,mistakeType:PeaceHumanRightsMistakeType):ScoredPeaceHumanRightsDistractor{return{text:text.trim(),mistakeType,qualityScore:text.trim().length>=20?1:0}}
+export function selectPeaceHumanRightsDistractors(correct:string,candidates:readonly ScoredPeaceHumanRightsDistractor[]):readonly ScoredPeaceHumanRightsDistractor[]{const seen=new Set([correct.trim().toLowerCase()]);return candidates.filter((item)=>item.qualityScore>0&&item.mistakeType.startsWith('phr_')&&!seen.has(item.text.toLowerCase())&&(seen.add(item.text.toLowerCase()),true)).slice(0,3)}

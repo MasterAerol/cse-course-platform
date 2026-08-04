@@ -276,6 +276,16 @@ export type GeneratorSlug =
   | 'ra6713-gifts-favors'
   | 'ra6713-incentives-penalties'
   | 'mixed-ra6713-ethics'
+  | 'human-dignity-universality'
+  | 'civil-political-rights'
+  | 'economic-social-cultural-rights'
+  | 'equality-nondiscrimination'
+  | 'rights-duties-responsibilities'
+  | 'peace-conflict-nonviolence'
+  | 'conflict-prevention-resolution'
+  | 'peacebuilding-concepts'
+  | 'human-rights-institutions'
+  | 'mixed-peace-human-rights'
 
 export type AnswerKind =
   | 'number'

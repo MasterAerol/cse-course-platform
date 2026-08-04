@@ -1,0 +1,5 @@
+import type { PeaceHumanRightsCategory,PeaceHumanRightsSource } from './peace-human-rights.types'
+const labels:Record<PeaceHumanRightsCategory,string>={dignity_universality:'human dignity and universality',civil_political:'civil and political rights',economic_social_cultural:'economic, social, and cultural rights',equality_nondiscrimination:'equality and non-discrimination',rights_responsibilities:'rights and responsibilities',peace_conflict_nonviolence:'peace, conflict, and nonviolence',conflict_prevention_resolution:'conflict prevention and resolution',peacebuilding:'peacebuilding',institutions:'human-rights institutions and mechanisms'}
+export function peaceHumanRightsCategoryLabel(category:PeaceHumanRightsCategory):string{return labels[category]}
+export function formatPeaceHumanRightsReference(source:PeaceHumanRightsSource):string{return `${source.sourceTitle}, ${source.provisionId} (${source.institution})`}
+export function peaceHumanRightsStableNumber(value:string):number{let total=0;for(const char of value)total=(total*41+(char.codePointAt(0)??0))%1_000_003;return total}

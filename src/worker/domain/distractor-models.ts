@@ -579,6 +579,16 @@ export type DistractorMistakeType =
   | 'ra6713_outside_work_overstatement'
   | 'ra6713_external_penalty'
   | 'ra6713_missing_condition'
+  | 'phr_rights_citizens_only'
+  | 'phr_equality_identical'
+  | 'phr_conflict_is_violence'
+  | 'phr_peace_is_silence'
+  | 'phr_nonviolence_inaction'
+  | 'phr_rights_unlimited'
+  | 'phr_escr_charity_only'
+  | 'phr_reconciliation_impunity'
+  | 'phr_chr_is_court'
+  | 'phr_treaty_body_domestic'
 
 export interface DistractorDerivation {
   operation: string
