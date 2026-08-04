@@ -107,7 +107,7 @@ export function QuestionRangeNavigator({
     <nav className="question-range-navigator" aria-label="Question navigator">
       {ranges.map((range) => {
         const isExpanded = range.index === expandedRangeIndex
-        const panelId = `${navigatorIdPrefix}-range-${range.index}`
+        const panelId = `question-range-${range.start}`
         const headingId = `${navigatorIdPrefix}-heading-${range.index}`
         const answeredCount = range.questions.filter((q) => q.answered).length
         const unansweredCount = range.questions.length - answeredCount
@@ -115,70 +115,69 @@ export function QuestionRangeNavigator({
 
         return (
           <section className="question-range" key={range.index}>
-            <h3>
-              <button
-                type="button"
-                className="question-range__summary"
-                id={headingId}
-                aria-expanded={isExpanded}
-                aria-controls={panelId}
-                onClick={() => onRangeExpand(range.index)}
-              >
-                <span className="question-range__title">
-                  Questions {range.start}-{range.end}
-                </span>
-                <span className="question-range__meta">
-                  <span className="question-range__meta-chip">Answered {answeredCount}</span>
-                  <span className="question-range__meta-chip">Unanswered {unansweredCount}</span>
-                  <span className="question-range__meta-chip">Marked {markedCount}</span>
-                </span>
-                <span
-                  className="question-range__chevron"
-                  aria-hidden="true"
-                  data-state={isExpanded ? 'open' : 'closed'}
-                />
-              </button>
-            </h3>
-
-            <div
-              id={panelId}
-              className={`question-range__panel ${isExpanded ? 'is-open' : ''}`}
-              role="region"
-              aria-labelledby={headingId}
-              aria-hidden={!isExpanded}
+            <button
+              type="button"
+              className="question-range__header"
+              id={headingId}
+              aria-expanded={isExpanded}
+              aria-controls={panelId}
+              onClick={() => onRangeExpand(range.index)}
             >
-              <div className="question-range__grid">
-                {range.questions.map((question, offset) => {
-                  const isCurrent = question.position - 1 === currentIndex
-                  const label = makeQuestionLabel({
-                    answered: question.answered,
-                    marked: question.marked,
-                    current: isCurrent,
-                    position: question.position,
-                  })
+              <span className="question-range__title">
+                Questions {range.start}-{range.end}
+              </span>
+              <span className="question-range__meta">
+                <span className="question-range__meta-chip">Answered {answeredCount}</span>
+                <span className="question-range__meta-chip">Unanswered {unansweredCount}</span>
+                <span className="question-range__meta-chip">Marked {markedCount}</span>
+              </span>
+              <span
+                className="question-range__chevron"
+                aria-hidden="true"
+                data-state={isExpanded ? 'open' : 'closed'}
+              />
+            </button>
 
-                  return (
-                    <button
-                      key={question.publicId}
-                      type="button"
-                      className={`question-range-button ${
-                        isCurrent ? 'question-range-button--current' : ''
-                      } ${question.answered ? 'question-range-button--answered' : ''} ${
-                        question.marked ? 'question-range-button--marked' : ''
-                      }`}
-                      aria-label={label}
-                      aria-current={isCurrent ? 'step' : undefined}
-                      data-question-index={question.position - 1}
-                      data-order={range.index * QUESTIONS_PER_RANGE + offset + 1}
-                      onClick={() => onQuestionSelect(question.position - 1)}
-                    >
-                      <span>{question.position}</span>
-                      <small>{makeSmallStatus(question.answered, question.marked)}</small>
-                    </button>
-                  )
-                })}
+            {isExpanded && (
+              <div
+                id={panelId}
+                className="question-range__content"
+                role="region"
+                aria-labelledby={headingId}
+              >
+                <div className="question-range__grid">
+                  {range.questions.map((question, offset) => {
+                    const isCurrent = question.position - 1 === currentIndex
+                    const label = makeQuestionLabel({
+                      answered: question.answered,
+                      marked: question.marked,
+                      current: isCurrent,
+                      position: question.position,
+                    })
+
+                    return (
+                      <button
+                        key={question.publicId}
+                        type="button"
+                        className={`question-range-button ${
+                          isCurrent ? 'question-range-button--current' : ''
+                        } ${question.answered ? 'question-range-button--answered' : ''} ${
+                          question.marked ? 'question-range-button--marked' : ''
+                        }`}
+                        aria-label={label}
+                        aria-current={isCurrent ? 'step' : undefined}
+                        data-question-index={question.position - 1}
+                        data-order={range.index * QUESTIONS_PER_RANGE + offset + 1}
+                        onClick={() => onQuestionSelect(question.position - 1)}
+                      >
+                        <span>{question.position}</span>
+                        <small>{makeSmallStatus(question.answered, question.marked)}</small>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </section>
         )
       })}
