@@ -6,8 +6,7 @@ import {
 import {
   generateSubjectAssessmentQuestions,
   numericalAbilityAssessmentSlug,
-  analyticalAbilityAssessmentSlug,
-  verbalAbilityAssessmentSlug,
+  getSubjectAssessmentRequirement,
   type SubjectAssessmentTopicSlug,
   type SubjectAssessmentBlueprint,
   validateSubjectAssessmentBlueprint,
@@ -1016,13 +1015,10 @@ async function validateAdminAssessment(
   database: D1Database,
   assessment: SubjectAssessmentRow,
 ): Promise<void> {
-  const expected = assessment.subject_slug === 'numerical-ability'
-    ? { slug: numericalAbilityAssessmentSlug, questions: 50, topics: 10 }
-    : assessment.subject_slug === 'analytical-ability'
-      ? { slug: analyticalAbilityAssessmentSlug, questions: 45, topics: 9 }
-      : assessment.subject_slug === 'verbal-ability'
-        ? { slug: verbalAbilityAssessmentSlug, questions: 50, topics: 10 }
-        : null
+  const requirement = getSubjectAssessmentRequirement(assessment.subject_slug)
+  const expected = requirement === null
+    ? null
+    : { slug: requirement.assessmentSlug, questions: requirement.totalQuestions, topics: requirement.topicCount }
   if (
     expected === null ||
     assessment.slug !== expected.slug ||

@@ -64,8 +64,10 @@ export function scoreAssessment(
     })
   }
 
-  const scorePercent =
-    totalPoints === 0 ? 0 : Math.round((earnedPoints / totalPoints) * 100)
+  const rawPercent = totalPoints === 0 ? 0 : (earnedPoints / totalPoints) * 100
+  const scorePercent = Number.isInteger(rawPercent * 2)
+    ? rawPercent
+    : Math.round(rawPercent)
 
   return {
     totalPoints,
