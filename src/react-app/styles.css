@@ -13,17 +13,21 @@
 .assessment-facts span { border: 1px solid var(--color-border, #d7dce2); border-radius: 999px; padding: .4rem .75rem; }
 .assessment-history, .topic-breakdown { display: grid; gap: .75rem; }
 .assessment-history article, .topic-breakdown article { display: flex; justify-content: space-between; gap: 1rem; padding: .75rem; border-bottom: 1px solid #d7dce2; }
-.question-navigator { display: grid; grid-template-columns: repeat(10, minmax(2.5rem, 1fr)); gap: .4rem; margin: 1rem 0; }
-.question-navigator button { min-height: 2.5rem; padding: .25rem; }
-.question-navigator .answered { border-color: #237a48; }
-.question-navigator .unanswered { border-color: #a56100; }
-.question-navigator .current { outline: 3px solid #275dad; outline-offset: 2px; }
+
 .assessment-choice { display: flex; gap: .75rem; align-items: flex-start; border: 1px solid #d7dce2; border-radius: .6rem; padding: .9rem; margin: .65rem 0; cursor: pointer; }
 .assessment-choice.selected { border-color: #275dad; background: #eef5ff; }
 .assessment-score { font-size: 2rem; font-weight: 700; }
 .review-correct { border-left: 5px solid #237a48; }
 .review-incorrect { border-left: 5px solid #b33434; }
-@media (max-width: 640px) { .question-navigator { grid-template-columns: repeat(5, 1fr); } .assessment-history article, .topic-breakdown article { flex-direction: column; } }
+
+@media (max-width: 640px) {
+  .assessment-history article,
+  .topic-breakdown article {
+    flex-direction: column;
+  }
+}
+
+
 
 * {
   box-sizing: border-box;
@@ -2616,8 +2620,7 @@ input[aria-invalid="true"] {
 }
 
 .question-navigator {
-  display: grid;
-  gap: 0.7rem;
+  width: 100%;
 }
 
 .question-navigator__header {
@@ -2632,6 +2635,7 @@ input[aria-invalid="true"] {
 .question-navigator__ranges {
   display: grid;
   gap: 0.7rem;
+  min-width: 0;
 }
 
 .question-navigator__legend {
@@ -2641,4 +2645,27 @@ input[aria-invalid="true"] {
 .question-navigator__legend .question-navigator-legend {
   margin-top: 0;
 }
+
+@media (max-width: 64rem) {
+  .question-range-nav-desktop.question-navigator {
+    display: none;
+  }
+
+  .question-navigator-drawer__content {
+    display: block;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .question-navigator-drawer .question-status-chips {
+    width: 100%;
+  }
+
+  .question-navigator-drawer .question-navigator {
+    min-width: 0;
+  }
+}
+
+
+
 
