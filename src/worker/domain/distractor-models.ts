@@ -496,6 +496,18 @@ export type DistractorMistakeType =
   | 'agreement_quantity_as_plural'
   | 'agreement_always_there_is'
   | 'agreement_final_s'
+  | 'pronoun_ambiguous_reference'
+  | 'pronoun_number_mismatch'
+  | 'pronoun_person_shift'
+  | 'pronoun_case_error'
+  | 'pronoun_possessive_contraction'
+  | 'pronoun_unnecessary_reflexive'
+  | 'pronoun_wrong_relative'
+  | 'pronoun_adjective_adverb'
+  | 'pronoun_double_comparison'
+  | 'pronoun_fewer_less'
+  | 'pronoun_wrong_modifier_target'
+  | 'pronoun_dangling_modifier'
 
 export interface DistractorDerivation {
   operation: string

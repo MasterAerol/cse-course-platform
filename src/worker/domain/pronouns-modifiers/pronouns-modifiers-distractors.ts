@@ -1,0 +1,4 @@
+import type { PronounModifierMistakeType } from './pronouns-modifiers.types'
+export interface PronounModifierDistractor { text: string; mistakeType: PronounModifierMistakeType; qualityScore: number }
+export function pronounModifierDistractor(text: string, mistakeType: PronounModifierMistakeType): PronounModifierDistractor { return { text, mistakeType, qualityScore: 0.9 } }
+export function selectPronounModifierDistractors(correct: string, candidates: readonly PronounModifierDistractor[]): readonly PronounModifierDistractor[] { const answer = correct.trim().toLowerCase(); const seen = new Set<string>(); const selected = candidates.filter((item) => { const text = item.text.trim().toLowerCase(); if (text === answer || seen.has(text)) return false; seen.add(text); return true }); if (selected.length !== 3) throw new Error('Pronoun and modifier entries require exactly three curated unique distractors.'); return selected }

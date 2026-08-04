@@ -220,6 +220,15 @@ export type GeneratorSlug =
   | 'inverted-sentence-agreement'
   | 'special-case-agreement'
   | 'mixed-subject-verb-agreement'
+  | 'pronoun-reference-agreement'
+  | 'pronoun-case'
+  | 'possessive-reflexive-pronoun'
+  | 'relative-pronoun-usage'
+  | 'adjective-adverb-modifier'
+  | 'comparative-modifier'
+  | 'misplaced-modifier'
+  | 'dangling-modifier'
+  | 'mixed-pronouns-modifiers'
 
 export type AnswerKind =
   | 'number'
