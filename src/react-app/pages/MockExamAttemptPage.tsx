@@ -829,6 +829,5 @@ export function MockExamAttemptPage() {
         </main>
       </div>
     </main>
-
-
-
+  )
+}
