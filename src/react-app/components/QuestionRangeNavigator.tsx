@@ -94,6 +94,7 @@ export function QuestionRangeNavigator({
         const panelId = `${navigatorIdPrefix}-range-${range.index}`
         const headingId = `${navigatorIdPrefix}-heading-${range.index}`
         const answeredCount = range.questions.filter((q) => q.answered).length
+        const unansweredCount = range.questions.length - answeredCount
         const markedCount = range.questions.filter((q) => q.marked).length
 
         return (
@@ -110,9 +111,17 @@ export function QuestionRangeNavigator({
                 <span>
                   Questions {range.start}-{range.end}
                 </span>
-                <span
-                  className="question-range__meta"
-                >{`· ${answeredCount} answered · ${markedCount} marked`}</span>
+                <span className="question-range__meta">
+                  <span className="question-range__meta-chip">
+                    Answered {answeredCount}
+                  </span>
+                  <span className="question-range__meta-chip">
+                    Unanswered {unansweredCount}
+                  </span>
+                  <span className="question-range__meta-chip">
+                    Marked {markedCount}
+                  </span>
+                </span>
               </button>
             </h3>
 
@@ -152,12 +161,10 @@ export function QuestionRangeNavigator({
                       <span>{question.position}</span>
                       <small>
                         {question.answered ? 'Answered' : 'Unanswered'}
-                        {question.marked ? ' · Marked' : ''}
+                        {question.marked ? '\u00B7 Marked' : ''}
                       </small>
                       {question.marked ? (
-                        <span className="question-range-badge" aria-hidden="true">
-                          ?
-                        </span>
+                        <span className="question-range-badge" aria-hidden="true" />
                       ) : null}
                     </button>
                   )

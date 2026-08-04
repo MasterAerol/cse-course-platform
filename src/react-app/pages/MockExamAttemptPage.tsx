@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
 import {
@@ -34,14 +34,30 @@ function getModeLabel(mode: 'timed' | 'untimed' | undefined): string {
   return mode === 'timed' ? 'Timed Simulation' : 'Untimed Practice'
 }
 
-function getNavigatorStatusLabel(summary: {
+function QuestionStatusChips(summary: {
   answered: number
   unanswered: number
   marked: number
-}): string {
-  return `Answered ${summary.answered} · Unanswered ${summary.unanswered} · Marked ${summary.marked}`
+}): ReactElement {
+  return (
+    <div
+      className="question-status-chips"
+      role="status"
+      aria-live="polite"
+      aria-label={`Answered ${summary.answered}, Unanswered ${summary.unanswered}, Marked ${summary.marked}`}
+    >
+      <span className="question-status-chip">Answered {summary.answered}</span>
+      <span className="question-status-chip">Unanswered {summary.unanswered}</span>
+      <span className="question-status-chip">Marked {summary.marked}</span>
+    </div>
+  )
 }
 
+function normalizeTextWithPeso(value: string): string {
+  return value
+    .replace(/\uFFFD/g, String.fromCharCode(0x20B1))
+    .replace(/\u00A0/g, ' ')
+}
 function getQuestionButtonLabel(question: MockQuestion, current: boolean): string {
   const status = [
     current ? 'current' : null,
@@ -399,7 +415,7 @@ export function MockExamAttemptPage() {
   if (data === null) {
     return (
       <main className="page-shell">
-        <p>Preparing your immutable 150-question snapshot…</p>
+        <p>Preparing your immutable 150-question snapshot...</p>
       </main>
     )
   }
@@ -407,20 +423,21 @@ export function MockExamAttemptPage() {
   if (data.attempt.status === 'instructions') {
     return (
       <main className="page-shell">
-        <Link to="/dashboard">? Dashboard</Link>
+          <Link to="/dashboard">Dashboard</Link>
         <section className="dashboard-card">
           <p className="eyebrow">
             {getModeLabel(data.attempt.mode)}
-            {' · '}
+            {'\u00B7'}
             Attempt {data.attempt.attemptNumber}
           </p>
-          <h1>{data.examination.title}</h1>
+          <h1 className="mock-attempt-title">Full CSE Professional Mock Examination</h1>
           <ul>
             <li>150 scored questions across four subject areas</li>
             <li>
               {data.attempt.mode === 'timed'
                 ? '190 minutes; the clock continues if you leave'
-                : 'Untimed practice; no deadline'}
+                : 'Untimed Practice; no deadline'
+              }
             </li>
             <li>Unanswered questions score zero</li>
             <li>Answers autosave; submission is final</li>
@@ -448,13 +465,11 @@ export function MockExamAttemptPage() {
       <main className="page-shell">
         <section className="dashboard-card">
           <h1>Review before submission</h1>
-          <p>
-            {getNavigatorStatusLabel({
+        {QuestionStatusChips({
               answered: summary.answeredCount,
               unanswered: summary.unansweredCount,
               marked: summary.markedForReviewCount,
             })}
-          </p>
           <p>
             Unanswered:{' '}
             {summary.unansweredQuestionNumbers.join(', ') || 'None'}
@@ -486,7 +501,7 @@ export function MockExamAttemptPage() {
 
   const saveStatus =
     saveState === 'saving'
-      ? 'Saving…'
+      ? 'Saving...'
       : saveState === 'failed'
         ? 'Save failed'
         : saveState === 'saved'
@@ -498,7 +513,7 @@ export function MockExamAttemptPage() {
     <main className="page-shell quiz-page">
       <header className="topbar mock-attempt-topbar">
         <div>
-          <h1>{data.examination.title}</h1>
+          <h1 className="mock-attempt-title">Full CSE Professional Mock Examination</h1>
           <div className="mock-attempt-badges">
             <span className="badge badge--muted">{getModeLabel(data.attempt.mode)}</span>
             <span className="badge badge--muted">
@@ -511,8 +526,8 @@ export function MockExamAttemptPage() {
         </div>
         <p className="meta-copy mock-attempt-timer" aria-live="polite">
           {data.attempt.mode === 'timed'
-            ? `Time: ${formatTime(remaining)}`
-            : 'Untimed practice'}
+            ? `Time remaining: ${formatTime(remaining)}`
+            : 'Untimed Practice'}
         </p>
       </header>
 
@@ -525,7 +540,11 @@ export function MockExamAttemptPage() {
         aria-label="Open question navigator"
         onClick={openQuestionNavigator}
       >
-        <span>?</span>
+        <span className="question-drawer-trigger__icon" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
         Questions
         <span>{index + 1} / {data.totalCount}</span>
       </button>
@@ -567,17 +586,21 @@ export function MockExamAttemptPage() {
                 onClick={closeQuestionNavigator}
                 aria-label="Close question navigator"
               >
-                ?
+                <span className="question-drawer-close__icon" aria-hidden="true">
+                  <span />
+                  <span />
+                </span>
+                <span className="sr-only">Close</span>
               </button>
             </header>
 
-            <p className="meta-copy" id={`${QUESTION_NAVIGATOR_ID}-status`}>
-              {getNavigatorStatusLabel({
+            <div id={`${QUESTION_NAVIGATOR_ID}-status`}>
+              {QuestionStatusChips({
                 answered: data.answeredCount,
                 unanswered: unansweredCount,
                 marked: data.markedForReviewCount,
               })}
-            </p>
+            </div>
 
             <QuestionRangeNavigator
               totalQuestions={data.totalCount}
@@ -595,15 +618,18 @@ export function MockExamAttemptPage() {
       ) : null}
 
       <section className="quiz-attempt-card">
-        <p className="eyebrow">Question {q.position}</p>
-        <p className="meta-copy">
-          Answered {data.answeredCount}/{data.totalCount} · Unanswered {unansweredCount} · Marked {data.markedForReviewCount}
-        </p>
+        {QuestionStatusChips({
+          answered: data.answeredCount,
+          unanswered: unansweredCount,
+          marked: data.markedForReviewCount,
+        })}
 
         <fieldset className="quiz-question">
-          <legend>
-            <span>Question {q.position}</span>
-            {q.prompt}
+          <legend className="mock-attempt-question-legend">
+            <span>QUESTION {q.position}</span>
+            <span className="mock-attempt-question-prompt">
+              {normalizeTextWithPeso(q.prompt)}
+            </span>
           </legend>
           <div className="quiz-choice-list">
             {q.choices.map((choice) => (
@@ -614,7 +640,7 @@ export function MockExamAttemptPage() {
                   checked={q.selectedChoicePublicId === choice.publicId}
                   onChange={() => void choose(q.publicId, choice.publicId)}
                 />
-                <span>{choice.text}</span>
+                <span>{normalizeTextWithPeso(choice.text)}</span>
               </label>
             ))}
           </div>
@@ -628,7 +654,7 @@ export function MockExamAttemptPage() {
             />
             <span>Mark this question for review</span>
           </label>
-          <p className="meta-copy" aria-live="polite">
+          <p className="sr-only" aria-live="polite">
             {getQuestionButtonLabel(q, index === q.position - 1)}
           </p>
         </fieldset>
@@ -643,7 +669,7 @@ export function MockExamAttemptPage() {
             Previous
           </button>
 
-          <p className="meta-copy" aria-live="polite">
+          <p className="mock-attempt-save-status" aria-live="polite">
             {saveStatus}
           </p>
 
@@ -670,6 +696,16 @@ export function MockExamAttemptPage() {
     </main>
   )
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
