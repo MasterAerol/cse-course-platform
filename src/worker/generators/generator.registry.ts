@@ -32,6 +32,7 @@ import { readingComprehensionGenerators } from './reading-comprehension/reading-
 import { philippineConstitutionGenerators } from './philippine-constitution/philippine-constitution-generators'
 import { ra6713Generators } from './ra-6713/ra-6713-generators'
 import { peaceHumanRightsGenerators } from './peace-human-rights/peace-human-rights-generators'
+import { environmentManagementGenerators } from './environment-management/environment-management-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -75,6 +76,7 @@ const generators = [
   ...philippineConstitutionGenerators,
   ...ra6713Generators,
   ...peaceHumanRightsGenerators,
+  ...environmentManagementGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(

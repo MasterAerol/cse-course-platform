@@ -286,6 +286,16 @@ export type GeneratorSlug =
   | 'peacebuilding-concepts'
   | 'human-rights-institutions'
   | 'mixed-peace-human-rights'
+  | 'environmental-rights-sustainability'
+  | 'clean-air-management'
+  | 'clean-water-management'
+  | 'ecological-solid-waste'
+  | 'toxic-hazardous-substances'
+  | 'biodiversity-wildlife-protected-areas'
+  | 'environmental-impact-assessment'
+  | 'climate-mitigation-adaptation'
+  | 'environmental-institutions-action'
+  | 'mixed-environment-management'
 
 export type AnswerKind =
   | 'number'

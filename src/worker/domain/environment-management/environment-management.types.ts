@@ -1,0 +1,8 @@
+import type { GeneratorDifficulty } from '../../generators/generator.types'
+export type EnvironmentCategory='rights_sustainability'|'air'|'water'|'solid_waste'|'hazardous'|'biodiversity'|'eia'|'climate'|'institutions'
+export type EnvironmentDomain='constitutional_ecology'|'sustainability'|'air'|'water'|'solid_waste'|'hazardous_substances'|'biodiversity'|'protected_areas'|'environmental_assessment'|'climate_change'|'institutional_responsibility'
+export type EnvironmentSourceType='constitution'|'statute'|'presidential_decree'|'official_mandate'|'official_science'
+export type EnvironmentMistakeType='env_all_development_stops'|'env_visible_smoke_only'|'env_dilution_solves_pollution'|'env_all_waste_mixed'|'env_everything_recyclable'|'env_hazardous_as_ordinary'|'env_biodiversity_animals_only'|'env_ecc_zero_impact'|'env_mitigation_equals_adaptation'|'env_one_institution_all_roles'
+export interface EnvironmentSource{sourceTitle:string;sourceUrl:string;sourceType:EnvironmentSourceType;lawId:string;provisionId:string;institution:string;classification:'philippine_law'|'official_institution'|'official_science';verificationDate:'2026-08-04';contentVersion:'environment-management-v1';paraphrasedRule:string}
+export interface EnvironmentDistractor{text:string;mistakeType:EnvironmentMistakeType}
+export interface EnvironmentEntry{id:string;category:EnvironmentCategory;domain:EnvironmentDomain;concept:string;explanation:string;exactTerms:readonly string[];misconception:string;scenarioTemplates:readonly string[];difficulty:GeneratorDifficulty;distractors:readonly EnvironmentDistractor[];source:EnvironmentSource;active:true}

@@ -589,6 +589,16 @@ export type DistractorMistakeType =
   | 'phr_reconciliation_impunity'
   | 'phr_chr_is_court'
   | 'phr_treaty_body_domestic'
+  | 'env_all_development_stops'
+  | 'env_visible_smoke_only'
+  | 'env_dilution_solves_pollution'
+  | 'env_all_waste_mixed'
+  | 'env_everything_recyclable'
+  | 'env_hazardous_as_ordinary'
+  | 'env_biodiversity_animals_only'
+  | 'env_ecc_zero_impact'
+  | 'env_mitigation_equals_adaptation'
+  | 'env_one_institution_all_roles'
 
 export interface DistractorDerivation {
   operation: string
