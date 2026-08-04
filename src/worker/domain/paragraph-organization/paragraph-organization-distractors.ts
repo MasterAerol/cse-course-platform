@@ -1,0 +1,4 @@
+import type { ParagraphMistakeType } from './paragraph-organization.types'
+export interface ParagraphDistractor { text: string; mistakeType: ParagraphMistakeType; qualityScore: number }
+export function paragraphDistractor(text: string, mistakeType: ParagraphMistakeType): ParagraphDistractor { return { text, mistakeType, qualityScore: 0.9 } }
+export function selectParagraphDistractors(correct: string, candidates: readonly ParagraphDistractor[]): readonly ParagraphDistractor[] { const answer = correct.trim().toLowerCase(); const seen = new Set<string>(); const selected = candidates.filter((item) => { const text = item.text.trim().toLowerCase(); if (text === answer || seen.has(text)) return false; seen.add(text); return true }); if (selected.length !== 3) throw new Error('Paragraph entries require exactly three curated unique distractors.'); return selected }

@@ -532,6 +532,18 @@ export type DistractorMistakeType =
   | 'structure_wrong_modifier_position'
   | 'structure_wrong_error_segment'
   | 'structure_no_error_when_error_exists'
+  | 'paragraph_detail_before_topic'
+  | 'paragraph_pronoun_before_antecedent'
+  | 'paragraph_example_before_general'
+  | 'paragraph_effect_before_cause'
+  | 'paragraph_conclusion_before_support'
+  | 'paragraph_reversed_chronology'
+  | 'paragraph_broken_comparison_pair'
+  | 'paragraph_transition_separated'
+  | 'paragraph_opening_closing_swapped'
+  | 'paragraph_adjacent_sentences_reversed'
+  | 'paragraph_surface_keyword_order'
+  | 'paragraph_new_idea_as_closing'
 
 export interface DistractorDerivation {
   operation: string

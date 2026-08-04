@@ -238,6 +238,15 @@ export type GeneratorSlug =
   | 'unclear-illogical-sentence'
   | 'sentence-part-error-identification'
   | 'mixed-sentence-structure-errors'
+  | 'topic-sentence-identification'
+  | 'supporting-detail-order'
+  | 'chronological-paragraph-order'
+  | 'cause-effect-paragraph-order'
+  | 'comparison-contrast-order'
+  | 'general-specific-order'
+  | 'transition-link-order'
+  | 'opening-closing-sentence'
+  | 'mixed-paragraph-organization'
 
 export type AnswerKind =
   | 'number'

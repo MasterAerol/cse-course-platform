@@ -1,0 +1,5 @@
+import type { ParagraphSkill, SentenceNode } from './paragraph-organization.types'
+const labels: Readonly<Record<ParagraphSkill, string>> = { topic_sentence: 'topic-sentence identification', supporting_detail: 'supporting-detail order', chronological: 'chronological order', cause_effect: 'cause-and-effect order', comparison_contrast: 'comparison-and-contrast order', general_specific: 'general and specific hierarchy', transition_link: 'transition and reference links', opening_closing: 'opening and closing sentences' }
+export function paragraphSkillLabel(skill: ParagraphSkill): string { return labels[skill] }
+export function displaySentenceNodes(nodes: readonly SentenceNode[]): string { return [...nodes].sort((left, right) => left.id.localeCompare(right.id)).map((item) => `${item.id}. ${item.text}`).join(' ') }
+export function paragraphNumericValue(value: string): number { let total = 0; for (const character of value) total = (total * 31 + (character.codePointAt(0) ?? 0)) % 1_000_003; return total }
