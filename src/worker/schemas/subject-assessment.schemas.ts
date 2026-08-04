@@ -72,7 +72,7 @@ const topicConfigSchema = z
 
 export const subjectAssessmentBlueprintInputSchema = z
   .object({
-    subjectSlug: z.enum(['numerical-ability', 'analytical-ability']),
+    subjectSlug: z.enum(['numerical-ability', 'analytical-ability', 'verbal-ability']),
     version: z.number().int().positive(),
     totalQuestions: z.number().int().positive(),
     passingScorePercent: z.number().int().min(0).max(100),

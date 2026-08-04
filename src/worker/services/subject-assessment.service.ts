@@ -7,6 +7,7 @@ import {
   generateSubjectAssessmentQuestions,
   numericalAbilityAssessmentSlug,
   analyticalAbilityAssessmentSlug,
+  verbalAbilityAssessmentSlug,
   type SubjectAssessmentTopicSlug,
   type SubjectAssessmentBlueprint,
   validateSubjectAssessmentBlueprint,
@@ -1019,7 +1020,9 @@ async function validateAdminAssessment(
     ? { slug: numericalAbilityAssessmentSlug, questions: 50, topics: 10 }
     : assessment.subject_slug === 'analytical-ability'
       ? { slug: analyticalAbilityAssessmentSlug, questions: 45, topics: 9 }
-      : null
+      : assessment.subject_slug === 'verbal-ability'
+        ? { slug: verbalAbilityAssessmentSlug, questions: 50, topics: 10 }
+        : null
   if (
     expected === null ||
     assessment.slug !== expected.slug ||

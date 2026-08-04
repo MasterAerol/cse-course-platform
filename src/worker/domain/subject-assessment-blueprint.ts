@@ -6,7 +6,9 @@ export const numericalAbilityAssessmentSlug = 'numerical-ability-subject-assessm
 export const numericalAbilitySubjectSlug = 'numerical-ability'
 export const analyticalAbilityAssessmentSlug = 'analytical-ability-subject-assessment'
 export const analyticalAbilitySubjectSlug = 'analytical-ability'
-export type SubjectAssessmentSubjectSlug = typeof numericalAbilitySubjectSlug | typeof analyticalAbilitySubjectSlug
+export const verbalAbilityAssessmentSlug = 'verbal-ability-subject-assessment'
+export const verbalAbilitySubjectSlug = 'verbal-ability'
+export type SubjectAssessmentSubjectSlug = typeof numericalAbilitySubjectSlug | typeof analyticalAbilitySubjectSlug | typeof verbalAbilitySubjectSlug
 
 export type SubjectAssessmentTopicSlug = string
 export type NumericalAbilityTopicSlug = SubjectAssessmentTopicSlug
@@ -39,13 +41,26 @@ const analyticalOwnership = {
   'seating-and-arrangement-problems': ['linear-row-seating','left-right-neighbor','fixed-gap-seating','circular-seating','facing-direction-seating','rearrangement-swap','schedule-slot-arrangement','object-shelf-arrangement','mixed-seating-arrangement'],
   'data-interpretation': ['table-interpretation','bar-chart-interpretation','line-graph-interpretation','pie-chart-interpretation','percentage-ratio-data','totals-differences-comparisons','average-weighted-data','multi-step-data-interpretation','mixed-data-interpretation'],
 } as const satisfies Record<string, readonly GeneratorSlug[]>
-
+const verbalOwnership = {
+  'vocabulary-and-word-meaning': ['root-word-meaning','prefix-meaning','suffix-meaning','word-family-form','denotation-connotation','multiple-meaning-word','definition-example-match','commonly-confused-words','mixed-vocabulary-word-meaning'],
+  'synonyms-and-antonyms': ['basic-synonym','basic-antonym','context-sensitive-synonym','context-sensitive-antonym','degree-intensity-synonym','connotation-tone-synonym','formal-informal-equivalent','sentence-synonym-antonym','mixed-synonyms-antonyms'],
+  'context-clues': ['definition-context-clue','synonym-context-clue','antonym-contrast-clue','example-illustration-clue','cause-effect-context-clue','general-sense-context-clue','multiple-meaning-context-clue','two-sentence-context-clue','mixed-context-clues'],
+  'sentence-completion': ['grammar-fit-completion','meaning-fit-completion','transition-word-completion','cause-effect-completion','contrast-comparison-completion','parallel-idea-completion','tone-formality-completion','double-blank-completion','mixed-sentence-completion'],
+  'grammar-and-correct-usage': ['part-of-speech-usage','verb-tense-consistency','article-determiner-usage','preposition-usage','conjunction-usage','comparative-superlative-usage','commonly-misused-expression','correct-sentence-usage','mixed-grammar-usage'],
+  'subject-verb-agreement': ['basic-subject-verb-agreement','compound-subject-agreement','either-or-neither-nor-agreement','indefinite-pronoun-agreement','collective-quantity-agreement','intervening-phrase-agreement','inverted-sentence-agreement','special-case-agreement','mixed-subject-verb-agreement'],
+  'pronouns-and-modifiers': ['pronoun-reference-agreement','pronoun-case','possessive-reflexive-pronoun','relative-pronoun-usage','adjective-adverb-modifier','comparative-modifier','misplaced-modifier','dangling-modifier','mixed-pronouns-modifiers'],
+  'sentence-structure-and-error-identification': ['subject-predicate-clause-identification','sentence-type-classification','sentence-fragment-detection','run-on-comma-splice-detection','coordination-subordination-error','parallel-structure-error','unclear-illogical-sentence','sentence-part-error-identification','mixed-sentence-structure-errors'],
+  'paragraph-organization': ['topic-sentence-identification','supporting-detail-order','chronological-paragraph-order','cause-effect-paragraph-order','comparison-contrast-order','general-specific-order','transition-link-order','opening-closing-sentence','mixed-paragraph-organization'],
+  'reading-comprehension': ['main-idea-comprehension','supporting-detail-comprehension','sequence-organization-comprehension','cause-effect-comprehension','vocabulary-in-context-comprehension','inference-comprehension','author-purpose-tone-comprehension','fact-opinion-conclusion-comprehension','mixed-reading-comprehension'],
+} as const satisfies Record<string, readonly GeneratorSlug[]>
 const numericalTitles: Record<string,string> = { percentages:'Percentages', fractions:'Fractions', decimals:'Decimals', 'ratio-and-proportion':'Ratio and Proportion', average:'Average', 'number-problems':'Number Problems', 'age-problems':'Age Problems', 'work-and-rate-problems':'Work and Rate Problems', 'distance-speed-and-time':'Distance, Speed, and Time', 'simple-interest':'Simple Interest' }
 const analyticalTitles: Record<string,string> = { 'logical-reasoning-fundamentals':'Logical Reasoning Fundamentals', 'analogy-and-classification':'Analogy and Classification', 'number-series':'Number Series', 'letter-series':'Letter Series', 'coding-and-decoding':'Coding and Decoding', 'ordering-and-ranking':'Ordering and Ranking', syllogisms:'Syllogisms', 'seating-and-arrangement-problems':'Seating and Arrangement Problems', 'data-interpretation':'Data Interpretation' }
+const verbalTitles: Record<string,string> = { 'vocabulary-and-word-meaning':'Vocabulary and Word Meaning', 'synonyms-and-antonyms':'Synonyms and Antonyms', 'context-clues':'Context Clues', 'sentence-completion':'Sentence Completion', 'grammar-and-correct-usage':'Grammar and Correct Usage', 'subject-verb-agreement':'Subject–Verb Agreement', 'pronouns-and-modifiers':'Pronouns and Modifiers', 'sentence-structure-and-error-identification':'Sentence Structure and Error Identification', 'paragraph-organization':'Paragraph Organization', 'reading-comprehension':'Reading Comprehension' }
 
 const definitions = {
   [numericalAbilitySubjectSlug]: { total: 50, ownership: numericalOwnership, titles: numericalTitles },
   [analyticalAbilitySubjectSlug]: { total: 45, ownership: analyticalOwnership, titles: analyticalTitles },
+  [verbalAbilitySubjectSlug]: { total: 50, ownership: verbalOwnership, titles: verbalTitles },
 } as const
 
 function configs(slugs: readonly GeneratorSlug[]): SubjectAssessmentGeneratorConfig[] { return slugs.map((slug,index)=>({slug,version:1,rotationPosition:index+1,selectionWeight:1})) }
@@ -53,6 +68,7 @@ function blueprint(subjectSlug: keyof typeof definitions): SubjectAssessmentBlue
 
 export const numericalAbilityBlueprintV1 = blueprint(numericalAbilitySubjectSlug)
 export const analyticalAbilityBlueprintV1 = blueprint(analyticalAbilitySubjectSlug)
+export const verbalAbilityBlueprintV1 = blueprint(verbalAbilitySubjectSlug)
 
 export interface BlueprintValidationResult { valid:boolean; errors:string[] }
 export function validateSubjectAssessmentBlueprint(input: SubjectAssessmentBlueprint): BlueprintValidationResult {
