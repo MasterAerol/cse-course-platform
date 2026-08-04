@@ -1,4 +1,4 @@
-import { useMemo, type ReactElement } from 'react'
+﻿import { useMemo, type ReactElement } from 'react'
 
 import { type MockQuestion } from '../lib/mock-exam-api'
 
@@ -59,6 +59,22 @@ function makeQuestionLabel({
   if (marked) states.push('marked for review')
 
   return `Question ${position}, ${states.join(', ')}`
+}
+
+function makeSmallStatus(answered: boolean, marked: boolean): string {
+  if (answered && marked) {
+    return 'Answered • Marked'
+  }
+
+  if (answered) {
+    return 'Answered'
+  }
+
+  if (marked) {
+    return 'Unanswered • Marked'
+  }
+
+  return 'Unanswered'
 }
 
 export function QuestionRangeNavigator({
@@ -159,13 +175,7 @@ export function QuestionRangeNavigator({
                       onClick={() => onQuestionSelect(question.position - 1)}
                     >
                       <span>{question.position}</span>
-                      <small>
-                        {question.answered ? 'Answered' : 'Unanswered'}
-                        {question.marked ? '\u00B7 Marked' : ''}
-                      </small>
-                      {question.marked ? (
-                        <span className="question-range-badge" aria-hidden="true" />
-                      ) : null}
+                      <small>{makeSmallStatus(question.answered, question.marked)}</small>
                     </button>
                   )
                 })}
@@ -177,3 +187,4 @@ export function QuestionRangeNavigator({
     </nav>
   )
 }
+

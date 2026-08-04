@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+﻿import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
 import {
@@ -55,9 +55,12 @@ function QuestionStatusChips(summary: {
 
 function normalizeTextWithPeso(value: string): string {
   return value
-    .replace(/\uFFFD/g, String.fromCharCode(0x20B1))
+    .replace(/\uFFFD/g, '\u20B1')
     .replace(/\u00A0/g, ' ')
 }
+
+
+
 function getQuestionButtonLabel(question: MockQuestion, current: boolean): string {
   const status = [
     current ? 'current' : null,
@@ -92,8 +95,23 @@ function focusFirstQuestionInDrawer(
   }
 
   currentButton.focus({ preventScroll: true })
-  currentButton.scrollIntoView({
-    block: 'center',
+  const scrollContainer = root.querySelector<HTMLElement>(
+    '.question-navigator-drawer__content',
+  )
+  if (scrollContainer === null) {
+    currentButton.scrollIntoView({
+      block: 'center',
+      behavior: reducedMotion ? 'auto' : 'smooth',
+    })
+    return
+  }
+
+  const containerRect = scrollContainer.getBoundingClientRect()
+  const buttonRect = currentButton.getBoundingClientRect()
+  const offset = buttonRect.top - containerRect.top
+
+  scrollContainer.scrollTo({
+    top: scrollContainer.scrollTop + offset - containerRect.height * 0.18,
     behavior: reducedMotion ? 'auto' : 'smooth',
   })
 }
@@ -131,9 +149,9 @@ export function MockExamAttemptPage() {
   const [data, setData] = useState<MockAttempt | null>(null)
   const [index, setIndex] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>(
-    'idle',
-  )
+  const [saveState, setSaveState] = useState<
+    'idle' | 'saving' | 'saved' | 'failed'
+  >('saved')
   const [reviewing, setReviewing] = useState(false)
   const [summary, setSummary] = useState<
     Awaited<ReturnType<typeof fetchSubmissionReview>> | null
@@ -334,6 +352,7 @@ export function MockExamAttemptPage() {
       return
     }
 
+    const previous = data
     setData({
       ...data,
       questions: data.questions.map((question) =>
@@ -348,6 +367,7 @@ export function MockExamAttemptPage() {
     try {
       await saveMockReviewFlag(attemptPublicId, questionId, value)
     } catch (e) {
+      setData(previous)
       setError(e instanceof Error ? e.message : 'Review flag could not be saved.')
     }
   }
@@ -423,7 +443,7 @@ export function MockExamAttemptPage() {
   if (data.attempt.status === 'instructions') {
     return (
       <main className="page-shell">
-          <Link to="/dashboard">Dashboard</Link>
+        <Link to="/dashboard">Dashboard</Link>
         <section className="dashboard-card">
           <p className="eyebrow">
             {getModeLabel(data.attempt.mode)}
@@ -465,11 +485,11 @@ export function MockExamAttemptPage() {
       <main className="page-shell">
         <section className="dashboard-card">
           <h1>Review before submission</h1>
-        {QuestionStatusChips({
-              answered: summary.answeredCount,
-              unanswered: summary.unansweredCount,
-              marked: summary.markedForReviewCount,
-            })}
+          {QuestionStatusChips({
+            answered: summary.answeredCount,
+            unanswered: summary.unansweredCount,
+            marked: summary.markedForReviewCount,
+          })}
           <p>
             Unanswered:{' '}
             {summary.unansweredQuestionNumbers.join(', ') || 'None'}
@@ -504,9 +524,7 @@ export function MockExamAttemptPage() {
       ? 'Saving...'
       : saveState === 'failed'
         ? 'Save failed'
-        : saveState === 'saved'
-          ? 'Saved'
-          : 'Autosave ready'
+        : 'Saved'
   const unansweredCount = data.totalCount - data.answeredCount
 
   return (
@@ -520,7 +538,7 @@ export function MockExamAttemptPage() {
               Attempt {data.attempt.attemptNumber}
             </span>
             <span className="badge badge--muted">
-              Passing score {data.examination.passingScore}%
+              Passing Score: {data.examination.passingScore}%
             </span>
           </div>
         </div>
@@ -545,8 +563,10 @@ export function MockExamAttemptPage() {
           <span />
           <span />
         </span>
-        Questions
-        <span>{index + 1} / {data.totalCount}</span>
+        <span className="question-drawer-trigger__text">Questions</span>
+        <span className="question-drawer-trigger__count">
+          {index + 1} / {data.totalCount}
+        </span>
       </button>
 
       <div className="question-range-nav-desktop" aria-live="polite">
@@ -577,6 +597,7 @@ export function MockExamAttemptPage() {
             aria-modal="true"
             aria-labelledby={`${QUESTION_NAVIGATOR_ID}-title`}
             ref={drawerRef}
+            tabIndex={-1}
           >
             <header className="drawer-header">
               <h2 id={`${QUESTION_NAVIGATOR_ID}-title`}>Question Navigator</h2>
@@ -594,25 +615,25 @@ export function MockExamAttemptPage() {
               </button>
             </header>
 
-            <div id={`${QUESTION_NAVIGATOR_ID}-status`}>
+            <div className="question-navigator-drawer__content">
               {QuestionStatusChips({
                 answered: data.answeredCount,
                 unanswered: unansweredCount,
                 marked: data.markedForReviewCount,
               })}
+
+              <QuestionRangeNavigator
+                totalQuestions={data.totalCount}
+                questions={data.questions}
+                currentIndex={index}
+                expandedRangeIndex={expandedRangeIndex}
+                onRangeExpand={handleRangeExpand}
+                onQuestionSelect={handleQuestionSelect}
+                navigatorIdPrefix="mock-question-range-drawer"
+              />
+
+              {getNavigatorLegend()}
             </div>
-
-            <QuestionRangeNavigator
-              totalQuestions={data.totalCount}
-              questions={data.questions}
-              currentIndex={index}
-              expandedRangeIndex={expandedRangeIndex}
-              onRangeExpand={handleRangeExpand}
-              onQuestionSelect={handleQuestionSelect}
-              navigatorIdPrefix="mock-question-range-drawer"
-            />
-
-            {getNavigatorLegend()}
           </aside>
         </>
       ) : null}
@@ -624,13 +645,26 @@ export function MockExamAttemptPage() {
           marked: data.markedForReviewCount,
         })}
 
-        <fieldset className="quiz-question">
-          <legend className="mock-attempt-question-legend">
-            <span>QUESTION {q.position}</span>
-            <span className="mock-attempt-question-prompt">
-              {normalizeTextWithPeso(q.prompt)}
-            </span>
-          </legend>
+        <article className="mock-attempt-question-card">
+          <header className="mock-attempt-question-header">
+            <p className="mock-attempt-question-label">QUESTION {q.position}</p>
+            <label className="mock-attempt-review-control">
+
+              <input
+                type="checkbox"
+                className="mock-attempt-review-checkbox"
+                checked={q.markedForReview}
+                onChange={(event) => void mark(q.publicId, event.currentTarget.checked)}
+                aria-label="Mark this question for review"
+              />
+              <span>Mark this question for review</span>
+            </label>
+          </header>
+
+          <p className="mock-attempt-question-prompt">
+            {normalizeTextWithPeso(q.prompt)}
+          </p>
+
           <div className="quiz-choice-list">
             {q.choices.map((choice) => (
               <label className="quiz-choice" key={choice.publicId}>
@@ -644,20 +678,11 @@ export function MockExamAttemptPage() {
               </label>
             ))}
           </div>
-          <label className="question-review-control">
-            <input
-              type="checkbox"
-              checked={q.markedForReview}
-              onChange={(event) =>
-                void mark(q.publicId, event.currentTarget.checked)
-              }
-            />
-            <span>Mark this question for review</span>
-          </label>
+
           <p className="sr-only" aria-live="polite">
             {getQuestionButtonLabel(q, index === q.position - 1)}
           </p>
-        </fieldset>
+        </article>
 
         <div className="mock-attempt-step-row">
           <button
@@ -696,16 +721,6 @@ export function MockExamAttemptPage() {
     </main>
   )
 }
-
-
-
-
-
-
-
-
-
-
 
 
 
