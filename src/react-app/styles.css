@@ -1630,7 +1630,7 @@ input[aria-invalid="true"] {
   border: 1px solid #d7e0ee;
   border-radius: 0.8rem;
   background: #fff;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .question-range h3 {
@@ -2208,7 +2208,7 @@ input[aria-invalid="true"] {
   border: 1px solid #d7e0ee;
   border-radius: 0.8rem;
   background: #fff;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .question-range h3 {
@@ -2614,4 +2614,3 @@ input[aria-invalid="true"] {
     transform: translateX(0);
   }
 }
-
