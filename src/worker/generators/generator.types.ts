@@ -256,6 +256,16 @@ export type GeneratorSlug =
   | 'author-purpose-tone-comprehension'
   | 'fact-opinion-conclusion-comprehension'
   | 'mixed-reading-comprehension'
+  | 'constitution-structure-principles'
+  | 'bill-of-rights'
+  | 'citizenship-suffrage'
+  | 'legislative-department'
+  | 'executive-department'
+  | 'judicial-department'
+  | 'constitutional-commissions'
+  | 'public-officer-accountability'
+  | 'local-government-economy-amendments'
+  | 'mixed-philippine-constitution'
 
 export type AnswerKind =
   | 'number'

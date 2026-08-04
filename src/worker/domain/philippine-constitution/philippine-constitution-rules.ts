@@ -1,0 +1,14 @@
+import type { ConstitutionEntry, ConstitutionSourceMetadata } from './philippine-constitution.types'
+
+const articles = new Set(['Preamble', ...Array.from({ length: 18 }, (_, index) => `Article ${['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV','XVI','XVII','XVIII'][index]}`)])
+const prohibitedCurrentContent = /\b(current|incumbent|candidate|running mate|administration’s|administration's|sitting senator|sitting justice|proposed amendment|pending amendment)\b/iu
+export function validArticleSection(article: string, section: string): boolean { return (articles.has(article) || /^Article IX-[ABCD]$/u.test(article)) && (article === 'Preamble' ? section === 'Preamble' : /^(Section \d+(?:\(\d+\))?|Sections \d+ and \d+|Sole unnumbered provision)$/u.test(section)) }
+export function sourceMetadataComplete(source: ConstitutionSourceMetadata): boolean { return source.sourceTitle === '1987 Constitution of the Republic of the Philippines' && source.sourceUrl === 'https://lawphil.net/consti/cons1987.html' && validArticleSection(source.article, source.section) && source.provisionId === `${source.article}|${source.section}` && /^\d{4}-\d{2}-\d{2}$/u.test(source.verificationDate) && source.classification === 'primary_constitution' && source.paraphrasedRule.trim().length >= 30 && source.historicalVersion === '1987-constitution-v1' }
+export function rejectsCurrentPoliticalContent(value: string): boolean { return !prohibitedCurrentContent.test(value) }
+export function qualificationAndTermValid(entry: ConstitutionEntry): boolean { const values = `${entry.paraphrase} ${entry.source.paraphrasedRule}`; return !/\b(?:years?|percent|thirds?|months?|days?|age)\b/iu.test(values) || entry.exactTerms.length > 0 }
+export function rightClassificationValid(entry: ConstitutionEntry): boolean { return entry.category !== 'bill_of_rights' || entry.article === 'Article III' }
+export function commissionRoleValid(entry: ConstitutionEntry): boolean { return entry.category !== 'constitutional_commissions' || entry.article.startsWith('Article IX') }
+export function amendmentProcessValid(entry: ConstitutionEntry): boolean { return entry.id !== 'constitutional-change' || (entry.article === 'Article XVII' && entry.paraphrase.includes('ratification')) }
+export function institutionRoleMatches(entry: ConstitutionEntry, answer: string): boolean { return answer === entry.paraphrase }
+export function uniqueVisibleChoices(choices: readonly string[]): boolean { return choices.length === 4 && new Set(choices.map((choice) => choice.trim().toLowerCase())).size === 4 }
+export function uniqueAnswer(choices: readonly string[], answer: string): boolean { return choices.filter((choice) => choice === answer).length === 1 }

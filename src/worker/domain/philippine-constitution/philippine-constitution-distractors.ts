@@ -1,0 +1,4 @@
+import type { ConstitutionDistractor, ConstitutionMistakeType } from './philippine-constitution.types'
+export interface ScoredConstitutionDistractor extends ConstitutionDistractor { qualityScore: number }
+export function constitutionDistractor(text: string, mistakeType: ConstitutionMistakeType): ScoredConstitutionDistractor { return { text: text.trim(), mistakeType, qualityScore: text.trim().length >= 20 ? 1 : 0 } }
+export function selectConstitutionDistractors(answer: string, candidates: readonly ScoredConstitutionDistractor[]): ScoredConstitutionDistractor[] { const seen=new Set([answer.trim().toLowerCase()]); return candidates.filter((item)=>item.qualityScore>0&&item.mistakeType.startsWith('constitution_')&&!seen.has(item.text.toLowerCase())&&(seen.add(item.text.toLowerCase()),true)).slice(0,3) }

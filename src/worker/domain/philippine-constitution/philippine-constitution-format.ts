@@ -1,0 +1,5 @@
+import type { ConstitutionCategory, ConstitutionSourceMetadata } from './philippine-constitution.types'
+const labels: Record<ConstitutionCategory,string> = { structure_principles:'constitutional structure and State principles', bill_of_rights:'Bill of Rights', citizenship_suffrage:'citizenship and suffrage', legislative:'Legislative Department', executive:'Executive Department', judicial:'Judicial Department', constitutional_commissions:'Constitutional Commissions', accountability:'accountability of public officers', local_economy_amendments:'local government, patrimony, and constitutional change' }
+export function constitutionCategoryLabel(category: ConstitutionCategory): string { return labels[category] }
+export function formatConstitutionReference(source: ConstitutionSourceMetadata): string { return `${source.sourceTitle}, ${source.article}, ${source.section}` }
+export function constitutionNumericValue(value: string): number { let total=0; for(const char of value) total=(total*31+(char.codePointAt(0)??0))%1_000_003; return total }

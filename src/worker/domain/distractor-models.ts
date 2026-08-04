@@ -559,6 +559,16 @@ export type DistractorMistakeType =
   | 'reading_reader_reaction_as_tone'
   | 'reading_opinion_as_fact'
   | 'reading_unsupported_conclusion'
+  | 'constitution_wrong_branch'
+  | 'constitution_wrong_commission'
+  | 'constitution_reversed_roles'
+  | 'constitution_confused_right'
+  | 'constitution_incorrect_article'
+  | 'constitution_missing_limitation'
+  | 'constitution_statute_confusion'
+  | 'constitution_current_practice'
+  | 'constitution_amendment_as_legislation'
+  | 'constitution_citizenship_suffrage_confusion'
 
 export interface DistractorDerivation {
   operation: string

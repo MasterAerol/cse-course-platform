@@ -1,0 +1,8 @@
+import type { GeneratorDifficulty } from '../../generators/generator.types'
+
+export type ConstitutionCategory = 'structure_principles' | 'bill_of_rights' | 'citizenship_suffrage' | 'legislative' | 'executive' | 'judicial' | 'constitutional_commissions' | 'accountability' | 'local_economy_amendments'
+export type ConstitutionSourceClassification = 'primary_constitution'
+export type ConstitutionMistakeType = 'constitution_wrong_branch' | 'constitution_wrong_commission' | 'constitution_reversed_roles' | 'constitution_confused_right' | 'constitution_incorrect_article' | 'constitution_missing_limitation' | 'constitution_statute_confusion' | 'constitution_current_practice' | 'constitution_amendment_as_legislation' | 'constitution_citizenship_suffrage_confusion'
+export interface ConstitutionSourceMetadata { sourceTitle: '1987 Constitution of the Republic of the Philippines'; sourceUrl: 'https://lawphil.net/consti/cons1987.html'; article: string; section: string; provisionId: string; verificationDate: '2026-08-04'; classification: ConstitutionSourceClassification; paraphrasedRule: string; historicalVersion: '1987-constitution-v1' }
+export interface ConstitutionDistractor { text: string; mistakeType: ConstitutionMistakeType }
+export interface ConstitutionEntry { id: string; category: ConstitutionCategory; article: string; section: string; concept: string; paraphrase: string; exactTerms: readonly string[]; misconception: string; difficulty: GeneratorDifficulty; distractors: readonly ConstitutionDistractor[]; source: ConstitutionSourceMetadata; active: true }

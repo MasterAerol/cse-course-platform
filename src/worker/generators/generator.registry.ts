@@ -29,6 +29,7 @@ import { pronounsModifiersGenerators } from './pronouns-modifiers/pronouns-modif
 import { sentenceStructureGenerators } from './sentence-structure/sentence-structure-generators'
 import { paragraphOrganizationGenerators } from './paragraph-organization/paragraph-organization-generators'
 import { readingComprehensionGenerators } from './reading-comprehension/reading-comprehension-generators'
+import { philippineConstitutionGenerators } from './philippine-constitution/philippine-constitution-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -69,6 +70,7 @@ const generators = [
   ...sentenceStructureGenerators,
   ...paragraphOrganizationGenerators,
   ...readingComprehensionGenerators,
+  ...philippineConstitutionGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(
