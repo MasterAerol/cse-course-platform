@@ -247,6 +247,15 @@ export type GeneratorSlug =
   | 'transition-link-order'
   | 'opening-closing-sentence'
   | 'mixed-paragraph-organization'
+  | 'main-idea-comprehension'
+  | 'supporting-detail-comprehension'
+  | 'sequence-organization-comprehension'
+  | 'cause-effect-comprehension'
+  | 'vocabulary-in-context-comprehension'
+  | 'inference-comprehension'
+  | 'author-purpose-tone-comprehension'
+  | 'fact-opinion-conclusion-comprehension'
+  | 'mixed-reading-comprehension'
 
 export type AnswerKind =
   | 'number'

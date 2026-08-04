@@ -544,6 +544,21 @@ export type DistractorMistakeType =
   | 'paragraph_adjacent_sentences_reversed'
   | 'paragraph_surface_keyword_order'
   | 'paragraph_new_idea_as_closing'
+  | 'reading_true_detail_not_main'
+  | 'reading_overly_broad_summary'
+  | 'reading_overly_narrow_detail'
+  | 'reading_altered_detail'
+  | 'reading_outside_assumption'
+  | 'reading_reversed_cause_effect'
+  | 'reading_wrong_sequence'
+  | 'reading_unsupported_word_sense'
+  | 'reading_wrong_part_of_speech'
+  | 'reading_overgeneralized_inference'
+  | 'reading_direct_detail_not_inference'
+  | 'reading_topic_instead_of_purpose'
+  | 'reading_reader_reaction_as_tone'
+  | 'reading_opinion_as_fact'
+  | 'reading_unsupported_conclusion'
 
 export interface DistractorDerivation {
   operation: string

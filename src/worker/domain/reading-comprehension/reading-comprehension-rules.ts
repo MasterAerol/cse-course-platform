@@ -1,0 +1,14 @@
+import type { ReadingComprehensionEntry, ReadingPassage } from './reading-comprehension.types'
+export function normalizeReadingText(value: string): string { return value.trim().toLowerCase().replaceAll(/\s+/gu, ' ') }
+export function passageWordCount(passage: ReadingPassage): number { return passage.text.trim().split(/\s+/u).filter(Boolean).length }
+export function passageLengthValid(passage: ReadingPassage): boolean { const count = passageWordCount(passage); return count >= 80 && count <= (passage.difficulty === 'hard' ? 250 : 180) }
+export function evidenceMappingValid(passage: ReadingPassage, entry: ReadingComprehensionEntry): boolean { return entry.evidence.length > 0 && entry.evidence.every((span) => passage.text.includes(span.text) && span.supports.length >= 8) }
+export function mainIdeaValid(passage: ReadingPassage): boolean { return passage.mainIdea.length >= 20 && passage.supportingDetails.length >= 2 && passage.supportingDetails.every((item) => passage.text.includes(item)) }
+export function detailsValid(passage: ReadingPassage): boolean { return passage.supportingDetails.every((item) => passage.text.includes(item)) && new Set(passage.supportingDetails).size === passage.supportingDetails.length }
+export function sequenceValid(passage: ReadingPassage): boolean { return passage.organization !== 'chronological' || passage.sequence.length >= 3 && passage.sequence.every((item) => passage.text.includes(item)) }
+export function causeEffectValid(passage: ReadingPassage): boolean { return passage.organization !== 'cause_effect' || passage.causeEffects.length > 0 && passage.causeEffects.every(([cause, effect]) => passage.text.includes(cause) && passage.text.includes(effect) && passage.text.indexOf(cause) < passage.text.indexOf(effect)) }
+export function contextualSenseValid(passage: ReadingPassage): boolean { return passage.vocabularyTargets.every((item) => passage.text.toLowerCase().includes(item.word.toLowerCase()) && item.sense.length >= 3) }
+export function inferenceSupportValid(passage: ReadingPassage): boolean { return passage.validInferences.length > 0 && passage.invalidOvergeneralizations.length > 0 && passage.validInferences.every((item) => item.length >= 15) }
+export function purposeToneValid(passage: ReadingPassage): boolean { return ['inform', 'explain', 'describe', 'instruct', 'compare', 'warn'].includes(passage.purpose) && ['informative', 'objective', 'encouraging', 'cautious', 'positive', 'neutral'].includes(passage.tone) }
+export function factOpinionConclusionValid(passage: ReadingPassage): boolean { return passage.facts.length > 0 && passage.conclusions.length > 0 && passage.facts.every((item) => passage.text.includes(item)) && passage.opinions.every((item) => passage.text.includes(item)) }
+export function readingAnswerMatches(entry: ReadingComprehensionEntry, answer: string): boolean { return normalizeReadingText(entry.correctChoice) === normalizeReadingText(answer) }

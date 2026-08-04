@@ -217,7 +217,7 @@ export function PracticeResultPage() {
                   Question {question.position}:{' '}
                   {question.isCorrect ? 'Correct' : 'Review'}
                 </h2>
-                <p>{question.prompt}</p>
+                <p className="question-prompt">{question.prompt}</p>
                 <p>
                   Your answer:{' '}
                   {question.selectedChoice === null

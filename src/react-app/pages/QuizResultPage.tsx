@@ -223,7 +223,7 @@ export function QuizResultPage() {
                   Question {question.position}:{' '}
                   {question.isCorrect ? 'Correct' : 'Incorrect'}
                 </h2>
-                <p>{question.prompt}</p>
+                <p className="question-prompt">{question.prompt}</p>
                 <p>
                   Your answer:{' '}
                   {question.selectedChoice === null

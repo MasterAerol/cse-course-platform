@@ -1,0 +1,4 @@
+import type { ReadingMistakeType } from './reading-comprehension.types'
+export interface ReadingDistractor { text: string; mistakeType: ReadingMistakeType; qualityScore: number }
+export function readingDistractor(text: string, mistakeType: ReadingMistakeType): ReadingDistractor { return { text, mistakeType, qualityScore: 0.9 } }
+export function selectReadingDistractors(correct: string, candidates: readonly ReadingDistractor[]): readonly ReadingDistractor[] { const answer = correct.trim().toLowerCase(); const seen = new Set<string>(); const selected = candidates.filter((item) => { const text = item.text.trim().toLowerCase(); if (text === answer || seen.has(text)) return false; seen.add(text); return true }); if (selected.length !== 3) throw new Error('Reading entries require exactly three curated unique distractors.'); return selected }

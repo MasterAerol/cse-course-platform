@@ -899,6 +899,8 @@ input[aria-invalid="true"] {
   color: #263a56;
   font-weight: 750;
   line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .quiz-question legend span {
@@ -985,6 +987,11 @@ input[aria-invalid="true"] {
   margin: 0 0 0.75rem;
   color: #102039;
   font-size: 1.15rem;
+}
+
+.quiz-review-card .question-prompt {
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .lesson-heading-block {
