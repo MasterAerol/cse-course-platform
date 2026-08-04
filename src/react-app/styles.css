@@ -2614,3 +2614,31 @@ input[aria-invalid="true"] {
     transform: translateX(0);
   }
 }
+
+.question-navigator {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.question-navigator__header {
+  min-height: 0;
+}
+
+.question-navigator__body {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.question-navigator__ranges {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.question-navigator__legend {
+  margin-top: 0.1rem;
+}
+
+.question-navigator__legend .question-navigator-legend {
+  margin-top: 0;
+}
+

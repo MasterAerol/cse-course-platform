@@ -648,17 +648,26 @@ export function MockExamAttemptPage() {
         </span>
       </button>
 
-      <div className="question-range-nav-desktop" aria-live="polite">
-        <QuestionRangeNavigator
-          totalQuestions={data.totalCount}
-          questions={data.questions}
-          currentIndex={index}
-          expandedRangeIndex={expandedRangeIndex}
-          onRangeExpand={handleRangeExpand}
-          onQuestionSelect={handleQuestionSelect}
-          navigatorIdPrefix="mock-question-range-inline"
-        />
-        {getNavigatorLegend()}
+      <div className="question-range-nav-desktop question-navigator" aria-live="polite">
+        <header className="question-navigator__header">
+          <span className="sr-only">Question Navigator</span>
+        </header>
+        <div className="question-navigator__body">
+          <div className="question-navigator__ranges">
+            <QuestionRangeNavigator
+              totalQuestions={data.totalCount}
+              questions={data.questions}
+              currentIndex={index}
+              expandedRangeIndex={expandedRangeIndex}
+              onRangeExpand={handleRangeExpand}
+              onQuestionSelect={handleQuestionSelect}
+              navigatorIdPrefix="mock-question-range-inline"
+            />
+          </div>
+          <div className="question-navigator__legend">
+            {getNavigatorLegend()}
+          </div>
+        </div>
       </div>
 
       {isNavigatorMounted ? (
@@ -699,23 +708,31 @@ export function MockExamAttemptPage() {
             </header>
 
             <div className="question-navigator-drawer__content">
-              {QuestionStatusChips({
-                answered: data.answeredCount,
-                unanswered: unansweredCount,
-                marked: data.markedForReviewCount,
-              })}
-
-              <QuestionRangeNavigator
-                totalQuestions={data.totalCount}
-                questions={data.questions}
-                currentIndex={index}
-                expandedRangeIndex={expandedRangeIndex}
-                onRangeExpand={handleRangeExpand}
-                onQuestionSelect={handleQuestionSelect}
-                navigatorIdPrefix="mock-question-range-drawer"
-              />
-
-              {getNavigatorLegend()}
+              <div className="question-navigator">
+                <header className="question-navigator__header">
+                  {QuestionStatusChips({
+                    answered: data.answeredCount,
+                    unanswered: unansweredCount,
+                    marked: data.markedForReviewCount,
+                  })}
+                </header>
+                <div className="question-navigator__body">
+                  <div className="question-navigator__ranges">
+                    <QuestionRangeNavigator
+                      totalQuestions={data.totalCount}
+                      questions={data.questions}
+                      currentIndex={index}
+                      expandedRangeIndex={expandedRangeIndex}
+                      onRangeExpand={handleRangeExpand}
+                      onQuestionSelect={handleQuestionSelect}
+                      navigatorIdPrefix="mock-question-range-drawer"
+                    />
+                  </div>
+                  <div className="question-navigator__legend">
+                    {getNavigatorLegend()}
+                  </div>
+                </div>
+              </div>
             </div>
           </aside>
         </>
@@ -809,5 +826,4 @@ export function MockExamAttemptPage() {
     </main>
   )
 }
-
 
