@@ -1,0 +1,4 @@
+import type { SentenceStructureMistakeType } from './sentence-structure.types'
+export interface StructureDistractor { text: string; mistakeType: SentenceStructureMistakeType; qualityScore: number }
+export function structureDistractor(text: string, mistakeType: SentenceStructureMistakeType): StructureDistractor { return { text, mistakeType, qualityScore: 0.9 } }
+export function selectStructureDistractors(correct: string, candidates: readonly StructureDistractor[]): readonly StructureDistractor[] { const answer = correct.trim().toLowerCase(); const seen = new Set<string>(); const selected = candidates.filter((item) => { const text = item.text.trim().toLowerCase(); if (text === answer || seen.has(text)) return false; seen.add(text); return true }); if (selected.length !== 3) throw new Error('Sentence-structure entries require exactly three curated unique distractors.'); return selected }

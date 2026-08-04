@@ -1,0 +1,4 @@
+import type { SentenceStructureSkill } from './sentence-structure.types'
+const labels: Readonly<Record<SentenceStructureSkill, string>> = { parts_clauses: 'subjects, predicates, phrases, and clauses', sentence_type: 'sentence-type classification', fragment: 'sentence fragments', run_on: 'run-ons and comma splices', coordination: 'coordination and subordination', parallel: 'parallel structure', unclear_logical: 'clear and logical construction', segmented_error: 'sentence-part error identification' }
+export function sentenceStructureSkillLabel(skill: SentenceStructureSkill): string { return labels[skill] }
+export function structureNumericValue(value: string): number { let total = 0; for (const character of value) total = (total * 31 + (character.codePointAt(0) ?? 0)) % 1_000_003; return total }

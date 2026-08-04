@@ -229,6 +229,15 @@ export type GeneratorSlug =
   | 'misplaced-modifier'
   | 'dangling-modifier'
   | 'mixed-pronouns-modifiers'
+  | 'subject-predicate-clause-identification'
+  | 'sentence-type-classification'
+  | 'sentence-fragment-detection'
+  | 'run-on-comma-splice-detection'
+  | 'coordination-subordination-error'
+  | 'parallel-structure-error'
+  | 'unclear-illogical-sentence'
+  | 'sentence-part-error-identification'
+  | 'mixed-sentence-structure-errors'
 
 export type AnswerKind =
   | 'number'

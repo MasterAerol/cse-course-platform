@@ -26,6 +26,7 @@ import { sentenceCompletionGenerators } from './sentence-completion/sentence-com
 import { grammarUsageGenerators } from './grammar-usage/grammar-usage-generators'
 import { subjectVerbAgreementGenerators } from './subject-verb-agreement/subject-verb-agreement-generators'
 import { pronounsModifiersGenerators } from './pronouns-modifiers/pronouns-modifiers-generators'
+import { sentenceStructureGenerators } from './sentence-structure/sentence-structure-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -63,6 +64,7 @@ const generators = [
   ...grammarUsageGenerators,
   ...subjectVerbAgreementGenerators,
   ...pronounsModifiersGenerators,
+  ...sentenceStructureGenerators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(
