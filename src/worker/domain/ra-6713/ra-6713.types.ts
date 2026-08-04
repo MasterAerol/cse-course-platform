@@ -1,0 +1,8 @@
+import type { GeneratorDifficulty } from '../../generators/generator.types'
+export type Ra6713Category = 'policy_coverage_definitions'|'norms'|'public_duties'|'saln_disclosure'|'conflict_divestment'|'financial_interests'|'outside_information'|'gifts'|'incentives_penalties'
+export type Ra6713RuleClass = 'policy'|'definition'|'norm'|'duty'|'disclosure'|'prohibition'|'incentive'|'penalty'
+export type Ra6713SourceClassification = 'primary_statute'|'implementing_rules'
+export type Ra6713MistakeType = 'ra6713_private_over_public'|'ra6713_neutrality_confusion'|'ra6713_favoritism_as_service'|'ra6713_disclosure_divestment_confusion'|'ra6713_saln_tax_confusion'|'ra6713_public_confidential_confusion'|'ra6713_gift_overgeneralization'|'ra6713_outside_work_overstatement'|'ra6713_external_penalty'|'ra6713_missing_condition'
+export interface Ra6713SourceMetadata { sourceTitle:string; sourceUrl:string; statuteId:'Republic Act No. 6713'; section:string; rule:string|null; provisionId:string; classification:Ra6713SourceClassification; verificationDate:'2026-08-04'; contentVersion:'ra6713-v1'; paraphrasedRule:string; exactNumbers:readonly string[] }
+export interface Ra6713Distractor { text:string; mistakeType:Ra6713MistakeType }
+export interface Ra6713Entry { id:string; category:Ra6713Category; section:string; rule:string|null; concept:string; paraphrase:string; exactTerms:readonly string[]; coveredActor:string; ruleClass:Ra6713RuleClass; misconception:string; scenarioFacts:readonly string[]; difficulty:GeneratorDifficulty; distractors:readonly Ra6713Distractor[]; source:Ra6713SourceMetadata; externalLawAttribution:null; active:true }

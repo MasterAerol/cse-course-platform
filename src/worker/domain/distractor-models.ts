@@ -569,6 +569,16 @@ export type DistractorMistakeType =
   | 'constitution_current_practice'
   | 'constitution_amendment_as_legislation'
   | 'constitution_citizenship_suffrage_confusion'
+  | 'ra6713_private_over_public'
+  | 'ra6713_neutrality_confusion'
+  | 'ra6713_favoritism_as_service'
+  | 'ra6713_disclosure_divestment_confusion'
+  | 'ra6713_saln_tax_confusion'
+  | 'ra6713_public_confidential_confusion'
+  | 'ra6713_gift_overgeneralization'
+  | 'ra6713_outside_work_overstatement'
+  | 'ra6713_external_penalty'
+  | 'ra6713_missing_condition'
 
 export interface DistractorDerivation {
   operation: string

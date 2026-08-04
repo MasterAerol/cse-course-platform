@@ -1,0 +1,4 @@
+import type { Ra6713Distractor,Ra6713MistakeType } from './ra-6713.types'
+export interface ScoredRa6713Distractor extends Ra6713Distractor{qualityScore:number}
+export function ra6713Distractor(text:string,mistakeType:Ra6713MistakeType):ScoredRa6713Distractor{return{text:text.trim(),mistakeType,qualityScore:text.trim().length>=20?1:0}}
+export function selectRa6713Distractors(correct:string,candidates:readonly ScoredRa6713Distractor[]):readonly ScoredRa6713Distractor[]{const seen=new Set([correct.trim().toLowerCase()]);return candidates.filter((item)=>item.qualityScore>0&&item.mistakeType.startsWith('ra6713_')&&!seen.has(item.text.toLowerCase())&&(seen.add(item.text.toLowerCase()),true)).slice(0,3)}

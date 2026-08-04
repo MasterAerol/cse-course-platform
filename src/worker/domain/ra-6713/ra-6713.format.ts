@@ -1,0 +1,5 @@
+import type { Ra6713Category,Ra6713SourceMetadata } from './ra-6713.types'
+const labels:Record<Ra6713Category,string>={policy_coverage_definitions:'policy, coverage, and definitions',norms:'norms of conduct',public_duties:'duties to the public',saln_disclosure:'SALN and disclosure',conflict_divestment:'conflict of interest and divestment',financial_interests:'financial and material interests',outside_information:'outside employment and confidential information',gifts:'gifts and favors',incentives_penalties:'incentives, enforcement, and penalties'}
+export function ra6713CategoryLabel(category:Ra6713Category):string{return labels[category]}
+export function formatRa6713Reference(source:Ra6713SourceMetadata):string{return `${source.sourceTitle}, ${source.section}${source.rule===null?'':`, ${source.rule}`}`}
+export function ra6713StableNumber(value:string):number{let total=0;for(const char of value)total=(total*37+(char.codePointAt(0)??0))%1_000_003;return total}

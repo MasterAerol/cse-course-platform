@@ -266,6 +266,16 @@ export type GeneratorSlug =
   | 'public-officer-accountability'
   | 'local-government-economy-amendments'
   | 'mixed-philippine-constitution'
+  | 'ra6713-policy-coverage-definitions'
+  | 'ra6713-norms-of-conduct'
+  | 'ra6713-public-facing-duties'
+  | 'ra6713-saln-disclosure'
+  | 'ra6713-conflict-divestment'
+  | 'ra6713-financial-material-interests'
+  | 'ra6713-outside-employment-information'
+  | 'ra6713-gifts-favors'
+  | 'ra6713-incentives-penalties'
+  | 'mixed-ra6713-ethics'
 
 export type AnswerKind =
   | 'number'

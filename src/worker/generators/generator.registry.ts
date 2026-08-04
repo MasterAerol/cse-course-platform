@@ -30,6 +30,7 @@ import { sentenceStructureGenerators } from './sentence-structure/sentence-struc
 import { paragraphOrganizationGenerators } from './paragraph-organization/paragraph-organization-generators'
 import { readingComprehensionGenerators } from './reading-comprehension/reading-comprehension-generators'
 import { philippineConstitutionGenerators } from './philippine-constitution/philippine-constitution-generators'
+import { ra6713Generators } from './ra-6713/ra-6713-generators'
 import { deriveQuestionSeed } from './generator-random'
 import type {
   GeneratedQuestion,
@@ -71,6 +72,7 @@ const generators = [
   ...paragraphOrganizationGenerators,
   ...readingComprehensionGenerators,
   ...philippineConstitutionGenerators,
+  ...ra6713Generators,
 ] as const satisfies readonly QuestionGenerator[]
 
 export function getGenerator(
