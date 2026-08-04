@@ -24,6 +24,10 @@ import { SubjectAssessmentPage } from './pages/SubjectAssessmentPage'
 import { SubjectAssessmentAttemptPage } from './pages/SubjectAssessmentAttemptPage'
 import { SubjectAssessmentResultPage } from './pages/SubjectAssessmentResultPage'
 import { SubjectAssessmentReviewPage } from './pages/SubjectAssessmentReviewPage'
+import { MockExamPage } from './pages/MockExamPage'
+import { MockExamAttemptPage } from './pages/MockExamAttemptPage'
+import { MockExamResultPage } from './pages/MockExamResultPage'
+import { MockExamReviewPage } from './pages/MockExamReviewPage'
 
 export function App() {
   return (
@@ -43,6 +47,10 @@ export function App() {
         <Route path="assessment-attempts/:attemptPublicId" element={<SubjectAssessmentAttemptPage />} />
         <Route path="assessment-attempts/:attemptPublicId/results" element={<SubjectAssessmentResultPage />} />
         <Route path="assessment-attempts/:attemptPublicId/review" element={<SubjectAssessmentReviewPage />} />
+        <Route path="mock-examinations/:mockExamSlug" element={<MockExamPage />} />
+        <Route path="mock-exam-attempts/:attemptPublicId" element={<MockExamAttemptPage />} />
+        <Route path="mock-exam-attempts/:attemptPublicId/results" element={<MockExamResultPage />} />
+        <Route path="mock-exam-attempts/:attemptPublicId/review" element={<MockExamReviewPage />} />
         <Route
           path="courses/:courseSlug/lessons/:lessonPublicId"
           element={<LessonPage />}

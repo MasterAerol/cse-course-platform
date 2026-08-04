@@ -5,6 +5,7 @@ import { useAuth } from '../auth/use-auth'
 import { CurriculumSubject } from '../components/CurriculumSubject'
 import { EnrollmentBadge } from '../components/EnrollmentBadge'
 import { SubjectAssessmentCard } from '../components/SubjectAssessmentCard'
+import { MockExamCard } from '../components/MockExamCard'
 import { fetchCourseDetail, type CourseDetail } from '../lib/api'
 
 type DetailState =
@@ -101,6 +102,7 @@ export function CourseDetailPage() {
                 {state.course.subjectAssessments.filter((assessment) => assessment.assessment.subjectSlug === subject.slug).map((assessment) => <SubjectAssessmentCard key={assessment.assessment.publicId} summary={assessment} />)}
               </div>
             ))}
+            {state.course.slug === 'cse-professional' && user !== null && <MockExamCard />}
             {user === null && (
               <p className="meta-copy">
                 Sign in with an enrolled account to open protected lessons.
