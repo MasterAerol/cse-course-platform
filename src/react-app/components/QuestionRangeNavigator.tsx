@@ -63,7 +63,7 @@ function makeQuestionLabel({
 
 function makeSmallStatus(answered: boolean, marked: boolean): string {
   if (answered && marked) {
-    return 'Answered • Marked'
+    return 'Answered · Marked'
   }
 
   if (answered) {
@@ -71,7 +71,7 @@ function makeSmallStatus(answered: boolean, marked: boolean): string {
   }
 
   if (marked) {
-    return 'Unanswered • Marked'
+    return 'Unanswered · Marked'
   }
 
   return 'Unanswered'
@@ -124,20 +124,19 @@ export function QuestionRangeNavigator({
                 aria-controls={panelId}
                 onClick={() => onRangeExpand(range.index)}
               >
-                <span>
+                <span className="question-range__title">
                   Questions {range.start}-{range.end}
                 </span>
                 <span className="question-range__meta">
-                  <span className="question-range__meta-chip">
-                    Answered {answeredCount}
-                  </span>
-                  <span className="question-range__meta-chip">
-                    Unanswered {unansweredCount}
-                  </span>
-                  <span className="question-range__meta-chip">
-                    Marked {markedCount}
-                  </span>
+                  <span className="question-range__meta-chip">Answered {answeredCount}</span>
+                  <span className="question-range__meta-chip">Unanswered {unansweredCount}</span>
+                  <span className="question-range__meta-chip">Marked {markedCount}</span>
                 </span>
+                <span
+                  className="question-range__chevron"
+                  aria-hidden="true"
+                  data-state={isExpanded ? 'open' : 'closed'}
+                />
               </button>
             </h3>
 
@@ -146,6 +145,7 @@ export function QuestionRangeNavigator({
               className={`question-range__panel ${isExpanded ? 'is-open' : ''}`}
               role="region"
               aria-labelledby={headingId}
+              aria-hidden={!isExpanded}
             >
               <div className="question-range__grid">
                 {range.questions.map((question, offset) => {
@@ -163,11 +163,9 @@ export function QuestionRangeNavigator({
                       type="button"
                       className={`question-range-button ${
                         isCurrent ? 'question-range-button--current' : ''
-                      } ${
-                        question.answered
-                          ? 'question-range-button--answered'
-                          : ''
-                      } ${question.marked ? 'question-range-button--marked' : ''}`}
+                      } ${question.answered ? 'question-range-button--answered' : ''} ${
+                        question.marked ? 'question-range-button--marked' : ''
+                      }`}
                       aria-label={label}
                       aria-current={isCurrent ? 'step' : undefined}
                       data-question-index={question.position - 1}
@@ -187,4 +185,3 @@ export function QuestionRangeNavigator({
     </nav>
   )
 }
-

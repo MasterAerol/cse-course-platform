@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
 import {
@@ -16,6 +16,7 @@ import { QuestionRangeNavigator } from '../components/QuestionRangeNavigator'
 
 const QUESTIONS_PER_RANGE = 25
 const QUESTION_NAVIGATOR_ID = 'mock-question-navigator'
+const DRAWER_TRANSITION_MS = 220
 const DRAWER_FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
@@ -59,7 +60,25 @@ function normalizeTextWithPeso(value: string): string {
     .replace(/\u00A0/g, ' ')
 }
 
-
+function ReviewFlagIcon({ marked }: { marked: boolean }): ReactElement {
+  return (
+    <svg
+      className="mock-attempt-review-icon"
+      viewBox="0 0 24 24"
+      role="img"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M6 3v17.2l5.2-2.6 5.2 2.6V3H6z"
+        fill={marked ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
 
 function getQuestionButtonLabel(question: MockQuestion, current: boolean): string {
   const status = [
@@ -111,7 +130,7 @@ function focusFirstQuestionInDrawer(
   const offset = buttonRect.top - containerRect.top
 
   scrollContainer.scrollTo({
-    top: scrollContainer.scrollTop + offset - containerRect.height * 0.18,
+    top: scrollContainer.scrollTop + offset - containerRect.height * 0.22,
     behavior: reducedMotion ? 'auto' : 'smooth',
   })
 }
@@ -158,11 +177,15 @@ export function MockExamAttemptPage() {
   >(null)
   const [remaining, setRemaining] = useState<number | null>(null)
   const [isNavigatorOpen, setIsNavigatorOpen] = useState(false)
-  const [manualExpandedRangeIndex, setManualExpandedRangeIndex] = useState<number | null>(null)
+  const [isNavigatorMounted, setIsNavigatorMounted] = useState(false)
+  const [manualExpandedRangeIndex, setManualExpandedRangeIndex] = useState<number | null>(
+    null,
+  )
 
   const submitting = useRef(false)
   const drawerRef = useRef<HTMLElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const navigatorCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const c = new AbortController()
@@ -239,6 +262,55 @@ export function MockExamAttemptPage() {
   )
 
   useEffect(() => {
+    if (isNavigatorOpen) {
+      if (navigatorCloseTimeoutRef.current !== null) {
+        clearTimeout(navigatorCloseTimeoutRef.current)
+        navigatorCloseTimeoutRef.current = null
+      }
+      return
+    }
+
+    if (!isNavigatorMounted) {
+      return
+    }
+
+    const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 0
+      : DRAWER_TRANSITION_MS
+
+    navigatorCloseTimeoutRef.current = setTimeout(() => {
+      setIsNavigatorMounted(false)
+    }, delay)
+
+    return () => {
+      if (navigatorCloseTimeoutRef.current !== null) {
+        clearTimeout(navigatorCloseTimeoutRef.current)
+        navigatorCloseTimeoutRef.current = null
+      }
+    }
+  }, [isNavigatorOpen, isNavigatorMounted])
+
+  useEffect(() => {
+    if (!isNavigatorOpen) {
+      return
+    }
+
+    const previousOverflow = document.body.style.overflow
+    const previousPaddingRight = document.body.style.paddingRight
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+
+    document.body.style.overflow = 'hidden'
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.body.style.paddingRight = previousPaddingRight
+    }
+  }, [isNavigatorOpen])
+
+  useEffect(() => {
     if (!isNavigatorOpen || data === null || drawerRef.current === null) {
       return
     }
@@ -308,6 +380,12 @@ export function MockExamAttemptPage() {
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [data, index, isNavigatorOpen])
+
+  useEffect(() => () => {
+    if (navigatorCloseTimeoutRef.current !== null) {
+      clearTimeout(navigatorCloseTimeoutRef.current)
+    }
+  }, [])
 
   async function start(): Promise<void> {
     try {
@@ -407,23 +485,23 @@ export function MockExamAttemptPage() {
     setIndex(questionIndex)
   }, [])
 
-  const handleQuestionSelect = useCallback((questionIndex: number): void => {
-    navigateToQuestion(questionIndex)
-    if (isNavigatorOpen) {
-      setIsNavigatorOpen(false)
-      triggerRef.current?.focus()
-    }
-  }, [isNavigatorOpen, navigateToQuestion])
+  const closeQuestionNavigator = (): void => {
+    setIsNavigatorOpen(false)
+    triggerRef.current?.focus()
+  }
 
   const openQuestionNavigator = useCallback((): void => {
+    setManualExpandedRangeIndex(null)
+    setIsNavigatorMounted(true)
     setIsNavigatorOpen(true)
   }, [])
 
-  const closeQuestionNavigator = useCallback((): void => {
-    setIsNavigatorOpen(false)
-    triggerRef.current?.focus()
-  }, [])
-
+  const handleQuestionSelect = (questionIndex: number): void => {
+    navigateToQuestion(questionIndex)
+    if (isNavigatorOpen) {
+      closeQuestionNavigator()
+    }
+  }
   if (error !== null && data === null) {
     return (
       <main className="page-shell">
@@ -558,14 +636,15 @@ export function MockExamAttemptPage() {
         aria-label="Open question navigator"
         onClick={openQuestionNavigator}
       >
-        <span className="question-drawer-trigger__icon" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </span>
-        <span className="question-drawer-trigger__text">Questions</span>
-        <span className="question-drawer-trigger__count">
-          {index + 1} / {data.totalCount}
+        <span className="question-drawer-trigger__label">
+          <span className="question-drawer-trigger__icon" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+          <span className="question-drawer-trigger__text">
+            Questions {index + 1} / {data.totalCount}
+          </span>
         </span>
       </button>
 
@@ -582,20 +661,24 @@ export function MockExamAttemptPage() {
         {getNavigatorLegend()}
       </div>
 
-      {isNavigatorOpen ? (
+      {isNavigatorMounted ? (
         <>
           <button
             aria-label="Close question navigator backdrop"
-            className="drawer-backdrop"
+            className={`drawer-backdrop ${isNavigatorOpen ? 'is-open' : ''}`}
             type="button"
             onClick={closeQuestionNavigator}
+            tabIndex={isNavigatorOpen ? 0 : -1}
           />
           <aside
             id={QUESTION_NAVIGATOR_ID}
-            className="question-navigator-drawer"
+            className={`question-navigator-drawer ${
+              isNavigatorOpen ? 'is-open' : ''
+            }`}
             role="dialog"
             aria-modal="true"
             aria-labelledby={`${QUESTION_NAVIGATOR_ID}-title`}
+            aria-hidden={!isNavigatorOpen}
             ref={drawerRef}
             tabIndex={-1}
           >
@@ -603,7 +686,7 @@ export function MockExamAttemptPage() {
               <h2 id={`${QUESTION_NAVIGATOR_ID}-title`}>Question Navigator</h2>
               <button
                 type="button"
-                className="button-secondary"
+                className="question-drawer-close button-secondary"
                 onClick={closeQuestionNavigator}
                 aria-label="Close question navigator"
               >
@@ -648,17 +731,20 @@ export function MockExamAttemptPage() {
         <article className="mock-attempt-question-card">
           <header className="mock-attempt-question-header">
             <p className="mock-attempt-question-label">QUESTION {q.position}</p>
-            <label className="mock-attempt-review-control">
-
-              <input
-                type="checkbox"
-                className="mock-attempt-review-checkbox"
-                checked={q.markedForReview}
-                onChange={(event) => void mark(q.publicId, event.currentTarget.checked)}
-                aria-label="Mark this question for review"
-              />
-              <span>Mark this question for review</span>
-            </label>
+            <button
+              type="button"
+              className="mock-attempt-review-control"
+              onClick={() => void mark(q.publicId, !q.markedForReview)}
+              aria-pressed={q.markedForReview}
+              aria-label={
+                q.markedForReview
+                  ? `Remove question ${q.position} from review`
+                  : `Mark question ${q.position} for review`
+              }
+            >
+              <ReviewFlagIcon marked={q.markedForReview} />
+              <span>{q.markedForReview ? 'Marked' : 'Review'}</span>
+            </button>
           </header>
 
           <p className="mock-attempt-question-prompt">
@@ -684,36 +770,38 @@ export function MockExamAttemptPage() {
           </p>
         </article>
 
-        <div className="mock-attempt-step-row">
-          <button
-            className="button-secondary"
-            type="button"
-            disabled={index === 0}
-            onClick={() => navigateToQuestion(Math.max(0, index - 1))}
-          >
-            Previous
-          </button>
+        <div className="mock-navigation">
+          <div className="mock-navigation__buttons">
+            <button
+              className="button-secondary"
+              type="button"
+              disabled={index === 0}
+              onClick={() => navigateToQuestion(Math.max(0, index - 1))}
+            >
+              Previous
+            </button>
 
-          <p className="mock-attempt-save-status" aria-live="polite">
+            <button
+              className="button-secondary"
+              type="button"
+              disabled={index >= data.questions.length - 1}
+              onClick={() =>
+                navigateToQuestion(Math.min(data.questions.length - 1, index + 1))
+              }
+            >
+              Next
+            </button>
+          </div>
+
+          <p className="mock-navigation__save-status" aria-live="polite">
             {saveStatus}
           </p>
 
-          <button
-            className="button-secondary"
-            type="button"
-            disabled={index >= data.questions.length - 1}
-            onClick={() =>
-              navigateToQuestion(Math.min(data.questions.length - 1, index + 1))
-            }
-          >
-            Next
-          </button>
-        </div>
-
-        <div className="quiz-submit-row">
-          <button type="button" onClick={() => void openReview()}>
-            Review & Submit Examination
-          </button>
+          <div className="mock-navigation__submit">
+            <button type="button" onClick={() => void openReview()}>
+              Review & Submit Examination
+            </button>
+          </div>
         </div>
 
         {error !== null ? <p className="form-error">{error}</p> : null}
@@ -721,6 +809,5 @@ export function MockExamAttemptPage() {
     </main>
   )
 }
-
 
 
