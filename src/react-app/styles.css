@@ -2669,3 +2669,44 @@ input[aria-invalid="true"] {
 
 
 
+.mock-attempt-desktop-layout {
+  width: 100%;
+}
+
+@media (min-width: 64rem) {
+  .quiz-page {
+    justify-items: stretch;
+  }
+
+  .mock-attempt-desktop-layout {
+    width: min(100%, 90rem);
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(19rem, 28rem) minmax(0, 1fr);
+    align-items: start;
+    gap: 1rem;
+  }
+
+  .question-range-nav-desktop.question-navigator {
+    margin-top: 0;
+    width: 100%;
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100dvh - 2rem);
+    overflow: auto;
+  }
+
+  .question-range-nav-desktop .question-navigator__body {
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .question-range-nav-desktop .question-range__grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .quiz-attempt-card {
+    width: 100%;
+    margin: 0;
+  }
+}

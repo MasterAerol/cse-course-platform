@@ -648,28 +648,6 @@ export function MockExamAttemptPage() {
         </span>
       </button>
 
-      <div className="question-range-nav-desktop question-navigator" aria-live="polite">
-        <header className="question-navigator__header">
-          <span className="sr-only">Question Navigator</span>
-        </header>
-        <div className="question-navigator__body">
-          <div className="question-navigator__ranges">
-            <QuestionRangeNavigator
-              totalQuestions={data.totalCount}
-              questions={data.questions}
-              currentIndex={index}
-              expandedRangeIndex={expandedRangeIndex}
-              onRangeExpand={handleRangeExpand}
-              onQuestionSelect={handleQuestionSelect}
-              navigatorIdPrefix="mock-question-range-inline"
-            />
-          </div>
-          <div className="question-navigator__legend">
-            {getNavigatorLegend()}
-          </div>
-        </div>
-      </div>
-
       {isNavigatorMounted ? (
         <>
           <button
@@ -737,92 +715,115 @@ export function MockExamAttemptPage() {
           </aside>
         </>
       ) : null}
-
-      <section className="quiz-attempt-card">
-        {QuestionStatusChips({
-          answered: data.answeredCount,
-          unanswered: unansweredCount,
-          marked: data.markedForReviewCount,
-        })}
-
-        <article className="mock-attempt-question-card">
-          <header className="mock-attempt-question-header">
-            <p className="mock-attempt-question-label">QUESTION {q.position}</p>
-            <button
-              type="button"
-              className="mock-attempt-review-control"
-              onClick={() => void mark(q.publicId, !q.markedForReview)}
-              aria-pressed={q.markedForReview}
-              aria-label={
-                q.markedForReview
-                  ? `Remove question ${q.position} from review`
-                  : `Mark question ${q.position} for review`
-              }
-            >
-              <ReviewFlagIcon marked={q.markedForReview} />
-              <span>{q.markedForReview ? 'Marked' : 'Review'}</span>
-            </button>
+      <div className="mock-attempt-desktop-layout">
+        <div className="question-range-nav-desktop question-navigator" aria-live="polite">
+          <header className="question-navigator__header">
+            <span className="sr-only">Question Navigator</span>
           </header>
-
-          <p className="mock-attempt-question-prompt">
-            {normalizeTextWithPeso(q.prompt)}
-          </p>
-
-          <div className="quiz-choice-list">
-            {q.choices.map((choice) => (
-              <label className="quiz-choice" key={choice.publicId}>
-                <input
-                  type="radio"
-                  name={q.publicId}
-                  checked={q.selectedChoicePublicId === choice.publicId}
-                  onChange={() => void choose(q.publicId, choice.publicId)}
-                />
-                <span>{normalizeTextWithPeso(choice.text)}</span>
-              </label>
-            ))}
-          </div>
-
-          <p className="sr-only" aria-live="polite">
-            {getQuestionButtonLabel(q, index === q.position - 1)}
-          </p>
-        </article>
-
-        <div className="mock-navigation">
-          <div className="mock-navigation__buttons">
-            <button
-              className="button-secondary"
-              type="button"
-              disabled={index === 0}
-              onClick={() => navigateToQuestion(Math.max(0, index - 1))}
-            >
-              Previous
-            </button>
-
-            <button
-              className="button-secondary"
-              type="button"
-              disabled={index >= data.questions.length - 1}
-              onClick={() =>
-                navigateToQuestion(Math.min(data.questions.length - 1, index + 1))
-              }
-            >
-              Next
-            </button>
-          </div>
-
-          <p className="mock-navigation__save-status" aria-live="polite">
-            {saveStatus}
-          </p>
-
-          <div className="mock-navigation__submit">
-            <button type="button" onClick={() => void openReview()}>
-              Review & Submit Examination
-            </button>
+          <div className="question-navigator__body">
+            <div className="question-navigator__ranges">
+              <QuestionRangeNavigator
+                totalQuestions={data.totalCount}
+                questions={data.questions}
+                currentIndex={index}
+                expandedRangeIndex={expandedRangeIndex}
+                onRangeExpand={handleRangeExpand}
+                onQuestionSelect={handleQuestionSelect}
+                navigatorIdPrefix="mock-question-range-inline"
+              />
+            </div>
+            <div className="question-navigator__legend">
+              {getNavigatorLegend()}
+            </div>
           </div>
         </div>
 
-        {error !== null ? <p className="form-error">{error}</p> : null}
-      </section>
+        <section className="quiz-attempt-card">
+          {QuestionStatusChips({
+            answered: data.answeredCount,
+            unanswered: unansweredCount,
+            marked: data.markedForReviewCount,
+          })}
+
+          <article className="mock-attempt-question-card">
+            <header className="mock-attempt-question-header">
+              <p className="mock-attempt-question-label">QUESTION {q.position}</p>
+              <button
+                type="button"
+                className="mock-attempt-review-control"
+                onClick={() => void mark(q.publicId, !q.markedForReview)}
+                aria-pressed={q.markedForReview}
+                aria-label={
+                  q.markedForReview
+                    ? `Remove question ${q.position} from review`
+                    : `Mark question ${q.position} for review`
+                }
+              >
+                <ReviewFlagIcon marked={q.markedForReview} />
+                <span>{q.markedForReview ? 'Marked' : 'Review'}</span>
+              </button>
+            </header>
+
+            <p className="mock-attempt-question-prompt">
+              {normalizeTextWithPeso(q.prompt)}
+            </p>
+
+            <div className="quiz-choice-list">
+              {q.choices.map((choice) => (
+                <label className="quiz-choice" key={choice.publicId}>
+                  <input
+                    type="radio"
+                    name={q.publicId}
+                    checked={q.selectedChoicePublicId === choice.publicId}
+                    onChange={() => void choose(q.publicId, choice.publicId)}
+                  />
+                  <span>{normalizeTextWithPeso(choice.text)}</span>
+                </label>
+              ))}
+            </div>
+
+            <p className="sr-only" aria-live="polite">
+              {getQuestionButtonLabel(q, index === q.position - 1)}
+            </p>
+          </article>
+
+          <div className="mock-navigation">
+            <div className="mock-navigation__buttons">
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={index === 0}
+                onClick={() => navigateToQuestion(Math.max(0, index - 1))}
+              >
+                Previous
+              </button>
+
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={index >= data.questions.length - 1}
+                onClick={() =>
+                  navigateToQuestion(Math.min(data.questions.length - 1, index + 1))
+                }
+              >
+                Next
+              </button>
+            </div>
+
+            <p className="mock-navigation__save-status" aria-live="polite">
+              {saveStatus}
+            </p>
+
+            <div className="mock-navigation__submit">
+              <button type="button" onClick={() => void openReview()}>
+                Review & Submit Examination
+              </button>
+            </div>
+          </div>
+
+          {error !== null ? <p className="form-error">{error}</p> : null}
+        </section>
+      </div>
     </main>
   )
 }
