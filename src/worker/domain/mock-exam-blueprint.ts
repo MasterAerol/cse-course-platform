@@ -12,7 +12,7 @@ import { createSeededRandom } from '../generators/generator-random'
 import type { GeneratedQuestion, GeneratorDifficulty } from '../generators/generator.types'
 
 export const fullCseMockSlug = 'full-cse-professional-mock-examination'
-export const fullCseMockBlueprintLabel = 'PassPath Simulation Distribution v1'
+export const fullCseMockBlueprintLabel = 'Platform-Designed Subject Distribution v1'
 
 export interface MockExamTopicConfig {
   topicSlug: string
