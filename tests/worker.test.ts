@@ -4065,9 +4065,13 @@ describe('Topic quiz APIs', () => {
       'percentages-topic-quiz',
     )
     const { body } = await startQuiz(cookie, quizId)
+    const seededChoices = await getSeededQuizChoices()
 
     for (const question of body.data.questions.slice(0, 7)) {
-      const correctChoiceId = question.choices[0]?.id
+      const correctChoiceId = seededChoices.find(
+        (choice) =>
+          choice.question_id === question.id && choice.is_correct === 1,
+      )?.choice_id
 
       if (correctChoiceId === undefined) {
         throw new Error('Seeded quiz correct choice was not returned.')

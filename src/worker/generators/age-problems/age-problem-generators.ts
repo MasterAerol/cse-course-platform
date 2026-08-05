@@ -354,7 +354,11 @@ function validateQuestion(question: GeneratedQuestion): GeneratorValidationResul
       return { valid: false, reason: 'Age answer, timeline, or choice validation failed.' }
     }
 
-    if (question.parameters.years !== undefined && presentAges.length >= 2) {
+    if (
+      question.parameters.validationKind !== 'timeline-sum' &&
+      question.parameters.years !== undefined &&
+      presentAges.length >= 2
+    ) {
       const direction = question.parameters.direction
       if (
         (direction === 'past' || direction === 'future') &&
@@ -687,8 +691,9 @@ export const mixedAgeRelationshipsGenerator: QuestionGenerator = {
     const direction = input.difficulty === 'easy' ? 'future' : random.pick(['past', 'future'] as const)
     const ratio = random.pick([2, 3])
     const years = random.integer(2, 8)
+    const maximumFutureYounger = Math.floor((80 + years) / ratio - years)
     const younger = direction === 'future'
-      ? random.integer(10, 24)
+      ? random.integer(10, Math.min(24, maximumFutureYounger))
       : random.integer(years + 6, 28)
     const older = direction === 'future'
       ? ratio * (younger + years) - years

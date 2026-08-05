@@ -52,6 +52,7 @@ import type {
   GeneratorDifficulty,
 } from '../generators/generator.types'
 import { AppError } from '../utils/app-error'
+import { orderAttemptChoices } from '../utils/attempt-choice-order'
 import type {
   CourseProgressState,
   LessonNavigationItem,
@@ -462,6 +463,7 @@ function countAnswered(answers: PracticeAttemptAnswerRow[]): number {
 function mapSafeQuestions(
   questions: PracticeQuestion[],
   answers: PracticeAttemptAnswerRow[],
+  attemptPublicId: string,
 ): SafePracticeQuestion[] {
   const answerByQuestionId = new Map(
     answers.map((answer) => [answer.question_id, answer]),
@@ -474,13 +476,12 @@ function mapSafeQuestions(
     position: question.position,
     selectedChoiceId:
       answerByQuestionId.get(question.id)?.selected_choice_id ?? null,
-    choices: question.choices
+    choices: orderAttemptChoices(question.choices
       .map((choice) => ({
         id: choice.id,
         text: choice.text,
         position: choice.position,
-      }))
-      .sort((left, right) => left.position - right.position),
+      })), attemptPublicId, question.id),
   }))
 }
 
@@ -660,6 +661,15 @@ function buildPracticeResultPayload(
     questions: questions.map((question) => {
       const answer = answerByQuestionId.get(question.id)
       const correctChoice = question.choices.find((choice) => choice.isCorrect)
+      const orderedChoices = orderAttemptChoices(
+        question.choices.map((choice) => ({
+          id: choice.id,
+          text: choice.text,
+          position: choice.position,
+        })),
+        attempt.attempt_public_id,
+        question.id,
+      )
 
       if (correctChoice === undefined) {
         throw new Error(`Question ${question.id} has no correct choice.`)
@@ -674,24 +684,33 @@ function buildPracticeResultPayload(
           question,
           answer?.selected_choice_id ?? null,
           answer?.selected_choice_text_snapshot ?? null,
-        ),
+        ) === null
+          ? null
+          : {
+              ...orderedChoices.find(
+                (choice) => choice.id === answer?.selected_choice_id,
+              )!,
+              text:
+                answer?.selected_choice_text_snapshot ??
+                orderedChoices.find(
+                  (choice) => choice.id === answer?.selected_choice_id,
+                )!.text,
+            },
         correctChoice: {
           id: correctChoice.id,
           text:
             answer?.correct_choice_text_snapshot ??
             correctChoice.text,
-          position: correctChoice.position,
+          position: orderedChoices.find(
+            (choice) => choice.id === correctChoice.id,
+          )!.position,
         },
         isCorrect: answer?.is_correct === 1,
         pointsAwarded: answer?.points_awarded ?? 0,
         explanation:
           attempt.show_explanations === 1 ? question.explanation : null,
         generator: question.generator,
-        choices: question.choices.map((choice) => ({
-          id: choice.id,
-          text: choice.text,
-          position: choice.position,
-        })),
+        choices: orderedChoices,
       }
     }),
     ...completion,
@@ -845,7 +864,7 @@ export async function startPracticeAttempt(
         passingScore: practice.passing_score,
         questionCount: questions.length,
       },
-      questions: mapSafeQuestions(questions, []),
+      questions: mapSafeQuestions(questions, [], attempt.attempt_public_id),
       answeredCount: 0,
       totalCount: questions.length,
     }
@@ -887,7 +906,7 @@ export async function startPracticeAttempt(
       passingScore: practice.passing_score,
       questionCount: questions.length,
     },
-    questions: mapSafeQuestions(questions, []),
+    questions: mapSafeQuestions(questions, [], attempt.attempt_public_id),
     answeredCount: 0,
     totalCount: questions.length,
   }
@@ -938,7 +957,11 @@ export async function getPracticeAttempt(
       passingScore: attempt.passing_score,
       questionCount: questions.length,
     },
-    questions: mapSafeQuestions(questions, answers),
+    questions: mapSafeQuestions(
+      questions,
+      answers,
+      attempt.attempt_public_id,
+    ),
     answeredCount: countAnswered(answers),
     totalCount: questions.length,
   }

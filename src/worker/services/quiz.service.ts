@@ -30,6 +30,7 @@ import {
 } from '../repositories/quiz.repository'
 import { findRequiredLessonProgressRows } from '../repositories/course.repository'
 import { AppError } from '../utils/app-error'
+import { orderAttemptChoices } from '../utils/attempt-choice-order'
 import type {
   CourseProgressState,
   LessonNavigationItem,
@@ -215,6 +216,7 @@ function getAttemptsRemaining(
 function mapSafeQuestions(
   questions: QuizQuestion[],
   answers: AttemptAnswerRow[],
+  attemptPublicId: string,
 ): SafeQuizQuestion[] {
   const answerByQuestionId = new Map(
     answers.map((answer) => [answer.question_id, answer]),
@@ -227,13 +229,12 @@ function mapSafeQuestions(
     position: question.position,
     selectedChoiceId:
       answerByQuestionId.get(question.id)?.selected_choice_id ?? null,
-    choices: question.choices
+    choices: orderAttemptChoices(question.choices
       .map((choice) => ({
         id: choice.id,
         text: choice.text,
         position: choice.position,
-      }))
-      .sort((left, right) => left.position - right.position),
+      })), attemptPublicId, question.id),
   }))
 }
 
@@ -430,6 +431,15 @@ function buildResultPayload(
     questions: questions.map((question) => {
       const answer = answerByQuestionId.get(question.id)
       const correctChoice = question.choices.find((choice) => choice.isCorrect)
+      const orderedChoices = orderAttemptChoices(
+        question.choices.map((choice) => ({
+          id: choice.id,
+          text: choice.text,
+          position: choice.position,
+        })),
+        attempt.attempt_public_id,
+        question.id,
+      )
 
       if (correctChoice === undefined) {
         throw new Error(`Question ${question.id} has no correct choice.`)
@@ -444,23 +454,32 @@ function buildResultPayload(
           question,
           answer?.selected_choice_id ?? null,
           answer?.selected_choice_text_snapshot ?? null,
-        ),
+        ) === null
+          ? null
+          : {
+              ...orderedChoices.find(
+                (choice) => choice.id === answer?.selected_choice_id,
+              )!,
+              text:
+                answer?.selected_choice_text_snapshot ??
+                orderedChoices.find(
+                  (choice) => choice.id === answer?.selected_choice_id,
+                )!.text,
+            },
         correctChoice: {
           id: correctChoice.id,
           text:
             answer?.correct_choice_text_snapshot ??
             correctChoice.text,
-          position: correctChoice.position,
+          position: orderedChoices.find(
+            (choice) => choice.id === correctChoice.id,
+          )!.position,
         },
         isCorrect: answer?.is_correct === 1,
         pointsAwarded: answer?.points_awarded ?? 0,
         explanation:
           attempt.show_explanations === 1 ? question.explanation : null,
-        choices: question.choices.map((choice) => ({
-          id: choice.id,
-          text: choice.text,
-          position: choice.position,
-        })),
+        choices: orderedChoices,
       }
     }),
     ...completion,
@@ -594,7 +613,7 @@ export async function startQuizAttempt(
       questionCount: questions.length,
       timeLimitMinutes: quiz.time_limit_minutes,
     },
-    questions: mapSafeQuestions(questions, []),
+    questions: mapSafeQuestions(questions, [], attempt.attempt_public_id),
   }
 }
 
@@ -648,7 +667,11 @@ export async function getQuizAttempt(
       questionCount: questions.length,
       timeLimitMinutes: attempt.time_limit_minutes,
     },
-    questions: mapSafeQuestions(questions, answers),
+    questions: mapSafeQuestions(
+      questions,
+      answers,
+      attempt.attempt_public_id,
+    ),
   }
 }
 
