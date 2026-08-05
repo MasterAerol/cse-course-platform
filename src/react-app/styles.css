@@ -2651,6 +2651,10 @@ input[aria-invalid="true"] {
     display: none;
   }
 
+  .question-drawer-trigger {
+    display: inline-flex;
+  }
+
   .question-navigator-drawer__content {
     display: block;
     min-height: 0;
