@@ -23,6 +23,8 @@
   "include": [
     "vite.config.ts",
     "vitest.config.ts",
+    "vitest.smart-recovery-constraints.config.ts",
+    "vitest.smart-recovery-migration.config.ts",
     "eslint.config.js",
     "tests",
     "src/worker"
