@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const emailSchema = z.preprocess(
+export const emailSchema = z.preprocess(
   (value) =>
     typeof value === 'string'
       ? value.trim().toLowerCase()
@@ -12,7 +12,7 @@ const emailSchema = z.preprocess(
     .email('Enter a valid email address.'),
 )
 
-const registrationPasswordSchema = z
+export const registrationPasswordSchema = z
   .string({ error: 'Enter a password.' })
   .min(12, 'Password must contain at least 12 characters.')
   .max(128, 'Password must contain at most 128 characters.')
@@ -20,7 +20,7 @@ const registrationPasswordSchema = z
   .regex(/[A-Z]/u, 'Password must include an uppercase letter.')
   .regex(/[0-9]/u, 'Password must include a number.')
 
-function nameSchema(label: 'First name' | 'Last name') {
+export function nameSchema(label: 'First name' | 'Last name') {
   return z
     .string({ error: `${label} is required.` })
     .trim()

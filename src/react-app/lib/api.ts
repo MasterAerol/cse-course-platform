@@ -1365,6 +1365,32 @@ const adminEnrollmentResponseSchema = z.object({
   }),
 })
 
+const adminBetaStudentSchema = z.object({
+  id: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
+  email: z.string().email(),
+  role: z.literal('student'),
+  status: z.enum(['active', 'suspended']),
+  enrollmentStatus: z.string().nullable(),
+  createdAt: z.string(),
+  lastLoginAt: z.string().nullable(),
+  activeSessionCount: z.number(),
+})
+
+const adminBetaStudentsResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({ students: z.array(adminBetaStudentSchema) }),
+})
+
+const adminBetaStudentMutationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    student: adminBetaStudentSchema,
+    enrolled: z.boolean(),
+  }),
+})
+
 const adminQuestionChoiceSchema = z.object({
   id: z.number(),
   text: z.string(),
@@ -1615,6 +1641,17 @@ export interface AdminOperationalEnrollmentInput {
   email: string
   courseSlug: string
   accessExpiresAt?: string | null
+}
+
+export type AdminBetaStudent = z.infer<typeof adminBetaStudentSchema>
+
+export interface CreateAdminBetaStudentInput {
+  firstName: string
+  lastName: string
+  email: string
+  password: string
+  confirmPassword: string
+  enrollInCseProfessional: boolean
 }
 
 export function fetchAdminDashboard(
@@ -2010,6 +2047,26 @@ export function createAdminOperationalEnrollment(
       body: JSON.stringify(input),
     },
   ).then((response) => response.data.enrollment)
+}
+
+export function fetchAdminBetaStudents(
+  signal?: AbortSignal,
+): Promise<AdminBetaStudent[]> {
+  return adminRequest(
+    '/api/admin/beta-students',
+    adminBetaStudentsResponseSchema,
+    { signal },
+  ).then((response) => response.data.students)
+}
+
+export function createAdminBetaStudent(
+  input: CreateAdminBetaStudentInput,
+): Promise<{ student: AdminBetaStudent; enrolled: boolean }> {
+  return adminRequest(
+    '/api/admin/beta-students',
+    adminBetaStudentMutationResponseSchema,
+    { method: 'POST', body: JSON.stringify(input) },
+  ).then((response) => response.data)
 }
 
 const success = <T extends z.ZodTypeAny>(data: T) => z.object({ success: z.literal(true), data })

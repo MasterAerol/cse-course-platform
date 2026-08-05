@@ -14,7 +14,7 @@ export function AdminLayout() {
         <nav>
           <NavLink to="/admin">Dashboard</NavLink>
           <NavLink to="/admin/courses">Courses</NavLink>
-          <NavLink to="/admin/students">Students</NavLink>
+          <NavLink to="/admin/students">Beta Students</NavLink>
           <NavLink to="/admin/audit-log">Audit Log</NavLink>
         </nav>
       </aside>

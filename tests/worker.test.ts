@@ -6680,6 +6680,357 @@ describe('Authentication API', () => {
   })
 })
 
+describe('Admin beta student accounts', () => {
+  function betaStudentBody(
+    email: string,
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      firstName: 'Beta',
+      lastName: 'Learner',
+      email,
+      password: validPassword,
+      confirmPassword: validPassword,
+      enrollInCseProfessional: true,
+      ...overrides,
+    }
+  }
+
+  it('rejects unauthenticated and student account creation server-side', async () => {
+    const unauthenticated = await app.request(
+      '/api/admin/beta-students',
+      jsonRequest(betaStudentBody('unauth-beta@example.com')),
+      createBindings('production'),
+    )
+    const { cookie } = await register('student-beta-creator@example.com')
+    const student = await app.request(
+      '/api/admin/beta-students',
+      adminJsonRequest(
+        betaStudentBody('forbidden-beta@example.com'),
+        cookie,
+      ),
+      createBindings('production'),
+    )
+
+    expect(unauthenticated.status).toBe(401)
+    expect(student.status).toBe(403)
+    await expect(unauthenticated.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: 'UNAUTHENTICATED' },
+    })
+    await expect(student.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: 'FORBIDDEN' },
+    })
+  })
+
+  it('creates, enrolls, and audit logs a student without exposing or logging the password', async () => {
+    const adminEmail = `beta-admin-${crypto.randomUUID()}@example.com`
+    const email = `  BETA-${crypto.randomUUID()}@Example.COM  `
+    const normalizedEmail = email.trim().toLowerCase()
+    const { cookie } = await registerAdmin(adminEmail)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const response = await app.request(
+        '/api/admin/beta-students',
+        adminJsonRequest(betaStudentBody(email), cookie),
+        createBindings('production'),
+      )
+      const responseText = await response.text()
+      const stored = await env.DB.prepare(
+        `SELECT
+          users.public_id,
+          users.password_hash,
+          users.role,
+          course_enrollments.enrollment_status,
+          courses.slug AS course_slug,
+          COUNT(user_sessions.id) AS session_count
+        FROM users
+        LEFT JOIN course_enrollments ON course_enrollments.user_id = users.id
+        LEFT JOIN courses ON courses.id = course_enrollments.course_id
+        LEFT JOIN user_sessions ON user_sessions.user_id = users.id
+        WHERE users.email = ?1
+        GROUP BY users.id, course_enrollments.id`,
+      )
+        .bind(normalizedEmail)
+        .first<{
+          public_id: string
+          password_hash: string
+          role: string
+          enrollment_status: string | null
+          course_slug: string | null
+          session_count: number
+        }>()
+      const audit = await env.DB.prepare(
+        `SELECT action, entity_type, entity_id, metadata_json
+        FROM audit_logs
+        WHERE action = 'beta_student.created' AND entity_id = ?1`,
+      )
+        .bind(stored?.public_id ?? '')
+        .first<{
+          action: string
+          entity_type: string
+          entity_id: string
+          metadata_json: string | null
+        }>()
+      const allLogs = [
+        ...logSpy.mock.calls,
+        ...warnSpy.mock.calls,
+        ...errorSpy.mock.calls,
+      ]
+
+      expect(response.status).toBe(201)
+      expect(responseText).toContain(normalizedEmail)
+      expect(responseText).toContain('"role":"student"')
+      expect(responseText).not.toContain(validPassword)
+      expect(responseText).not.toContain('passwordHash')
+      expect(responseText).not.toContain('password_hash')
+      expect(stored?.role).toBe('student')
+      expect(stored?.password_hash).not.toBe(validPassword)
+      expect(stored?.password_hash).toMatch(/^pbkdf2-sha256\$v1\$100000\$/u)
+      await expect(
+        verifyPassword(validPassword, stored?.password_hash ?? ''),
+      ).resolves.toBe(true)
+      expect(stored?.course_slug).toBe('cse-professional')
+      expect(stored?.enrollment_status).toBe('active')
+      expect(stored?.session_count).toBe(0)
+      expect(audit).toMatchObject({
+        action: 'beta_student.created',
+        entity_type: 'user',
+        entity_id: stored?.public_id,
+      })
+      expect(audit?.metadata_json).toContain(normalizedEmail)
+      expect(audit?.metadata_json).toContain('cse-professional')
+      expect(audit?.metadata_json).not.toContain(validPassword)
+      expect(JSON.stringify(allLogs)).not.toContain(validPassword)
+    } finally {
+      logSpy.mockRestore()
+      warnSpy.mockRestore()
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('rejects role injection, mismatched passwords, and duplicate emails safely', async () => {
+    const { cookie } = await registerAdmin(
+      `beta-validation-admin-${crypto.randomUUID()}@example.com`,
+    )
+    const email = `beta-duplicate-${crypto.randomUUID()}@example.com`
+    const roleResponse = await app.request(
+      '/api/admin/beta-students',
+      adminJsonRequest(betaStudentBody(`role-${email}`, { role: 'admin' }), cookie),
+      createBindings('production'),
+    )
+    const mismatchResponse = await app.request(
+      '/api/admin/beta-students',
+      adminJsonRequest(
+        betaStudentBody(`mismatch-${email}`, {
+          confirmPassword: 'DifferentPassword123',
+        }),
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const first = await app.request(
+      '/api/admin/beta-students',
+      adminJsonRequest(betaStudentBody(email), cookie),
+      createBindings('production'),
+    )
+    const duplicate = await app.request(
+      '/api/admin/beta-students',
+      adminJsonRequest(betaStudentBody(email.toUpperCase()), cookie),
+      createBindings('production'),
+    )
+    const count = await env.DB.prepare(
+      'SELECT COUNT(*) AS count FROM users WHERE email = ?1',
+    )
+      .bind(email)
+      .first<{ count: number }>()
+
+    expect(roleResponse.status).toBe(400)
+    expect(mismatchResponse.status).toBe(400)
+    expect(first.status).toBe(201)
+    expect(duplicate.status).toBe(409)
+    await expect(duplicate.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'BETA_STUDENT_EMAIL_EXISTS',
+        message: 'A user account with this email already exists.',
+      },
+    })
+    expect(count?.count).toBe(1)
+  })
+
+  it('keeps enrollment idempotent and lists only safe student fields', async () => {
+    const { cookie } = await registerAdmin(
+      `beta-list-admin-${crypto.randomUUID()}@example.com`,
+    )
+    const email = `beta-list-${crypto.randomUUID()}@example.com`
+    const created = await app.request(
+      '/api/admin/beta-students',
+      adminJsonRequest(betaStudentBody(email), cookie),
+      createBindings('production'),
+    )
+    const firstEnrollment = await app.request(
+      '/api/admin/enrollments',
+      adminJsonRequest({ email, courseSlug: 'cse-professional' }, cookie),
+      createBindings('production'),
+    )
+    const secondEnrollment = await app.request(
+      '/api/admin/enrollments',
+      adminJsonRequest({ email, courseSlug: 'cse-professional' }, cookie),
+      createBindings('production'),
+    )
+    const listResponse = await app.request(
+      '/api/admin/beta-students',
+      { headers: { cookie } },
+      createBindings('production'),
+    )
+    const listText = await listResponse.text()
+    const enrollmentCount = await env.DB.prepare(
+      `SELECT COUNT(*) AS count
+      FROM course_enrollments
+      WHERE user_id = (SELECT id FROM users WHERE email = ?1)
+        AND course_id = (SELECT id FROM courses WHERE slug = 'cse-professional')`,
+    )
+      .bind(email)
+      .first<{ count: number }>()
+
+    expect(created.status).toBe(201)
+    expect(firstEnrollment.status).toBe(201)
+    expect(secondEnrollment.status).toBe(201)
+    expect(listResponse.status).toBe(200)
+    expect(listText).toContain(email)
+    expect(listText).toContain('"role":"student"')
+    expect(listText).not.toContain('password')
+    expect(listText).not.toContain('password_hash')
+    expect(enrollmentCount?.count).toBe(1)
+  })
+
+  it('allows the created learner to log in and access the course but not admin routes', async () => {
+    const { cookie: adminCookie } = await registerAdmin(
+      `beta-login-admin-${crypto.randomUUID()}@example.com`,
+    )
+    const email = `beta-login-${crypto.randomUUID()}@example.com`
+    const closedBindings = {
+      ...createBindings('production'),
+      REGISTRATION_MODE: 'closed' as const,
+    }
+    const created = await app.request(
+      '/api/admin/beta-students',
+      adminJsonRequest(betaStudentBody(email), adminCookie),
+      closedBindings,
+    )
+    const publicRegistration = await app.request(
+      '/api/auth/register',
+      jsonRequest(betaStudentBody(`public-${email}`)),
+      closedBindings,
+    )
+    const login = await app.request(
+      '/api/auth/login',
+      jsonRequest({ email, password: validPassword }),
+      closedBindings,
+    )
+    const studentCookie = getCookieHeader(login)
+    const dashboard = await app.request(
+      '/api/student/dashboard',
+      { headers: { cookie: studentCookie } },
+      closedBindings,
+    )
+    const adminCheck = await app.request(
+      '/api/admin/auth-check',
+      { headers: { cookie: studentCookie } },
+      closedBindings,
+    )
+
+    expect(created.status).toBe(201)
+    expect(publicRegistration.status).toBe(403)
+    expect(login.status).toBe(200)
+    expect(dashboard.status).toBe(200)
+    expect(await dashboard.text()).toContain('cse-professional')
+    expect(adminCheck.status).toBe(403)
+  })
+
+  it('rolls back user and enrollment creation when the atomic audit batch fails', async () => {
+    const { cookie } = await registerAdmin(
+      `beta-rollback-admin-${crypto.randomUUID()}@example.com`,
+    )
+    const email = `beta-rollback-${crypto.randomUUID()}@example.com`
+    const triggerName = `test_beta_audit_failure_${crypto.randomUUID().replaceAll('-', '')}`
+
+    await env.DB.prepare(
+      `CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON audit_logs
+      WHEN NEW.action = 'beta_student.created'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced beta audit failure');
+      END`,
+    ).run()
+
+    try {
+      const response = await app.request(
+        '/api/admin/beta-students',
+        adminJsonRequest(betaStudentBody(email), cookie),
+        createBindings('production'),
+      )
+      const user = await env.DB.prepare(
+        'SELECT id FROM users WHERE email = ?1',
+      )
+        .bind(email)
+        .first<{ id: number }>()
+      const enrollment = await env.DB.prepare(
+        `SELECT course_enrollments.id
+        FROM course_enrollments
+        INNER JOIN users ON users.id = course_enrollments.user_id
+        WHERE users.email = ?1`,
+      )
+        .bind(email)
+        .first<{ id: number }>()
+
+      expect(response.status).toBe(500)
+      expect(user).toBeNull()
+      expect(enrollment).toBeNull()
+      await expect(response.json()).resolves.toMatchObject({
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR' },
+      })
+    } finally {
+      await env.DB.prepare(`DROP TRIGGER ${triggerName}`).run()
+    }
+  })
+  it('can create a student without enrollment when the administrator opts out', async () => {
+    const { cookie } = await registerAdmin(
+      `beta-no-enrollment-admin-${crypto.randomUUID()}@example.com`,
+    )
+    const email = `beta-no-enrollment-${crypto.randomUUID()}@example.com`
+    const response = await app.request(
+      '/api/admin/beta-students',
+      adminJsonRequest(
+        betaStudentBody(email, { enrollInCseProfessional: false }),
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const enrollment = await env.DB.prepare(
+      `SELECT id FROM course_enrollments
+      WHERE user_id = (SELECT id FROM users WHERE email = ?1)`,
+    )
+      .bind(email)
+      .first<{ id: number }>()
+
+    expect(response.status).toBe(201)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        student: { email, role: 'student', enrollmentStatus: null },
+        enrolled: false,
+      },
+    })
+    expect(enrollment).toBeNull()
+  })
+})
 describe('Admin Content Builder Lite API', () => {
   async function createAdminCourseForTest(
     cookie: string,

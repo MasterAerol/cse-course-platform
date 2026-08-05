@@ -13,6 +13,7 @@ import type { AppEnv } from '../types/app'
 import { successResponse } from '../utils/responses'
 import { parseJsonBody } from '../utils/validation'
 import { adminAssessmentRoutes } from './admin/assessment.routes'
+import { adminBetaStudentRoutes } from './admin/beta-student.routes'
 import { adminAuditRoutes } from './admin/audit.routes'
 import { adminCourseRoutes } from './admin/course.routes'
 import { adminCurriculumRoutes } from './admin/curriculum.routes'
@@ -46,6 +47,7 @@ adminRoutes.route('/courses', adminCourseRoutes)
 adminRoutes.route('/', adminCurriculumRoutes)
 adminRoutes.route('/', adminLessonBlockRoutes)
 adminRoutes.route('/', adminAssessmentRoutes)
+adminRoutes.route('/', adminBetaStudentRoutes)
 adminRoutes.route('/', adminAuditRoutes)
 adminRoutes.route('/', adminSubjectAssessmentRoutes)
 adminRoutes.route('/', adminMockExamRoutes)
