@@ -9,11 +9,13 @@ import {
 import {
   ApiClientError,
   fetchCurrentUser,
+  fetchPlatformConfig,
   login as loginRequest,
   logout as logoutRequest,
   registerStudent,
   type LoginRequest,
   type RegistrationRequest,
+  type RegistrationMode,
   type User,
 } from '../lib/api'
 import { AuthContext, type AuthContextValue } from './auth-context'
@@ -32,6 +34,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [registrationMode, setRegistrationMode] =
+    useState<RegistrationMode>('closed')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -63,7 +67,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     }
 
+    async function loadPlatformConfig(): Promise<void> {
+      try {
+        const config = await fetchPlatformConfig(controller.signal)
+        setRegistrationMode(config.data.registrationMode)
+      } catch {
+        if (!controller.signal.aborted) {
+          setRegistrationMode('closed')
+        }
+      }
+    }
+
     void restoreSession()
+    void loadPlatformConfig()
 
     return () => {
       controller.abort()
@@ -96,11 +112,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       user,
       loading,
       error,
+      registrationMode,
       login,
       register,
       logout,
     }),
-    [error, loading, login, logout, register, user],
+    [error, loading, login, logout, register, registrationMode, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -8,6 +8,8 @@ import {
   type ValidationFieldErrors,
 } from './app-error'
 
+export const MAXIMUM_JSON_BODY_BYTES = 256 * 1024
+
 const validationFields = new Set<ValidationField>([
   'accessExpiresAt',
   'accessDurationDays',
@@ -88,8 +90,22 @@ export async function parseJsonBody<T>(
   let body: unknown
 
   try {
-    body = await context.req.json<unknown>()
-  } catch {
+    const text = await context.req.text()
+
+    if (new TextEncoder().encode(text).byteLength > MAXIMUM_JSON_BODY_BYTES) {
+      throw new AppError(
+        413,
+        'REQUEST_BODY_TOO_LARGE',
+        'The request body is too large.',
+      )
+    }
+
+    body = JSON.parse(text) as unknown
+  } catch (error: unknown) {
+    if (error instanceof AppError) {
+      throw error
+    }
+
     throw new AppError(
       400,
       'VALIDATION_ERROR',

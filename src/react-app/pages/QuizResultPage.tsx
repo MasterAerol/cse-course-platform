@@ -146,14 +146,12 @@ export function QuizResultPage() {
             </span>
           </div>
 
-          <div className="progress" aria-label="Course progress">
-            <div
-              className="progress__bar"
-              style={{
-                width: `${state.result.courseProgress.progressPercentage}%`,
-              }}
-            />
-          </div>
+          <progress
+            className="progress"
+            aria-label="Course progress"
+            max="100"
+            value={state.result.courseProgress.progressPercentage}
+          />
           <p className="meta-copy">
             Course progress:{' '}
             {state.result.courseProgress.completedRequiredLessons} of{' '}

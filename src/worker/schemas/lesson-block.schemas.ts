@@ -5,6 +5,22 @@ interface BaseLessonBlock {
   position: number
 }
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function isSafeImageSource(value: string): boolean {
+  return (
+    (value.startsWith('/') && !value.startsWith('//')) ||
+    isHttpUrl(value)
+  )
+}
+
 const headingContentSchema = z
   .object({
     level: z.union([z.literal(1), z.literal(2), z.literal(3)]),
@@ -44,7 +60,11 @@ const exampleContentSchema = z
 
 const imageContentSchema = z
   .object({
-    src: z.string().min(1).max(500),
+    src: z
+      .string()
+      .min(1)
+      .max(500)
+      .refine(isSafeImageSource, 'Use a root-relative or HTTP(S) image URL.'),
     alt: z.string().min(1).max(240),
     caption: z.string().min(1).max(500).optional(),
   })
@@ -53,7 +73,11 @@ const imageContentSchema = z
 const videoContentSchema = z
   .object({
     provider: z.enum(['external']),
-    url: z.string().url().max(1_000),
+    url: z
+      .string()
+      .url()
+      .max(1_000)
+      .refine(isHttpUrl, 'Use an HTTP(S) video URL.'),
     title: z.string().min(1).max(180),
   })
   .strict()

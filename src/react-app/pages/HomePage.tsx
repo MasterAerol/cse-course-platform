@@ -16,7 +16,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function HomePage() {
-  const { user } = useAuth()
+  const { user, registrationMode } = useAuth()
   const [connection, setConnection] = useState<ConnectionState>({
     status: 'loading',
   })
@@ -61,9 +61,14 @@ export function HomePage() {
               <Link className="button-link" to="/login">
                 Sign in
               </Link>
-              <Link className="button-link button-link--secondary" to="/register">
-                Create account
-              </Link>
+              {registrationMode === 'open' && (
+                <Link
+                  className="button-link button-link--secondary"
+                  to="/register"
+                >
+                  Create account
+                </Link>
+              )}
             </>
           ) : (
             <>

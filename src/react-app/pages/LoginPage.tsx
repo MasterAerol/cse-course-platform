@@ -27,7 +27,7 @@ function getLocationState(location: Location): LoginLocationState {
 }
 
 export function LoginPage() {
-  const { login } = useAuth()
+  const { login, registrationMode } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const locationState = getLocationState(location)
@@ -103,9 +103,15 @@ export function LoginPage() {
           </button>
         </form>
 
-        <p className="auth-switch">
-          Need an account? <Link to="/register">Register as a student</Link>
-        </p>
+        {registrationMode === 'open' ? (
+          <p className="auth-switch">
+            Need an account? <Link to="/register">Register as a student</Link>
+          </p>
+        ) : (
+          <p className="auth-switch">
+            Private-beta access is provided by an administrator.
+          </p>
+        )}
       </section>
     </main>
   )

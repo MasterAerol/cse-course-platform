@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router'
 
 import { App } from './App'
 import { AuthProvider } from './auth/AuthProvider'
+import { AppErrorBoundary } from './components/AppErrorBoundary'
 import './styles.css'
 
 const rootElement = document.getElementById('root')
@@ -14,10 +15,12 @@ if (rootElement === null) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
+    <AppErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </BrowserRouter>
+    </AppErrorBoundary>
   </StrictMode>,
 )

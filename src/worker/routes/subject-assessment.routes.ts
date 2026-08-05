@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 
 import { requireAuthentication } from '../middleware/auth.middleware'
+import { requireLearnerMutationRateLimit } from '../middleware/rate-limit.middleware'
 import {
   saveSubjectAssessmentAnswerSchema,
   subjectAssessmentAnswerParamsSchema,
@@ -22,6 +23,7 @@ import { parseJsonBody, parseValidatedInput } from '../utils/validation'
 
 export const subjectAssessmentRoutes = new Hono<AppEnv>()
 subjectAssessmentRoutes.use('*', requireAuthentication)
+subjectAssessmentRoutes.use('*', requireLearnerMutationRateLimit)
 
 subjectAssessmentRoutes.get('/subject-assessments/:assessmentSlug', async (context) => {
   const { assessmentSlug } = parseValidatedInput(subjectAssessmentSlugParamsSchema.safeParse(context.req.param()))

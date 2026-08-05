@@ -1,7 +1,12 @@
 import { Hono } from 'hono'
 
+import {
+  applyApiSecurityHeaders,
+  requireSameOriginMutation,
+} from './middleware/security.middleware'
 import { adminRoutes } from './routes/admin.routes'
 import { authRoutes } from './routes/auth.routes'
+import { configRoutes } from './routes/config.routes'
 import { courseRoutes } from './routes/course.routes'
 import { devRoutes } from './routes/dev.routes'
 import { healthRoutes } from './routes/health.routes'
@@ -23,7 +28,11 @@ app.use('*', async (context, next) => {
   await next()
 })
 
+app.use('/api/*', applyApiSecurityHeaders)
+app.use('/api/*', requireSameOriginMutation)
+
 app.route('/api/health', healthRoutes)
+app.route('/api/config', configRoutes)
 app.route('/api/auth', authRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/courses', courseRoutes)
@@ -58,7 +67,7 @@ app.onError((error, context) => {
     JSON.stringify({
       message: 'Unhandled Worker error',
       requestId: context.get('requestId'),
-      error: error.message,
+      errorName: error.name,
       path: context.req.path,
     }),
   )

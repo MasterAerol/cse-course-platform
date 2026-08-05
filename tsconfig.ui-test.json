@@ -1,9 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -11,21 +12,9 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": [
-      "node",
-      "vitest/globals",
-      "@cloudflare/vitest-pool-workers/types",
-      "./src/worker/worker-configuration.d.ts"
-    ],
+    "types": ["vite/client", "vitest/globals"],
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": [
-    "vite.config.ts",
-    "vitest.config.ts",
-    "eslint.config.js",
-    "tests",
-    "src/worker"
-  ],
-  "exclude": ["tests/registration-policy-ui.test.tsx"]
+  "include": ["tests/registration-policy-ui.test.tsx"]
 }

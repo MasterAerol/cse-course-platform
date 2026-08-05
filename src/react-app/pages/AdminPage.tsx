@@ -5,7 +5,7 @@ import { fetchAdminCheck } from '../lib/api'
 
 type AdminCheckState =
   | { status: 'loading' }
-  | { status: 'authorized'; email: string }
+  | { status: 'authorized' }
   | { status: 'error'; message: string }
 
 export function AdminPage() {
@@ -19,10 +19,10 @@ export function AdminPage() {
     async function verifyAdminRoute(): Promise<void> {
       try {
         const response = await fetchAdminCheck(controller.signal)
-        setCheck({
-          status: 'authorized',
-          email: response.data.user.email,
-        })
+        if (!response.data.authorized) {
+          throw new Error('Administrator authorization could not be confirmed.')
+        }
+        setCheck({ status: 'authorized' })
       } catch (error: unknown) {
         if (!controller.signal.aborted) {
           setCheck({
@@ -46,13 +46,11 @@ export function AdminPage() {
   return (
     <main className="centered-page">
       <section className="message-card" aria-live="polite">
-        <p className="eyebrow">Admin route test</p>
-        <h1>Server-enforced administrator check</h1>
+        <p className="eyebrow">Administration</p>
+        <h1>Administrator access</h1>
         {check.status === 'loading' && <p>Checking the protected API…</p>}
         {check.status === 'authorized' && (
-          <p>
-            Access confirmed for <strong>{check.email}</strong>.
-          </p>
+          <p>Access confirmed for this administrator account.</p>
         )}
         {check.status === 'error' && (
           <p className="form-error" role="alert">

@@ -111,13 +111,14 @@ export function DashboardPage() {
           Welcome, {user.firstName} {user.lastName}.
         </h1>
         <p>
-          You are signed in as <strong>{user.email}</strong> with the{' '}
-          <strong>{user.role}</strong> role.
+          {user.role === 'admin'
+            ? 'You are signed in with administrator access.'
+            : 'You are signed in with learner access.'}
         </p>
 
         {user.role === 'admin' && (
           <Link className="button-link" to="/admin">
-            Test admin route
+            Open administration
           </Link>
         )}
 

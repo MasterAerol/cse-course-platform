@@ -1,12 +1,19 @@
 import { Hono } from 'hono'
 import { getCookie } from 'hono/cookie'
 
+import { getRegistrationMode } from '../config/registration'
+
 import {
   AUTH_COOKIE_NAME,
   clearAuthenticationCookie,
   setAuthenticationCookie,
 } from '../auth/cookie'
 import { requireAuthentication } from '../middleware/auth.middleware'
+import {
+  enforceRateLimit,
+  getClientAddress,
+  hashRateLimitKey,
+} from '../middleware/rate-limit.middleware'
 import {
   loginSchema,
   registrationSchema,
@@ -19,6 +26,7 @@ import {
 } from '../services/auth.service'
 import type { SessionMetadata } from '../types/auth'
 import type { AppEnv } from '../types/app'
+import { AppError } from '../utils/app-error'
 import { successResponse } from '../utils/responses'
 import { parseJsonBody } from '../utils/validation'
 
@@ -51,6 +59,21 @@ function getSessionMetadata(context: {
 }
 
 authRoutes.post('/register', async (context) => {
+  if (getRegistrationMode(context.env) !== 'open') {
+    throw new AppError(
+      403,
+      'REGISTRATION_CLOSED',
+      'Registration is currently limited to approved private-beta learners.',
+    )
+  }
+
+  await enforceRateLimit(
+    context,
+    'REGISTRATION_RATE_LIMITER',
+    `registration:${getClientAddress(context)}`,
+    'registration',
+  )
+
   const input = await parseJsonBody(context, registrationSchema)
   const result = await registerStudent(
     context.env.DB,
@@ -69,6 +92,23 @@ authRoutes.post('/register', async (context) => {
 
 authRoutes.post('/login', async (context) => {
   const input = await parseJsonBody(context, loginSchema)
+  const accountKey = await hashRateLimitKey('login-account', input.email)
+
+  await Promise.all([
+    enforceRateLimit(
+      context,
+      'LOGIN_IP_RATE_LIMITER',
+      `login:${getClientAddress(context)}`,
+      'login-ip',
+    ),
+    enforceRateLimit(
+      context,
+      'LOGIN_ACCOUNT_RATE_LIMITER',
+      accountKey,
+      'login-account',
+    ),
+  ])
+
   const result = await loginUser(
     context.env.DB,
     input,

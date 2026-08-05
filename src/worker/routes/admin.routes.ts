@@ -5,6 +5,7 @@ import {
   requireAuthentication,
 } from '../middleware/auth.middleware'
 import { requireAdminCsrf } from '../middleware/admin-csrf.middleware'
+import { requireAdminRateLimit } from '../middleware/rate-limit.middleware'
 import { operationalEnrollmentSchema } from '../schemas/course.schemas'
 import { enrollStudentOperationally } from '../services/course.service'
 import { getPublicUser } from '../services/auth.service'
@@ -23,6 +24,7 @@ import { adminMockExamRoutes } from './admin/mock-exam.routes'
 export const adminRoutes = new Hono<AppEnv>()
 
 adminRoutes.use('*', requireAuthentication, requireAdmin)
+adminRoutes.use('*', requireAdminRateLimit)
 adminRoutes.use('*', requireAdminCsrf)
 
 adminRoutes.get('/auth-check', (context) =>

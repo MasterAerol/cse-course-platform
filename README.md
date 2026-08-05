@@ -321,7 +321,7 @@ Start the local development server, then run one of these with an admin
 account:
 
 ```bash
-CSE_FRACTIONS_ADMIN_PASSWORD="<password>" node scripts/create-fractions-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-fractions-draft
+CSE_FRACTIONS_ADMIN_PASSWORD="<password>" node scripts/create-fractions-topic.mjs --base-url http://127.0.0.1:5173 --email <admin-email> --confirm create-fractions-draft
 ```
 
 or, if you already have a valid admin session cookie:
@@ -367,7 +367,7 @@ preserved.
 Start the integrated development server and run:
 
 ```bash
-CSE_RATIO_PROPORTION_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-ratio-proportion-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-ratio-proportion
+CSE_RATIO_PROPORTION_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-ratio-proportion-topic.mjs --base-url http://127.0.0.1:5173 --email <admin-email> --confirm create-validate-publish-ratio-proportion
 ```
 
 An existing admin session may be used instead:
@@ -397,7 +397,7 @@ content and audit records intact.
 With the integrated local server running:
 
 ```bash
-CSE_AVERAGE_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-average-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-average
+CSE_AVERAGE_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-average-topic.mjs --base-url http://127.0.0.1:5173 --email <admin-email> --confirm create-validate-publish-average
 ```
 
 An existing admin session cookie may be used instead:
@@ -426,7 +426,7 @@ changed during that run and preserves content and audit records.
 With the integrated local server running:
 
 ```bash
-CSE_NUMBER_PROBLEMS_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-number-problems-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-number-problems
+CSE_NUMBER_PROBLEMS_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-number-problems-topic.mjs --base-url http://127.0.0.1:5173 --email <admin-email> --confirm create-validate-publish-number-problems
 ```
 
 An existing admin session cookie may be used instead:
@@ -461,7 +461,7 @@ generators.
 With the integrated local server running:
 
 ```bash
-CSE_AGE_PROBLEMS_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-age-problems-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-age-problems
+CSE_AGE_PROBLEMS_ADMIN_PASSWORD="<password>" node scripts/create-and-publish-age-problems-topic.mjs --base-url http://127.0.0.1:5173 --email <admin-email> --confirm create-validate-publish-age-problems
 ```
 
 An existing administrator session cookie may be used instead:
@@ -478,7 +478,7 @@ Use a local or deployed admin account without placing credentials in source cont
 
 ```powershell
 $env:CSE_WORK_RATE_ADMIN_PASSWORD = '<admin-password>'
-node scripts/create-and-publish-work-rate-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-work-rate
+node scripts/create-and-publish-work-rate-topic.mjs --base-url http://127.0.0.1:5173 --email <admin-email> --confirm create-validate-publish-work-rate
 Remove-Item Env:CSE_WORK_RATE_ADMIN_PASSWORD
 ```
 
@@ -496,7 +496,7 @@ For local creation and publication, start the current app and supply an existing
 
 ```powershell
 $env:CSE_DISTANCE_SPEED_TIME_ADMIN_PASSWORD='<admin-password>'
-node scripts/create-and-publish-distance-speed-time-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-distance-speed-time
+node scripts/create-and-publish-distance-speed-time-topic.mjs --base-url http://127.0.0.1:5173 --email <admin-email> --confirm create-validate-publish-distance-speed-time
 Remove-Item Env:CSE_DISTANCE_SPEED_TIME_ADMIN_PASSWORD
 ```
 
@@ -544,7 +544,7 @@ account without storing credentials in the repository:
 
 ```powershell
 $env:CSE_SIMPLE_INTEREST_ADMIN_PASSWORD='<admin-password>'
-node scripts/create-and-publish-simple-interest-topic.mjs --base-url http://127.0.0.1:5173 --email admin@example.com --confirm create-validate-publish-simple-interest
+node scripts/create-and-publish-simple-interest-topic.mjs --base-url http://127.0.0.1:5173 --email <admin-email> --confirm create-validate-publish-simple-interest
 Remove-Item Env:CSE_SIMPLE_INTEREST_ADMIN_PASSWORD
 ```
 
@@ -606,15 +606,16 @@ npx wrangler d1 migrations create DB descriptive_name
 
 ## Cloudflare binding types
 
-Generate `worker-configuration.d.ts` after any binding or variable change:
+Generate `src/worker/worker-configuration.d.ts` after any binding or variable change:
 
 ```bash
 npm run cf-typegen
 npm run cf-typegen:check
 ```
 
-The Worker derives D1 bindings from generated `Cloudflare.Env`; the focused
-`Bindings` type widens only the non-secret `ENVIRONMENT` value needed locally.
+The Worker derives platform bindings from generated `Cloudflare.Env`; the focused
+`Bindings` type widens only the non-secret environment and registration values
+needed by local development and tests.
 
 ## Quality checks
 

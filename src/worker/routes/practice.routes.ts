@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 
 import { requireAuthentication } from '../middleware/auth.middleware'
+import { requireLearnerMutationRateLimit } from '../middleware/rate-limit.middleware'
 import { lessonPublicIdSchema } from '../schemas/course.schemas'
 import {
   practiceAnswerParamsSchema,
@@ -26,6 +27,7 @@ import {
 export const practiceRoutes = new Hono<AppEnv>()
 
 practiceRoutes.use('*', requireAuthentication)
+practiceRoutes.use('*', requireLearnerMutationRateLimit)
 
 practiceRoutes.get('/lessons/:lessonPublicId/practice', async (context) => {
   const params = parseValidatedInput(

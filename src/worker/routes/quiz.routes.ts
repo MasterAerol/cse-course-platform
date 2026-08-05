@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 
 import { requireAuthentication } from '../middleware/auth.middleware'
+import { requireLearnerMutationRateLimit } from '../middleware/rate-limit.middleware'
 import { lessonPublicIdSchema } from '../schemas/course.schemas'
 import {
   answerParamsSchema,
@@ -26,6 +27,7 @@ import {
 export const quizRoutes = new Hono<AppEnv>()
 
 quizRoutes.use('*', requireAuthentication)
+quizRoutes.use('*', requireLearnerMutationRateLimit)
 
 quizRoutes.get('/lessons/:lessonPublicId/quiz', async (context) => {
   const params = parseValidatedInput(

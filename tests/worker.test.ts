@@ -757,12 +757,25 @@ const passwordValidationCases = [
   message: string
 }>
 
+const allowAllRateLimiter: RateLimit = {
+  limit() {
+    return Promise.resolve({ success: true })
+  },
+}
+
 function createBindings(
   environment: Bindings['ENVIRONMENT'],
 ): Bindings {
   return {
     DB: env.DB,
     ENVIRONMENT: environment,
+    REGISTRATION_MODE: 'open',
+    LOGIN_IP_RATE_LIMITER: allowAllRateLimiter,
+    LOGIN_ACCOUNT_RATE_LIMITER: allowAllRateLimiter,
+    REGISTRATION_RATE_LIMITER: allowAllRateLimiter,
+    ATTEMPT_RATE_LIMITER: allowAllRateLimiter,
+    AUTOSAVE_RATE_LIMITER: allowAllRateLimiter,
+    ADMIN_RATE_LIMITER: allowAllRateLimiter,
   }
 }
 

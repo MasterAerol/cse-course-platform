@@ -16,6 +16,13 @@ const healthResponseSchema = z.object({
   }),
 })
 
+const platformConfigResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    registrationMode: z.enum(['open', 'closed']),
+  }),
+})
+
 const authenticationResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
@@ -630,6 +637,8 @@ const apiErrorSchema = z.object({
 
 export type User = z.infer<typeof userSchema>
 export type HealthResponse = z.infer<typeof healthResponseSchema>
+export type PlatformConfigResponse = z.infer<typeof platformConfigResponseSchema>
+export type RegistrationMode = PlatformConfigResponse['data']['registrationMode']
 export type AdminCheckResponse = z.infer<typeof adminCheckResponseSchema>
 export type CourseSummary = z.infer<typeof courseSummarySchema>
 export type CourseDetail = z.infer<typeof courseDetailSchema>
@@ -792,6 +801,12 @@ async function request<T>(
 
 export function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {
   return request('/api/health', healthResponseSchema, { signal })
+}
+
+export function fetchPlatformConfig(
+  signal?: AbortSignal,
+): Promise<PlatformConfigResponse> {
+  return request('/api/config', platformConfigResponseSchema, { signal })
 }
 
 export async function registerStudent(

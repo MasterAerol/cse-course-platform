@@ -3,6 +3,21 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import { mockExamSimulationLabel } from '../src/shared/mock-exam-copy'
 
+function collectObjectKeys(value: unknown, keys = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) collectObjectKeys(item, keys)
+    return keys
+  }
+
+  if (typeof value !== 'object' || value === null) return keys
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    keys.add(key)
+    collectObjectKeys(nestedValue, keys)
+  }
+
+  return keys
+}
 import {
   createMockExamAttempt,
   getMockExamAttempt,
@@ -114,9 +129,11 @@ describe('Full CSE mock student lifecycle QA', () => {
     if ('resultAvailable' in started) throw new Error('Attempt closed unexpectedly.')
     expect(started.questions).toHaveLength(150)
     expect(started.attempt.deadlineAt).toBeNull()
-    expect(JSON.stringify(started.questions)).not.toMatch(
-      /isCorrect|explanation|generatorSlug|topicSlug/u,
-    )
+    const exposedKeys = collectObjectKeys(started.questions)
+    expect(exposedKeys).not.toContain('isCorrect')
+    expect(exposedKeys).not.toContain('explanation')
+    expect(exposedKeys).not.toContain('generatorSlug')
+    expect(exposedKeys).not.toContain('topicSlug')
 
     const firstQuestion = started.questions[0]
     if (firstQuestion === undefined) throw new Error('Question fixture missing.')

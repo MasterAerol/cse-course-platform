@@ -675,9 +675,7 @@ export async function startSubjectAssessmentAttempt(
   } catch (error) {
     console.error(JSON.stringify({
       message: 'Subject assessment generation failed',
-      assessmentId: assessment.id,
-      userId,
-      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : 'UnknownError',
     }))
     throw new AppError(
       503,

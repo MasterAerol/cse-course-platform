@@ -26,5 +26,6 @@ Thumbs.db
 
 # Local-only files
 *.local
+backups/
 
 .tmp/

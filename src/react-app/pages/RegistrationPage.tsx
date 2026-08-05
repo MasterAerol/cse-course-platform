@@ -27,7 +27,7 @@ function FieldErrorList({ errors, id }: FieldErrorListProps) {
 }
 
 export function RegistrationPage() {
-  const { register } = useAuth()
+  const { register, registrationMode } = useAuth()
   const navigate = useNavigate()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -99,6 +99,27 @@ export function RegistrationPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (registrationMode !== 'open') {
+    return (
+      <main className="auth-page">
+        <section className="auth-card" aria-labelledby="registration-title">
+          <Link className="brand-link" to="/">
+            CSE Course Platform
+          </Link>
+          <p className="eyebrow">Private beta</p>
+          <h1 id="registration-title">Registration is currently closed</h1>
+          <p>
+            Accounts are created for approved private-beta learners by an
+            administrator. If you already have an account, sign in below.
+          </p>
+          <Link className="button-link" to="/login">
+            Sign in
+          </Link>
+        </section>
+      </main>
+    )
   }
 
   return (

@@ -29,6 +29,9 @@ export function clearAuthenticationCookie(
 ): void {
   deleteCookie(context, AUTH_COOKIE_NAME, {
     path: '/',
+    httpOnly: true,
     secure: context.env.ENVIRONMENT === 'production',
+    sameSite: 'Lax',
+    priority: 'High',
   })
 }
