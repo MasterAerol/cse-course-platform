@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import type { StudentCourseCurriculum } from '../lib/api'
+import type { StudentCourseCurriculum } from '../lib/curriculum.types'
 import { CurriculumLessonItem } from './CurriculumLessonItem'
 
 interface CurriculumTopicProps {

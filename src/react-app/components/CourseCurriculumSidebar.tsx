@@ -1,4 +1,4 @@
-import type { StudentCourseCurriculum } from '../lib/api'
+import type { StudentCourseCurriculum } from '../lib/curriculum.types'
 import { CurriculumSubject } from './CurriculumSubject'
 
 interface CourseCurriculumSidebarProps {
@@ -15,7 +15,11 @@ export function CourseCurriculumSidebar({
   onLessonNavigate,
 }: CourseCurriculumSidebarProps) {
   return (
-    <nav className="curriculum-sidebar" aria-label="Course curriculum">
+    <nav
+      className="curriculum-sidebar"
+      aria-label="Course curriculum"
+      data-testid="course-content-list"
+    >
       <div className="curriculum-sidebar__header">
         <p className="eyebrow">Course content</p>
         <h2>{curriculum.course.title}</h2>

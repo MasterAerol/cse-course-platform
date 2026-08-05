@@ -12,9 +12,12 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["vite/client", "vitest/globals"],
+    "types": ["vite/client"],
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["tests/registration-policy-ui.test.tsx"]
+  "include": [
+    "tests/lesson-curriculum-ui.test.tsx",
+    "tests/registration-policy-ui.test.tsx"
+  ]
 }

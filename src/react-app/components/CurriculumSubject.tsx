@@ -1,4 +1,4 @@
-import type { StudentCourseCurriculum } from '../lib/api'
+import type { StudentCourseCurriculum } from '../lib/curriculum.types'
 import { CurriculumTopic } from './CurriculumTopic'
 
 interface CurriculumSubjectProps {

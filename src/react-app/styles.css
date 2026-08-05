@@ -594,7 +594,7 @@ input[aria-invalid="true"] {
   margin: 0;
 }
 
-.lesson-layout {
+.lesson-workspace {
   display: grid;
   grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
   gap: 2rem;
@@ -603,7 +603,9 @@ input[aria-invalid="true"] {
   padding: 2rem;
 }
 
-.lesson-sidebar {
+.lesson-curriculum-sidebar {
+  display: block;
+  min-width: 0;
   position: sticky;
   top: 1rem;
   height: calc(100vh - 2rem);
@@ -697,7 +699,7 @@ input[aria-invalid="true"] {
   font-size: 0.82rem;
 }
 
-.lesson-reader {
+.lesson-content {
   width: min(100%, 48rem);
   padding: 0 0 4rem;
 }
@@ -1130,7 +1132,16 @@ input[aria-invalid="true"] {
   background: rgb(16 32 57 / 35%);
 }
 
+.curriculum-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgb(16 32 57 / 35%);
+}
+
 .mobile-curriculum-drawer {
+  position: relative;
+  z-index: 30;
   width: min(100%, 24rem);
   height: 100%;
   overflow: auto;
@@ -1200,16 +1211,16 @@ input[aria-invalid="true"] {
     padding: 1rem;
   }
 
-  .lesson-layout {
+  .lesson-workspace {
     display: block;
     padding: 1rem;
   }
 
-  .lesson-sidebar {
+  .lesson-curriculum-sidebar {
     display: none;
   }
 
-  .lesson-reader {
+  .lesson-content {
     width: 100%;
   }
 
@@ -1223,12 +1234,12 @@ input[aria-invalid="true"] {
 }
 
 @media (min-width: 34.01rem) and (max-width: 63.99rem) {
-  .lesson-layout {
+  .lesson-workspace {
     display: block;
     padding: 1rem;
   }
 
-  .lesson-sidebar {
+  .lesson-curriculum-sidebar {
     display: none;
   }
 

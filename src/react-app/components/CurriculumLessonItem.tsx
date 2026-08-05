@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 
-import type { CurriculumLesson } from '../lib/api'
+import type { CurriculumLesson } from '../lib/curriculum.types'
 
 interface CurriculumLessonItemProps {
   courseSlug: string

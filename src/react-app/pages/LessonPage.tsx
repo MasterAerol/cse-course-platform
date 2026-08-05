@@ -197,6 +197,7 @@ export function LessonPage() {
         <>
           <button
             className="mobile-curriculum-button button-link"
+            data-testid="curriculum-trigger"
             aria-label="Open course curriculum"
             type="button"
             onClick={() => setIsCurriculumDrawerOpen(true)}
@@ -204,15 +205,18 @@ export function LessonPage() {
             Curriculum
           </button>
 
-          <section className="lesson-layout">
-            <aside className="lesson-sidebar">
+          <section className="lesson-workspace">
+            <aside
+              className="lesson-curriculum-sidebar"
+              data-testid="course-content-sidebar"
+            >
               <CourseCurriculumSidebar
                 curriculum={state.curriculum}
                 currentLessonPublicId={state.lesson.publicId}
               />
             </aside>
 
-            <article className="lesson-reader">
+            <article className="lesson-content">
               <nav className="lesson-breadcrumb" aria-label="Breadcrumb">
                 <Link to={`/courses/${state.lesson.course.slug}`}>
                   {state.lesson.course.title}

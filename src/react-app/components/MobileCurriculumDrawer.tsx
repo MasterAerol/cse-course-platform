@@ -1,4 +1,4 @@
-import type { StudentCourseCurriculum } from '../lib/api'
+import type { StudentCourseCurriculum } from '../lib/curriculum.types'
 import { CourseCurriculumSidebar } from './CourseCurriculumSidebar'
 
 interface MobileCurriculumDrawerProps {
@@ -19,9 +19,14 @@ export function MobileCurriculumDrawer({
   }
 
   return (
-    <div className="drawer-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className="curriculum-drawer-backdrop"
+      role="presentation"
+      onClick={onClose}
+    >
       <aside
         className="mobile-curriculum-drawer"
+        data-testid="curriculum-drawer"
         aria-label="Mobile course curriculum"
         onClick={(event) => event.stopPropagation()}
       >
