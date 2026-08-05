@@ -112,7 +112,7 @@ export function SubjectAssessmentAttemptPage() {
   }
 
   return (
-    <main className="page-shell quiz-page">
+    <main className="page-shell quiz-page assessment-attempt-page">
       <header className="topbar">
         <Link className="brand-link" to="/">
           CSE Course Platform
@@ -146,15 +146,19 @@ export function SubjectAssessmentAttemptPage() {
 
         return (
           <section className="quiz-attempt-card">
-            <p className="eyebrow">Attempt {data.attempt.attemptNumber}</p>
-            <h1>{data.assessment.title}</h1>
-            <p>
-              Passing score: {data.assessment.passingScore}% · Questions:{' '}
-              {data.assessment.questionCount}
-            </p>
-            <p className="meta-copy" aria-live="polite">
-              Answered {data.answeredCount} of {data.totalCount}
-            </p>
+            <header className="assessment-header">
+              <p className="eyebrow">Attempt {data.attempt.attemptNumber}</p>
+              <h1 className="assessment-title">{data.assessment.title}</h1>
+              <div className="assessment-meta">
+                <p>
+                  Passing score: {data.assessment.passingScore}% {'\u00B7'} Questions:{' '}
+                  {data.assessment.questionCount}
+                </p>
+                <p className="meta-copy" aria-live="polite">
+                  Answered {data.answeredCount} of {data.totalCount}
+                </p>
+              </div>
+            </header>
 
             <nav className="quiz-question-nav" aria-label="Question navigation">
               {data.questions.map((item, position) => {
