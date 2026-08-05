@@ -8,6 +8,7 @@ interface CurriculumTopicProps {
   topic: StudentCourseCurriculum['subjects'][number]['topics'][number]
   currentLessonPublicId?: string
   compact?: boolean
+  onLessonNavigate?: () => void
 }
 
 export function CurriculumTopic({
@@ -15,6 +16,7 @@ export function CurriculumTopic({
   topic,
   currentLessonPublicId,
   compact = false,
+  onLessonNavigate,
 }: CurriculumTopicProps) {
   const [expanded, setExpanded] = useState(true)
   const panelId = `topic-${topic.slug}`
@@ -40,6 +42,7 @@ export function CurriculumTopic({
               lesson={lesson}
               currentLessonPublicId={currentLessonPublicId}
               compact={compact}
+              onNavigate={onLessonNavigate}
             />
           ))}
         </ol>

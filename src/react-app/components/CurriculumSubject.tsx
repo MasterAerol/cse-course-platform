@@ -6,6 +6,7 @@ interface CurriculumSubjectProps {
   subject: StudentCourseCurriculum['subjects'][number]
   currentLessonPublicId?: string
   compact?: boolean
+  onLessonNavigate?: () => void
 }
 
 export function CurriculumSubject({
@@ -13,6 +14,7 @@ export function CurriculumSubject({
   subject,
   currentLessonPublicId,
   compact = false,
+  onLessonNavigate,
 }: CurriculumSubjectProps) {
   return (
     <section className="curriculum-subject">
@@ -25,6 +27,7 @@ export function CurriculumSubject({
             topic={topic}
             currentLessonPublicId={currentLessonPublicId}
             compact={compact}
+            onLessonNavigate={onLessonNavigate}
           />
         ))}
       </div>

@@ -1222,6 +1222,20 @@ input[aria-invalid="true"] {
   }
 }
 
+@media (min-width: 34.01rem) and (max-width: 63.99rem) {
+  .lesson-layout {
+    display: block;
+    padding: 1rem;
+  }
+
+  .lesson-sidebar {
+    display: none;
+  }
+
+  .mobile-curriculum-button {
+    display: inline-flex;
+  }
+}
 .admin-shell {
   min-height: 100vh;
   display: grid;

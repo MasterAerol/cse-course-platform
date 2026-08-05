@@ -5,12 +5,14 @@ interface CourseCurriculumSidebarProps {
   curriculum: StudentCourseCurriculum
   currentLessonPublicId?: string
   compact?: boolean
+  onLessonNavigate?: () => void
 }
 
 export function CourseCurriculumSidebar({
   curriculum,
   currentLessonPublicId,
   compact = false,
+  onLessonNavigate,
 }: CourseCurriculumSidebarProps) {
   return (
     <nav className="curriculum-sidebar" aria-label="Course curriculum">
@@ -25,6 +27,7 @@ export function CourseCurriculumSidebar({
           subject={subject}
           currentLessonPublicId={currentLessonPublicId}
           compact={compact}
+          onLessonNavigate={onLessonNavigate}
         />
       ))}
     </nav>

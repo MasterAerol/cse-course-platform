@@ -19,10 +19,11 @@ export function MobileCurriculumDrawer({
   }
 
   return (
-    <div className="drawer-backdrop" role="presentation">
+    <div className="drawer-backdrop" role="presentation" onClick={onClose}>
       <aside
         className="mobile-curriculum-drawer"
         aria-label="Mobile course curriculum"
+        onClick={(event) => event.stopPropagation()}
       >
         <div className="drawer-header">
           <h2>Curriculum</h2>
@@ -34,6 +35,7 @@ export function MobileCurriculumDrawer({
           curriculum={curriculum}
           currentLessonPublicId={currentLessonPublicId}
           compact
+          onLessonNavigate={onClose}
         />
       </aside>
     </div>

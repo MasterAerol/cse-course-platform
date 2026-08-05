@@ -7,6 +7,7 @@ interface CurriculumLessonItemProps {
   lesson: CurriculumLesson
   currentLessonPublicId?: string
   compact?: boolean
+  onNavigate?: () => void
 }
 
 export function CurriculumLessonItem({
@@ -14,6 +15,7 @@ export function CurriculumLessonItem({
   lesson,
   currentLessonPublicId,
   compact = false,
+  onNavigate,
 }: CurriculumLessonItemProps) {
   const isCurrent = lesson.publicId === currentLessonPublicId
   const progressLabel =
@@ -61,6 +63,9 @@ export function CurriculumLessonItem({
       <Link
         to={`/courses/${courseSlug}/lessons/${lesson.publicId}`}
         aria-current={isCurrent ? 'page' : undefined}
+        onClick={() => {
+          onNavigate?.()
+        }}
       >
         {content}
       </Link>

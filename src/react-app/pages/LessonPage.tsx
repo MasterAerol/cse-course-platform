@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { CourseCurriculumSidebar } from '../components/CourseCurriculumSidebar'
+import { MobileCurriculumDrawer } from '../components/MobileCurriculumDrawer'
 import { LessonBlockRenderer } from '../components/LessonBlockRenderer'
 import { LessonNavigation } from '../components/LessonNavigation'
 import { PracticeLessonPanel } from '../components/PracticeLessonPanel'
@@ -69,6 +70,7 @@ export function LessonPage() {
   const [state, setState] = useState<LessonPageState>({
     status: 'loading',
   })
+  const [isCurriculumDrawerOpen, setIsCurriculumDrawerOpen] = useState(false)
   const [completionStatus, setCompletionStatus] = useState<
     | { type: 'idle' }
     | { type: 'submitting' }
@@ -193,13 +195,14 @@ export function LessonPage() {
 
       {state.status === 'loaded' && (
         <>
-          <Link
+          <button
             className="mobile-curriculum-button button-link"
-            to={`/courses/${state.lesson.course.slug}`}
             aria-label="Open course curriculum"
+            type="button"
+            onClick={() => setIsCurriculumDrawerOpen(true)}
           >
             Curriculum
-          </Link>
+          </button>
 
           <section className="lesson-layout">
             <aside className="lesson-sidebar">
@@ -298,6 +301,13 @@ export function LessonPage() {
               />
             </article>
           </section>
+
+          <MobileCurriculumDrawer
+            curriculum={state.curriculum}
+            currentLessonPublicId={state.lesson.publicId}
+            open={isCurriculumDrawerOpen}
+            onClose={() => setIsCurriculumDrawerOpen(false)}
+          />
         </>
       )}
     </main>
