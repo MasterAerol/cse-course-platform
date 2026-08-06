@@ -86,6 +86,7 @@ const dashboard: SmartRecoveryDashboard = {
   eligibleEvidenceCount: 8,
   excludedEvidenceCount: 2,
   skillsWithEvidence: 1,
+  prioritySkillCount: 1,
   needsMorePractice: [weakSkill],
   improving: [],
   strong: [],
@@ -93,7 +94,18 @@ const dashboard: SmartRecoveryDashboard = {
   activeRecoveryAttemptPublicId: null,
   recommendedRecoveryQuestionCount: 0,
   eligibleRecoverySkillCount: 0,
+  selectedRecoverySkillCount: 0,
   recoveryUnavailableReason: 'not_enough_evidence',
+  recoveryDiagnostics: {
+    statusCounts: { not_enough_data: 0, needs_more_practice: 1, improving: 0, strong: 0, neutral: 0 },
+    generatableSkillCount: 0,
+    selectedSkillCount: 0,
+    excludedSkillCount: 1,
+    ambiguousEvidenceCount: 0,
+    missingCanonicalSkillEvidenceCount: 0,
+    missingGeneratorEligibilityCount: 1,
+    invalidMappingOrContextEvidenceCount: 0,
+  },
   latestRecoveryResult: null,
 }
 

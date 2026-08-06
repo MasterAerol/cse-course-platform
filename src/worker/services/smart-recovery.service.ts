@@ -1,13 +1,8 @@
 import {
   SMART_RECOVERY_TAXONOMY_VERSION,
 } from '../domain/smart-recovery-skills'
-import {
-  allocateRecoveryQuestions,
-  filterGeneratableWeaknesses,
-  generateRecoveryQuestions,
-  recommendedRecoveryQuestionCount,
-  type RecentRecoveryIdentity,
-} from '../domain/smart-recovery-attempt'
+import type { RecentRecoveryIdentity } from '../domain/smart-recovery-attempt'
+import { evaluateRecoveryEligibility } from '../domain/smart-recovery-eligibility'
 import {
   SMART_RECOVERY_EVIDENCE_WINDOW,
   SMART_RECOVERY_FORMULA_VERSION,
@@ -69,6 +64,11 @@ export interface SmartRecoveryEvidenceContext {
   skillsBySlug: Map<string, SkillCatalogEntry>
   evidence: NormalizedSkillEvidence[]
   excludedEvidenceCount: number
+  exclusionDiagnostics: {
+    ambiguousMappingCount: number
+    missingCanonicalSkillRowCount: number
+    invalidMappingOrContextCount: number
+  }
 }
 
 function assertValidCalculationDate(calculatedAt: Date): void {
@@ -125,6 +125,7 @@ export async function loadSmartRecoveryEvidenceContext(
     skillsBySlug,
     evidence: normalized.evidence,
     excludedEvidenceCount: normalized.excludedCount,
+    exclusionDiagnostics: normalized.exclusionDiagnostics,
   }
 }
 
@@ -151,8 +152,6 @@ export async function getSmartRecoveryDashboard(
   const hasEnoughEvidence = summaries.some(
     (summary) => summary.status !== 'not_enough_data',
   )
-  const generatableWeaknesses = filterGeneratableWeaknesses(needsMorePractice)
-  const allocations = allocateRecoveryQuestions(generatableWeaknesses)
   const [activeAttempt, latestAttempt, recentRows] = await Promise.all([
     findActiveRecoveryAttempt(database, userId, context.courseId),
     findLatestSubmittedRecoveryAttempt(database, userId, context.courseId),
@@ -162,38 +161,29 @@ export async function getSmartRecoveryDashboard(
     activeAttempt !== null &&
     activeAttempt.taxonomy_version === SMART_RECOVERY_TAXONOMY_VERSION &&
     activeAttempt.weakness_formula_version === SMART_RECOVERY_FORMULA_VERSION
-  let recoveryAvailable = activeIsCompatible
-  let recoveryUnavailableReason:
-    | 'not_enough_evidence'
-    | 'no_current_weakness'
-    | 'no_generatable_skills'
-    | 'configuration_unavailable'
-    | null = null
-
-  if (activeAttempt !== null && !activeIsCompatible) {
-    recoveryUnavailableReason = 'configuration_unavailable'
-  } else if (activeAttempt === null && needsMorePractice.length === 0) {
-    recoveryUnavailableReason = hasEnoughEvidence
-      ? 'no_current_weakness'
-      : 'not_enough_evidence'
-  } else if (activeAttempt === null && allocations.length === 0) {
-    recoveryUnavailableReason = 'no_generatable_skills'
-  } else if (activeAttempt === null) {
-    try {
-      generateRecoveryQuestions({
-        attemptSeed: [
-          'recovery-availability',
-          String(userId),
-          calculatedAt.toISOString().slice(0, 10),
-        ].join('|'),
-        allocations,
-        recentIdentities: mapRecentIdentities(recentRows),
-      })
-      recoveryAvailable = true
-    } catch {
-      recoveryUnavailableReason = 'configuration_unavailable'
-    }
-  }
+  const eligibility = evaluateRecoveryEligibility({
+    observedSkills: summaries,
+    hasEnoughEvidence,
+    attemptSeed: [
+      'recovery-availability',
+      String(userId),
+      calculatedAt.toISOString().slice(0, 10),
+    ].join('|'),
+    recentIdentities: mapRecentIdentities(recentRows),
+    activeAttempt:
+      activeAttempt === null
+        ? null
+        : {
+            compatible: activeIsCompatible,
+            questionCount: activeAttempt.question_count,
+          },
+    ambiguousEvidenceCount:
+      context.exclusionDiagnostics.ambiguousMappingCount,
+    missingCanonicalSkillEvidenceCount:
+      context.exclusionDiagnostics.missingCanonicalSkillRowCount,
+    invalidMappingOrContextEvidenceCount:
+      context.exclusionDiagnostics.invalidMappingOrContextCount,
+  })
 
   return {
     taxonomyVersion: SMART_RECOVERY_TAXONOMY_VERSION,
@@ -210,16 +200,17 @@ export async function getSmartRecoveryDashboard(
     eligibleEvidenceCount: context.evidence.length,
     excludedEvidenceCount: context.excludedEvidenceCount,
     skillsWithEvidence: summaries.length,
+    prioritySkillCount: needsMorePractice.length,
     needsMorePractice,
     improving,
     strong,
-    recoveryAvailable,
+    recoveryAvailable: eligibility.recoveryAvailable,
     activeRecoveryAttemptPublicId: activeAttempt?.public_id ?? null,
-    recommendedRecoveryQuestionCount:
-      activeAttempt?.question_count ??
-      recommendedRecoveryQuestionCount(generatableWeaknesses.length),
-    eligibleRecoverySkillCount: generatableWeaknesses.length,
-    recoveryUnavailableReason,
+    recommendedRecoveryQuestionCount: eligibility.recommendedQuestionCount,
+    eligibleRecoverySkillCount: eligibility.eligibleSkills.length,
+    selectedRecoverySkillCount: eligibility.selectedSkills.length,
+    recoveryUnavailableReason: eligibility.unavailableReason,
+    recoveryDiagnostics: eligibility.diagnostics,
     latestRecoveryResult:
       latestAttempt === null ||
       latestAttempt.submitted_at === null ||
@@ -234,7 +225,6 @@ export async function getSmartRecoveryDashboard(
           },
   }
 }
-
 export async function getSmartRecoverySkillDetails(
   database: D1Database,
   userId: number,

@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 
 import type { SmartRecoveryViewState } from '../hooks/use-smart-recovery'
+import { smartRecoveryUnavailableMessage } from '../lib/smart-recovery-copy'
 import type {
   RecoveryHistory,
   SmartRecoveryDashboard,
@@ -171,14 +172,14 @@ export function SmartRecoveryOverview({
         <div>
           <p className="eyebrow">Targeted practice</p>
           <h2 id="recovery-action-heading">Recovery set</h2>
-          <p>{summary.recommendedRecoveryQuestionCount > 0 ? `${summary.recommendedRecoveryQuestionCount} questions across ${summary.eligibleRecoverySkillCount} priority ${summary.eligibleRecoverySkillCount === 1 ? 'skill' : 'skills'}.` : 'A targeted set will appear when enough eligible weakness evidence is available.'}</p>
+          <p>{summary.recommendedRecoveryQuestionCount > 0 ? `${summary.recommendedRecoveryQuestionCount} questions targeting your top ${summary.selectedRecoverySkillCount} priority ${summary.selectedRecoverySkillCount === 1 ? 'skill' : 'skills'}.` : 'A targeted set will appear when enough eligible weakness evidence is available.'}</p>
         </div>
         {summary.activeRecoveryAttemptPublicId !== null ? (
           <Link className="button-link" to={`/smart-recovery/attempts/${summary.activeRecoveryAttemptPublicId}`}>Continue Recovery Set</Link>
         ) : summary.recoveryAvailable && onStartRecovery !== undefined ? (
           <button type="button" disabled={starting} onClick={onStartRecovery}>{starting ? 'Preparing Recovery Set...' : 'Start Recovery Set'}</button>
         ) : (
-          <p className="meta-copy">{summary.recoveryUnavailableReason === 'not_enough_evidence' ? 'Complete more generated questions to unlock a targeted set.' : summary.recoveryUnavailableReason === 'no_current_weakness' ? 'No current weak skill needs a targeted set.' : summary.recoveryUnavailableReason === 'no_generatable_skills' ? 'Your current priority skills do not have an eligible targeted generator.' : summary.recoveryUnavailableReason === 'configuration_unavailable' ? 'Targeted recovery is temporarily unavailable.' : 'Targeted recovery is not available yet.'}</p>
+          <p className="meta-copy">{smartRecoveryUnavailableMessage(summary.recoveryUnavailableReason)}</p>
         )}
         {summary.latestRecoveryResult !== null && <Link to={`/smart-recovery/attempts/${summary.latestRecoveryResult.attemptPublicId}/results`}>Latest result: {summary.latestRecoveryResult.correctCount}/{summary.latestRecoveryResult.questionCount} ({summary.latestRecoveryResult.scorePercent}%)</Link>}
         {startError !== null && <p className="form-error" role="alert">{startError}</p>}

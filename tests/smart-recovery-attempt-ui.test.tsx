@@ -44,6 +44,7 @@ const dashboard: SmartRecoveryDashboard = {
   eligibleEvidenceCount: 5,
   excludedEvidenceCount: 0,
   skillsWithEvidence: 1,
+  prioritySkillCount: 1,
   needsMorePractice: [],
   improving: [],
   strong: [],
@@ -51,7 +52,18 @@ const dashboard: SmartRecoveryDashboard = {
   activeRecoveryAttemptPublicId: null,
   recommendedRecoveryQuestionCount: 8,
   eligibleRecoverySkillCount: 1,
+  selectedRecoverySkillCount: 1,
   recoveryUnavailableReason: null,
+  recoveryDiagnostics: {
+    statusCounts: { not_enough_data: 0, needs_more_practice: 1, improving: 0, strong: 0, neutral: 0 },
+    generatableSkillCount: 1,
+    selectedSkillCount: 1,
+    excludedSkillCount: 0,
+    ambiguousEvidenceCount: 0,
+    missingCanonicalSkillEvidenceCount: 0,
+    missingGeneratorEligibilityCount: 0,
+    invalidMappingOrContextEvidenceCount: 0,
+  },
   latestRecoveryResult: {
     attemptPublicId: 'recovery-attempt-11111111-1111-4111-8111-111111111111',
     scorePercent: 75,
@@ -119,7 +131,7 @@ describe('Smart Recovery Phase D/E UI contracts', () => {
       <SmartRecoveryCardView summary={dashboard} onStartRecovery={onStart} />,
     )
     expect(overview).toContain('Start Recovery Set')
-    expect(overview).toContain('8 questions across 1 priority skill')
+    expect(overview).toContain('8 questions targeting your top 1 priority skill')
     expect(overview).toContain('Latest result: 6/8 (75%)')
     expect(card).toContain('Start Recovery Set')
   })

@@ -56,6 +56,24 @@ export interface RecentRecoveryIdentity {
   normalizedPrompt: string
 }
 
+export type RecoveryGenerationFailureReason =
+  | 'insufficient_fresh_questions'
+  | 'configuration_unavailable'
+
+export class RecoveryGenerationError extends Error {
+  constructor(
+    readonly reason: RecoveryGenerationFailureReason,
+    skillSlug: string,
+  ) {
+    super(
+      reason === 'insufficient_fresh_questions'
+        ? `Unable to generate a fresh recovery question for ${skillSlug}.`
+        : `Recovery generator configuration is unavailable for ${skillSlug}.`,
+    )
+    this.name = 'RecoveryGenerationError'
+  }
+}
+
 export function allocateRecoveryQuestions(
   eligibleSkills: readonly SkillWeaknessSummary[],
 ): RecoverySkillAllocation[] {
@@ -134,13 +152,13 @@ function generatorFor(
   offset: number,
 ): RecoveryGeneratorEligibility {
   if (candidates.length === 0) {
-    throw new Error(`No recovery generator is available for ${skillSlug}.`)
+    throw new RecoveryGenerationError('configuration_unavailable', skillSlug)
   }
   const random = createSeededRandom(`${attemptSeed}|${skillSlug}|generators`)
   const rotation = random.integer(0, candidates.length - 1)
   const selected = candidates[(rotation + offset) % candidates.length]
   if (selected === undefined) {
-    throw new Error(`Recovery generator selection failed for ${skillSlug}.`)
+    throw new RecoveryGenerationError('configuration_unavailable', skillSlug)
   }
   return selected
 }
@@ -214,8 +232,9 @@ export function generateRecoveryQuestions(input: {
       }
 
       if (accepted === null) {
-        throw new Error(
-          `Unable to generate a fresh recovery question for ${allocation.skill.skill.slug}.`,
+        throw new RecoveryGenerationError(
+          'insufficient_fresh_questions',
+          allocation.skill.skill.slug,
         )
       }
       signatures.add(accepted.metadata.canonicalSignature)

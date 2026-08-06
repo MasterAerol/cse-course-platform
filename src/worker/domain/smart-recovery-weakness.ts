@@ -2,6 +2,10 @@ import {
   SMART_RECOVERY_TAXONOMY_VERSION,
   generatorSkillMappings,
 } from './smart-recovery-skills'
+import type {
+  RecoveryEligibilityDiagnostics,
+  RecoveryUnavailableReason,
+} from './smart-recovery-eligibility'
 
 export const SMART_RECOVERY_FORMULA_VERSION = 2 as const
 
@@ -210,6 +214,7 @@ export interface SmartRecoveryDashboardSummary {
   eligibleEvidenceCount: number
   excludedEvidenceCount: number
   skillsWithEvidence: number
+  prioritySkillCount: number
   needsMorePractice: SkillWeaknessSummary[]
   improving: SkillWeaknessSummary[]
   strong: SkillWeaknessSummary[]
@@ -217,12 +222,9 @@ export interface SmartRecoveryDashboardSummary {
   activeRecoveryAttemptPublicId: string | null
   recommendedRecoveryQuestionCount: number
   eligibleRecoverySkillCount: number
-  recoveryUnavailableReason:
-    | 'not_enough_evidence'
-    | 'no_current_weakness'
-    | 'no_generatable_skills'
-    | 'configuration_unavailable'
-    | null
+  selectedRecoverySkillCount: number
+  recoveryUnavailableReason: RecoveryUnavailableReason
+  recoveryDiagnostics: RecoveryEligibilityDiagnostics
   latestRecoveryResult: {
     attemptPublicId: string
     scorePercent: number
@@ -242,11 +244,24 @@ export interface SmartRecoveryDetailsResponse {
   sourceBreakdown: EvidenceSourceSummary[]
 }
 
+export interface NormalizedEvidenceExclusionDiagnostics {
+  ambiguousMappingCount: number
+  missingCanonicalSkillRowCount: number
+  invalidMappingOrContextCount: number
+}
+
 export interface NormalizedEvidenceCollection {
   evidence: NormalizedSkillEvidence[]
   excludedCount: number
+  exclusionDiagnostics: NormalizedEvidenceExclusionDiagnostics
 }
 
+const mappingByGenerator = new Map(
+  generatorSkillMappings.map((mapping) => [
+    `${mapping.generatorSlug}@${mapping.generatorVersion}`,
+    mapping,
+  ]),
+)
 const directMappingByGenerator = new Map(
   generatorSkillMappings
     .filter((mapping) => mapping.mappingKind === 'direct')
@@ -286,11 +301,16 @@ export function normalizeGeneratedEvidence(
 ): NormalizedEvidenceCollection {
   const evidence: NormalizedSkillEvidence[] = []
   let excludedCount = 0
+  const exclusionDiagnostics: NormalizedEvidenceExclusionDiagnostics = {
+    ambiguousMappingCount: 0,
+    missingCanonicalSkillRowCount: 0,
+    invalidMappingOrContextCount: 0,
+  }
 
   for (const record of records) {
-    const mapping = directMappingByGenerator.get(
-      `${record.generatorSlug}@${record.generatorVersion}`,
-    )
+    const generatorKey = `${record.generatorSlug}@${record.generatorVersion}`
+    const knownMapping = mappingByGenerator.get(generatorKey)
+    const mapping = directMappingByGenerator.get(generatorKey)
     const mappedSkillSlug =
       record.sourceType === 'recovery' ? record.skillSlug : mapping?.skillSlug
     const skill =
@@ -317,6 +337,20 @@ export function normalizeGeneratedEvidence(
       !contextMatches
     ) {
       excludedCount += 1
+      if (
+        record.sourceType !== 'recovery' &&
+        knownMapping?.mappingKind === 'broad-mixed'
+      ) {
+        exclusionDiagnostics.ambiguousMappingCount += 1
+      } else if (
+        mappedSkillSlug !== null &&
+        mappedSkillSlug !== undefined &&
+        skill === undefined
+      ) {
+        exclusionDiagnostics.missingCanonicalSkillRowCount += 1
+      } else {
+        exclusionDiagnostics.invalidMappingOrContextCount += 1
+      }
       continue
     }
 
@@ -342,7 +376,7 @@ export function normalizeGeneratedEvidence(
     })
   }
 
-  return { evidence, excludedCount }
+  return { evidence, excludedCount, exclusionDiagnostics }
 }
 
 function windowEvidence(

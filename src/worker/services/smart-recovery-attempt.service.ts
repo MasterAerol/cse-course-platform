@@ -1,9 +1,8 @@
+import type { RecentRecoveryIdentity } from '../domain/smart-recovery-attempt'
 import {
-  allocateRecoveryQuestions,
-  filterGeneratableWeaknesses,
-  generateRecoveryQuestions,
-  type RecentRecoveryIdentity,
-} from '../domain/smart-recovery-attempt'
+  evaluateRecoveryEligibility,
+  type RecoveryUnavailableReason,
+} from '../domain/smart-recovery-eligibility'
 import { scoreAssessment } from '../domain/assessment-scoring'
 import { buildRecoveryAttemptProgress } from '../domain/smart-recovery-history'
 import {
@@ -347,7 +346,7 @@ async function planningSummaries(
   const context = await loadSmartRecoveryEvidenceContext(database, userId, now)
   return context.skills
     .map((skill) => calculateSkillWeakness(skill, context.evidence, now))
-    .filter((summary) => summary.status === 'needs_more_practice')
+    .filter((summary) => summary.evidenceCount > 0)
 }
 
 async function loadAttemptPayload(
@@ -366,6 +365,32 @@ async function loadAttemptPayload(
     )
   }
   return mapAttemptPayload(attempt, questions, answers)
+}
+
+function recoveryEligibilityError(
+  reason: RecoveryUnavailableReason,
+): AppError {
+  if (reason === 'insufficient_fresh_questions') {
+    return new AppError(
+      503,
+      'RECOVERY_FRESH_QUESTIONS_UNAVAILABLE',
+      'A fresh recovery set is not available yet. Please try again later.',
+    )
+  }
+  if (reason === 'configuration_unavailable') {
+    return new AppError(
+      503,
+      'RECOVERY_CONFIGURATION_UNAVAILABLE',
+      'Targeted recovery is temporarily unavailable.',
+    )
+  }
+  return new AppError(
+    409,
+    'RECOVERY_NOT_AVAILABLE',
+    reason === 'no_generatable_skills'
+      ? 'Your current weak skills do not have an eligible targeted generator.'
+      : 'A recovery set is not available from your current skill evidence.',
+  )
 }
 
 export async function createRecoveryAttempt(
@@ -398,43 +423,22 @@ export async function createRecoveryAttempt(
   )
   if (active !== null) return loadAttemptPayload(database, active)
 
-  const eligible = filterGeneratableWeaknesses(
-    await planningSummaries(database, userId, now),
-  )
-  const allocations = allocateRecoveryQuestions(eligible)
-  if (allocations.length === 0) {
-    throw new AppError(
-      409,
-      eligible.length === 0
-        ? 'RECOVERY_NOT_AVAILABLE'
-        : 'RECOVERY_CONFIGURATION_UNAVAILABLE',
-      'A recovery set is not available from your current skill evidence.',
-    )
-  }
-
+  const observedSkills = await planningSummaries(database, userId, now)
   const attemptSeed = createAttemptSeed()
-  let questions
-  try {
-    questions = generateRecoveryQuestions({
-      attemptSeed,
-      allocations,
-      recentIdentities: recentIdentities(
-        await findRecentGeneratedIdentities(database, userId),
-      ),
-    })
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        message: 'Recovery question generation failed',
-        errorName: error instanceof Error ? error.name : 'UnknownError',
-      }),
-    )
-    throw new AppError(
-      503,
-      'RECOVERY_GENERATION_FAILED',
-      'The recovery set could not be prepared. Please try again.',
-    )
+  const eligibility = evaluateRecoveryEligibility({
+    observedSkills,
+    hasEnoughEvidence: observedSkills.some(
+      (summary) => summary.status !== 'not_enough_data',
+    ),
+    attemptSeed,
+    recentIdentities: recentIdentities(
+      await findRecentGeneratedIdentities(database, userId),
+    ),
+  })
+  if (!eligibility.recoveryAvailable) {
+    throw recoveryEligibilityError(eligibility.unavailableReason)
   }
+  const questions = eligibility.generatedQuestions
 
   const attemptPublicId = `recovery-attempt-${crypto.randomUUID()}`
   try {

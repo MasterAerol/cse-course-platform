@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 
 import { useSmartRecoverySummary } from '../hooks/use-smart-recovery'
 import type { SmartRecoveryViewState } from '../hooks/use-smart-recovery'
+import { smartRecoveryUnavailableMessage } from '../lib/smart-recovery-copy'
 import {
   createSmartRecoveryAttempt,
   type SmartRecoveryDashboard,
@@ -33,6 +34,12 @@ export function SmartRecoveryCardView({
             : 'No current weak skill appears in your submitted evidence.'
           : `${priority.accuracyPercent ?? 'No'}% weighted accuracy across ${priority.evidenceCount} evidence items.`}
       </p>
+      {summary.activeRecoveryAttemptPublicId === null &&
+        !summary.recoveryAvailable && (
+          <p className="meta-copy">
+            {smartRecoveryUnavailableMessage(summary.recoveryUnavailableReason)}
+          </p>
+        )}
       {summary.latestRecoveryResult !== null && (
         <p className="meta-copy">
           Latest recovery: {summary.latestRecoveryResult.correctCount}/{summary.latestRecoveryResult.questionCount} ({summary.latestRecoveryResult.scorePercent}%).{' '}

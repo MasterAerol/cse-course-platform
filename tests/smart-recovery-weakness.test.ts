@@ -193,13 +193,21 @@ describe('Smart Recovery formula v2', () => {
       [record(broad.generatorSlug, broad.generatorVersion)],
       new Map([[broad.skillSlug, broadSkill]]),
     )
-    expect(excluded).toEqual({ evidence: [], excludedCount: 1 })
+    expect(excluded).toMatchObject({
+      evidence: [],
+      excludedCount: 1,
+      exclusionDiagnostics: { ambiguousMappingCount: 1 },
+    })
 
     const mismatched = normalizeGeneratedEvidence(
       [record(skill.slug)],
       new Map([[skill.slug, { ...skill, topicSlug: 'different-topic' }]]),
     )
-    expect(mismatched).toEqual({ evidence: [], excludedCount: 1 })
+    expect(mismatched).toMatchObject({
+      evidence: [],
+      excludedCount: 1,
+      exclusionDiagnostics: { invalidMappingOrContextCount: 1 },
+    })
   })
 
   it('keeps the approved evidence window constants explicit', () => {
