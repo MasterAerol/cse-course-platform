@@ -469,6 +469,7 @@ export async function submitRecoveryAttemptRows(
     correctCount: number
     questionCount: number
     scorePercent: number
+    submittedAt: string
     scores: ReadonlyArray<{
       snapshotId: number
       selectedChoiceId: number | null
@@ -515,7 +516,7 @@ export async function submitRecoveryAttemptRows(
         `UPDATE recovery_attempts
         SET status = 'submitted', correct_count = ?2,
           question_count = ?3, score_percent = ?4,
-          submitted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+          submitted_at = ?5, updated_at = ?5
         WHERE id = ?1 AND status = 'in_progress'`,
       )
       .bind(
@@ -523,6 +524,7 @@ export async function submitRecoveryAttemptRows(
         input.correctCount,
         input.questionCount,
         input.scorePercent,
+        input.submittedAt,
       ),
   )
   await database.batch(statements)

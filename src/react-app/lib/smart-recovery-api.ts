@@ -6,6 +6,7 @@ const evidenceSourceSchema = z.enum([
   'generated_practice',
   'subject_assessment',
   'mock_exam',
+  'recovery',
 ])
 
 const evidenceWindowSchema = z.object({
@@ -18,6 +19,7 @@ const evidenceWindowSchema = z.object({
     generated_practice: z.number().positive(),
     subject_assessment: z.number().positive(),
     mock_exam: z.number().positive(),
+    recovery: z.number().positive(),
   }),
   needsMorePracticeBelowPercent: z.number().min(0).max(100),
   strongAtOrAbovePercent: z.number().min(0).max(100),
@@ -27,6 +29,7 @@ const evidenceWindowSchema = z.object({
 
 const evidenceScopeSchema = z.object({
   submittedGeneratedAttemptsOnly: z.literal(true),
+  recoveryEvidenceIncluded: z.literal(true),
   fixedQuestionEvidenceIncluded: z.literal(false),
   ambiguousGeneratorMappingsIncluded: z.literal(false),
 })
@@ -75,7 +78,7 @@ export const smartRecoveryDashboardResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     taxonomyVersion: z.literal(1),
-    formulaVersion: z.literal(1),
+    formulaVersion: z.literal(2),
     calculatedAt: z.string(),
     evidenceWindow: evidenceWindowSchema,
     evidenceScope: evidenceScopeSchema,
@@ -114,7 +117,7 @@ export const smartRecoveryDetailsResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     taxonomyVersion: z.literal(1),
-    formulaVersion: z.literal(1),
+    formulaVersion: z.literal(2),
     calculatedAt: z.string(),
     evidenceWindow: evidenceWindowSchema,
     evidenceScope: evidenceScopeSchema,
@@ -215,15 +218,40 @@ const weaknessStatusSchema = z.enum([
   'strong',
 ])
 
+const recoveryProgressSchema = z.object({
+  statusBefore: weaknessStatusSchema,
+  weightedAccuracyBefore: z.number().min(0).max(100).nullable(),
+  evidenceCountBefore: z.number().int().nonnegative(),
+  statusAfter: weaknessStatusSchema,
+  weightedAccuracyAfter: z.number().min(0).max(100).nullable(),
+  evidenceCountAfter: z.number().int().nonnegative(),
+  percentagePointChange: z.number().min(-100).max(100).nullable(),
+  trend: z.enum(['improved', 'stable', 'declined', 'insufficient_data']),
+})
+
+const recoveryInterpretationSchema = z.object({
+  code: z.enum([
+    'improved',
+    'strong_recovery_result',
+    'still_needs_practice',
+    'more_evidence_needed',
+  ]),
+  title: z.string(),
+  message: z.string(),
+})
+
 export const recoveryResultResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
+    formulaVersion: z.literal(2),
     attempt: z.object({
       publicId: z.string(),
       status: z.literal('submitted'),
+      formulaVersion: z.number().int().positive(),
       startedAt: z.string(),
       submittedAt: z.string(),
     }),
+    interpretation: recoveryInterpretationSchema,
     scorePercent: z.number().min(0).max(100),
     correctCount: z.number().int().nonnegative(),
     questionCount: z.number().int().positive(),
@@ -235,7 +263,7 @@ export const recoveryResultResponseSchema = z.object({
       questions: z.number().int().positive(),
       correct: z.number().int().nonnegative(),
       accuracyPercent: z.number().min(0).max(100),
-      statusBefore: weaknessStatusSchema,
+      ...recoveryProgressSchema.shape,
       currentStatus: weaknessStatusSchema,
       relatedLesson: z.object({
         publicId: z.string(),
@@ -326,8 +354,52 @@ export async function fetchSmartRecoveryResult(
   signal?: AbortSignal,
 ): Promise<RecoveryResult> {
   const response = await request(
-    `/api/student/smart-recovery/attempts/${encodeURIComponent(attemptPublicId)}/results`,
+    `/api/student/smart-recovery/attempts/${encodeURIComponent(attemptPublicId)}/result`,
     recoveryResultResponseSchema,
+    { signal },
+  )
+  return response.data
+}
+export const recoveryHistoryResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    formulaVersion: z.literal(2),
+    activeAttemptPublicId: z.string().nullable(),
+    totalSubmittedAttempts: z.number().int().nonnegative(),
+    historyLimit: z.number().int().positive(),
+    attempts: z.array(z.object({
+      attempt: z.object({
+        publicId: z.string(),
+        formulaVersion: z.number().int().positive(),
+        startedAt: z.string(),
+        submittedAt: z.string(),
+      }),
+      scorePercent: z.number().min(0).max(100),
+      correctCount: z.number().int().nonnegative(),
+      questionCount: z.number().int().positive(),
+      skillsTrained: z.number().int().positive(),
+      interpretation: recoveryInterpretationSchema,
+      skillProgress: z.array(z.object({
+        skill: z.object({ slug: z.string(), title: z.string() }),
+        questions: z.number().int().positive(),
+        correct: z.number().int().nonnegative(),
+        accuracyPercent: z.number().min(0).max(100),
+        progress: recoveryProgressSchema,
+      })),
+    })),
+  }),
+})
+
+export type RecoveryHistory = z.infer<
+  typeof recoveryHistoryResponseSchema
+>['data']
+
+export async function fetchSmartRecoveryHistory(
+  signal?: AbortSignal,
+): Promise<RecoveryHistory> {
+  const response = await request(
+    '/api/student/smart-recovery/history',
+    recoveryHistoryResponseSchema,
     { signal },
   )
   return response.data

@@ -20,14 +20,15 @@ import type {
 
 const evidenceWindow = {
   lookbackDays: 180,
-  maximumItemsPerSkill: 20,
+  maximumItemsPerSkill: 50,
   minimumEvidenceItems: 5,
   recentItemCount: 5,
   recentWeightMultiplier: 1.5,
   sourceWeights: {
-    generated_practice: 1,
+    generated_practice: 0.75,
     subject_assessment: 1.25,
-    mock_exam: 1.5,
+    mock_exam: 1.25,
+      recovery: 1.25,
   },
   needsMorePracticeBelowPercent: 60,
   strongAtOrAbovePercent: 80,
@@ -37,6 +38,7 @@ const evidenceWindow = {
 
 const evidenceScope = {
   submittedGeneratedAttemptsOnly: true,
+    recoveryEvidenceIncluded: true,
   fixedQuestionEvidenceIncluded: false,
   ambiguousGeneratorMappingsIncluded: false,
 } as const
@@ -76,7 +78,7 @@ const weakSkill: SmartRecoverySkillSummary = {
 
 const dashboard: SmartRecoveryDashboard = {
   taxonomyVersion: 1,
-  formulaVersion: 1,
+  formulaVersion: 2,
   calculatedAt: '2026-08-06T10:00:00.000Z',
   evidenceWindow,
   evidenceScope,
@@ -97,7 +99,7 @@ const dashboard: SmartRecoveryDashboard = {
 
 const details: SmartRecoveryDetails = {
   taxonomyVersion: 1,
-  formulaVersion: 1,
+  formulaVersion: 2,
   calculatedAt: dashboard.calculatedAt,
   evidenceWindow,
   evidenceScope,

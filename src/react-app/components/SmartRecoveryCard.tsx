@@ -33,6 +33,12 @@ export function SmartRecoveryCardView({
             : 'No current weak skill appears in your submitted evidence.'
           : `${priority.accuracyPercent ?? 'No'}% weighted accuracy across ${priority.evidenceCount} evidence items.`}
       </p>
+      {summary.latestRecoveryResult !== null && (
+        <p className="meta-copy">
+          Latest recovery: {summary.latestRecoveryResult.correctCount}/{summary.latestRecoveryResult.questionCount} ({summary.latestRecoveryResult.scorePercent}%).{' '}
+          <Link to={`/smart-recovery/attempts/${summary.latestRecoveryResult.attemptPublicId}/results`}>View result</Link>
+        </p>
+      )}
       {summary.activeRecoveryAttemptPublicId !== null ? (
         <Link className="button-link" to={`/smart-recovery/attempts/${summary.activeRecoveryAttemptPublicId}`}>Continue Recovery Set</Link>
       ) : summary.recoveryAvailable && onStartRecovery !== undefined ? (

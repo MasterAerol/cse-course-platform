@@ -5,11 +5,13 @@ import {
   type RecentRecoveryIdentity,
 } from '../domain/smart-recovery-attempt'
 import { scoreAssessment } from '../domain/assessment-scoring'
+import { buildRecoveryAttemptProgress } from '../domain/smart-recovery-history'
 import {
+  SMART_RECOVERY_EVIDENCE_WINDOW,
   SMART_RECOVERY_FORMULA_VERSION,
   calculateSkillWeakness,
   type SkillWeaknessSummary,
-  type WeaknessStatus,
+  type SkillCatalogEntry,
 } from '../domain/smart-recovery-weakness'
 import { SMART_RECOVERY_TAXONOMY_VERSION } from '../domain/smart-recovery-skills'
 import type {
@@ -97,11 +99,22 @@ export interface RecoveryAttemptPayload {
 }
 
 export interface RecoveryResultPayload {
+  formulaVersion: typeof SMART_RECOVERY_FORMULA_VERSION
   attempt: {
     publicId: string
     status: 'submitted'
+    formulaVersion: number
     startedAt: string
     submittedAt: string
+  }
+  interpretation: {
+    code:
+      | 'improved'
+      | 'strong_recovery_result'
+      | 'still_needs_practice'
+      | 'more_evidence_needed'
+    title: string
+    message: string
   }
   scorePercent: number
   correctCount: number
@@ -114,8 +127,15 @@ export interface RecoveryResultPayload {
     questions: number
     correct: number
     accuracyPercent: number
-    statusBefore: WeaknessStatus
-    currentStatus: WeaknessStatus
+    statusBefore: 'not_enough_data' | 'needs_more_practice' | 'improving' | 'strong'
+    weightedAccuracyBefore: number | null
+    evidenceCountBefore: number
+    statusAfter: 'not_enough_data' | 'needs_more_practice' | 'improving' | 'strong'
+    weightedAccuracyAfter: number | null
+    evidenceCountAfter: number
+    percentagePointChange: number | null
+    trend: 'improved' | 'stable' | 'declined' | 'insufficient_data'
+    currentStatus: 'not_enough_data' | 'needs_more_practice' | 'improving' | 'strong'
     relatedLesson: {
       publicId: string
       slug: string
@@ -531,21 +551,6 @@ function explanationText(explanation: GeneratedExplanation): string {
   return `${explanation.title}: ${explanation.steps.join(' ')} Final answer: ${explanation.finalAnswer}`
 }
 
-function statusBefore(question: InternalRecoveryQuestion): WeaknessStatus {
-  const recovery = question.metadata.recovery
-  if (typeof recovery === 'object' && recovery !== null) {
-    const value = (recovery as { statusBefore?: unknown }).statusBefore
-    if (
-      value === 'not_enough_data' ||
-      value === 'needs_more_practice' ||
-      value === 'improving' ||
-      value === 'strong'
-    ) {
-      return value
-    }
-  }
-  return 'needs_more_practice'
-}
 
 async function buildRecoveryResult(
   database: D1Database,
@@ -567,7 +572,15 @@ async function buildRecoveryResult(
   const [questions, answers, evidenceContext] = await Promise.all([
     findRecoveryQuestionsWithChoices(database, attempt.id).then(groupQuestions),
     findRecoveryAnswers(database, attempt.id),
-    loadSmartRecoveryEvidenceContext(database, userId, now),
+    loadSmartRecoveryEvidenceContext(
+      database,
+      userId,
+      now,
+      new Date(
+        Date.parse(attempt.submitted_at) -
+          SMART_RECOVERY_EVIDENCE_WINDOW.lookbackDays * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+    ),
   ])
   const answerBySnapshot = new Map(
     answers.map((answer) => [answer.snapshot_id, answer]),
@@ -596,29 +609,69 @@ async function buildRecoveryResult(
     if (answerBySnapshot.get(question.id)?.is_correct === 1) item.correct += 1
     grouped.set(question.skillSlug, item)
   }
-  const skillBreakdown = [...grouped.values()].map((item) => ({
-    skill: {
-      slug: item.question.skillSlug,
-      title: item.question.skillTitle,
+  const progressSummary = buildRecoveryAttemptProgress(
+    {
+      attemptPublicId: attempt.public_id,
+      attemptFormulaVersion: attempt.weakness_formula_version,
+      startedAt: attempt.started_at,
+      submittedAt: attempt.submitted_at,
+      scorePercent: attempt.score_percent,
+      correctCount: attempt.correct_count,
+      questionCount: attempt.question_count,
+      skills: [...grouped.values()].map((item) => {
+        const skill: SkillCatalogEntry = {
+          slug: item.question.skillSlug,
+          title: item.question.skillTitle,
+          description: null,
+          taxonomyVersion: attempt.taxonomy_version,
+          subjectSlug: item.question.subjectSlug,
+          subjectTitle: item.question.subjectTitle,
+          topicSlug: item.question.topicSlug,
+          topicTitle: item.question.topicTitle,
+          relatedLessonSlug: item.question.relatedLessonSlug,
+          relatedLessonTitle: item.question.relatedLessonTitle,
+        }
+        return {
+          skill,
+          questions: item.questions,
+          correct: item.correct,
+        }
+      }),
     },
-    questions: item.questions,
-    correct: item.correct,
-    accuracyPercent: Math.round((item.correct / item.questions) * 1000) / 10,
-    statusBefore: statusBefore(item.question),
-    currentStatus:
-      currentBySkill.get(item.question.skillSlug) ?? 'not_enough_data',
-    relatedLesson:
-      item.question.relatedLessonPublicId === null ||
-      item.question.relatedLessonSlug === null ||
-      item.question.relatedLessonTitle === null
-        ? null
-        : {
-            publicId: item.question.relatedLessonPublicId,
-            slug: item.question.relatedLessonSlug,
-            title: item.question.relatedLessonTitle,
-            courseSlug: CSE_PROFESSIONAL_SLUG,
-          },
-  }))
+    evidenceContext.evidence,
+  )
+  const progressBySkill = new Map(
+    progressSummary.skillProgress.map((item) => [item.skill.slug, item.progress]),
+  )
+  const skillBreakdown = [...grouped.values()].map((item) => {
+    const progress = progressBySkill.get(item.question.skillSlug)
+    if (progress === undefined) {
+      throw new Error('Recovery skill progress could not be calculated.')
+    }
+    return {
+      skill: {
+        slug: item.question.skillSlug,
+        title: item.question.skillTitle,
+      },
+      questions: item.questions,
+      correct: item.correct,
+      accuracyPercent: Math.round((item.correct / item.questions) * 1000) / 10,
+      ...progress,
+      currentStatus:
+        currentBySkill.get(item.question.skillSlug) ?? 'not_enough_data',
+      relatedLesson:
+        item.question.relatedLessonPublicId === null ||
+        item.question.relatedLessonSlug === null ||
+        item.question.relatedLessonTitle === null
+          ? null
+          : {
+              publicId: item.question.relatedLessonPublicId,
+              slug: item.question.relatedLessonSlug,
+              title: item.question.relatedLessonTitle,
+              courseSlug: CSE_PROFESSIONAL_SLUG,
+            },
+    }
+  })
   const strongest = [...skillBreakdown].sort(
     (left, right) =>
       right.accuracyPercent - left.accuracyPercent ||
@@ -626,19 +679,22 @@ async function buildRecoveryResult(
   )[0]
 
   return {
+    formulaVersion: SMART_RECOVERY_FORMULA_VERSION,
     attempt: {
       publicId: attempt.public_id,
       status: attempt.status,
+      formulaVersion: attempt.weakness_formula_version,
       startedAt: attempt.started_at,
       submittedAt: attempt.submitted_at,
     },
+    interpretation: progressSummary.interpretation,
     scorePercent: attempt.score_percent,
     correctCount: attempt.correct_count,
     questionCount: attempt.question_count,
     skillsTrained: skillBreakdown.length,
     strongestRecoverySkill: strongest?.skill.title ?? null,
     stillNeedsPractice: skillBreakdown
-      .filter((item) => item.currentStatus === 'needs_more_practice')
+      .filter((item) => item.statusAfter === 'needs_more_practice')
       .map((item) => item.skill.title),
     skillBreakdown,
     questions: questions.map((question) => {
@@ -746,6 +802,7 @@ export async function submitRecoveryAttempt(
     correctCount: score.earnedPoints,
     questionCount: score.totalPoints,
     scorePercent: score.scorePercent,
+    submittedAt: now.toISOString(),
     scores: score.questions.map((question) => ({
       snapshotId: question.questionId,
       selectedChoiceId: question.selectedChoiceId,

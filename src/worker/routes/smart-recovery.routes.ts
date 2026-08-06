@@ -21,6 +21,7 @@ import {
   saveRecoveryAnswer,
   submitRecoveryAttempt,
 } from '../services/smart-recovery-attempt.service'
+import { getRecoveryHistory } from '../services/smart-recovery-history.service'
 import type { AppEnv } from '../types/app'
 import { successResponse } from '../utils/responses'
 import { parseJsonBody, parseValidatedInput } from '../utils/validation'
@@ -35,6 +36,16 @@ smartRecoveryRoutes.get('/smart-recovery', async (context) =>
   successResponse(
     context,
     await getSmartRecoveryDashboard(
+      context.env.DB,
+      context.get('authUser').internalUserId,
+    ),
+  ),
+)
+
+smartRecoveryRoutes.get('/smart-recovery/history', async (context) =>
+  successResponse(
+    context,
+    await getRecoveryHistory(
       context.env.DB,
       context.get('authUser').internalUserId,
     ),
@@ -118,6 +129,23 @@ smartRecoveryRoutes.post(
     return successResponse(
       context,
       await submitRecoveryAttempt(
+        context.env.DB,
+        context.get('authUser').internalUserId,
+        params.attemptPublicId,
+      ),
+    )
+  },
+)
+
+smartRecoveryRoutes.get(
+  '/smart-recovery/attempts/:attemptPublicId/result',
+  async (context) => {
+    const params = parseValidatedInput(
+      smartRecoveryAttemptParamsSchema.safeParse(context.req.param()),
+    )
+    return successResponse(
+      context,
+      await getRecoveryAttemptResult(
         context.env.DB,
         context.get('authUser').internalUserId,
         params.attemptPublicId,

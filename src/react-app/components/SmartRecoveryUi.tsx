@@ -1,6 +1,8 @@
 import { Link } from 'react-router'
 
+import type { SmartRecoveryViewState } from '../hooks/use-smart-recovery'
 import type {
+  RecoveryHistory,
   SmartRecoveryDashboard,
   SmartRecoveryDetails,
   SmartRecoverySkillSummary,
@@ -89,13 +91,47 @@ function SkillSection({
   )
 }
 
+function RecoveryHistorySection({
+  state,
+}: {
+  state: SmartRecoveryViewState<RecoveryHistory>
+}) {
+  return (
+    <section className="recovery-section" aria-labelledby="recovery-history-heading" data-testid="recovery-history">
+      <div>
+        <h2 id="recovery-history-heading">Recovery history</h2>
+        <p>Submitted recovery sets are compared using evidence available at each submission boundary.</p>
+      </div>
+      {state.status === 'loading' && <p aria-busy="true" aria-live="polite">Loading recovery history...</p>}
+      {state.status === 'error' && <div role="alert"><p>{state.error}</p><button type="button" className="button-secondary" onClick={state.reload}>Try again</button></div>}
+      {state.status === 'loaded' && state.data.attempts.length === 0 && <p className="recovery-empty">No submitted recovery sets yet.</p>}
+      {state.status === 'loaded' && state.data.attempts.length > 0 && (
+        <div className="recovery-history-list">
+          {state.data.attempts.map((item) => (
+            <article key={item.attempt.publicId}>
+              <div>
+                <p className="eyebrow">{formatSmartRecoveryDate(item.attempt.submittedAt)}</p>
+                <h3>{item.interpretation.title}</h3>
+                <p>{item.correctCount}/{item.questionCount} correct ({item.scorePercent}%) across {item.skillsTrained} {item.skillsTrained === 1 ? 'skill' : 'skills'}.</p>
+              </div>
+              <Link to={`/smart-recovery/attempts/${item.attempt.publicId}/results`}>View result</Link>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function SmartRecoveryOverview({
   summary,
+  historyState,
   onStartRecovery,
   starting = false,
   startError = null,
 }: {
   summary: SmartRecoveryDashboard
+  historyState?: SmartRecoveryViewState<RecoveryHistory>
   onStartRecovery?: () => void
   starting?: boolean
   startError?: string | null
@@ -119,7 +155,7 @@ export function SmartRecoveryOverview({
         </h2>
         <p>
           {summary.state === 'has_priorities'
-            ? 'These priorities come from your submitted generated questions.'
+            ? 'These priorities come from submitted generated questions, including completed recovery sets.'
             : summary.state === 'no_current_weakness'
               ? 'Your current submitted evidence does not identify a weak skill.'
               : `Complete more generated questions so each skill can reach at least ${summary.evidenceWindow.minimumEvidenceItems} evidence items.`}
@@ -157,6 +193,8 @@ export function SmartRecoveryOverview({
           </p>
         </section>
       )}
+
+      {historyState !== undefined && <RecoveryHistorySection state={historyState} />}
 
       <SkillSection title="Needs more practice" description="Start by reviewing the lowest current weighted accuracy signals." items={summary.needsMorePractice} />
       <SkillSection title="Improving" description="Recent evidence is moving in a positive direction." items={summary.improving} />

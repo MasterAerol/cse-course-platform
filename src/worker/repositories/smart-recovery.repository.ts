@@ -10,6 +10,7 @@ interface GeneratedEvidenceRow {
   attempt_public_id: string
   attempt_submitted_at: string
   snapshot_public_id: string
+  skill_slug: string | null
   generator_slug: string
   generator_version: number
   generator_seed: string
@@ -19,6 +20,7 @@ interface GeneratedEvidenceRow {
   selected_distractor_type: string | null
   subject_slug: string
   topic_slug: string | null
+  related_lesson_slug: string | null
 }
 
 interface SkillCatalogRow {
@@ -41,6 +43,7 @@ SELECT
   attempts.public_id AS attempt_public_id,
   attempts.submitted_at AS attempt_submitted_at,
   snapshots.public_id AS snapshot_public_id,
+  NULL AS skill_slug,
   snapshots.generator_slug,
   snapshots.generator_version,
   snapshots.seed AS generator_seed,
@@ -49,7 +52,8 @@ SELECT
   COALESCE(answers.is_correct, 0) AS is_correct,
   selected.distractor_type AS selected_distractor_type,
   subjects.slug AS subject_slug,
-  topics.slug AS topic_slug
+  topics.slug AS topic_slug,
+  NULL AS related_lesson_slug
 FROM practice_attempts attempts
 INNER JOIN practice_sets ON practice_sets.id = attempts.practice_set_id
 INNER JOIN lessons ON lessons.id = practice_sets.lesson_id
@@ -81,6 +85,7 @@ SELECT
   attempts.public_id AS attempt_public_id,
   attempts.submitted_at AS attempt_submitted_at,
   snapshots.public_id AS snapshot_public_id,
+  NULL AS skill_slug,
   snapshots.generator_slug,
   snapshots.generator_version,
   snapshots.seed AS generator_seed,
@@ -89,7 +94,8 @@ SELECT
   COALESCE(answers.is_correct, 0) AS is_correct,
   selected.distractor_type AS selected_distractor_type,
   subjects.slug AS subject_slug,
-  snapshots.topic_slug
+  snapshots.topic_slug,
+  NULL AS related_lesson_slug
 FROM subject_assessment_attempts attempts
 INNER JOIN subject_assessments assessments
   ON assessments.id = attempts.assessment_id
@@ -119,6 +125,7 @@ SELECT
   attempts.public_id AS attempt_public_id,
   attempts.submitted_at AS attempt_submitted_at,
   snapshots.public_id AS snapshot_public_id,
+  NULL AS skill_slug,
   snapshots.generator_slug,
   snapshots.generator_version,
   snapshots.seed AS generator_seed,
@@ -127,7 +134,8 @@ SELECT
   COALESCE(answers.is_correct, 0) AS is_correct,
   selected.distractor_type AS selected_distractor_type,
   snapshots.subject_slug,
-  snapshots.topic_slug
+  snapshots.topic_slug,
+  NULL AS related_lesson_slug
 FROM mock_exam_attempts attempts
 INNER JOIN mock_examinations examinations
   ON examinations.id = attempts.mock_exam_id
@@ -151,6 +159,44 @@ WHERE attempts.user_id = ?1
   )
   AND courses.slug = 'cse-professional'
 
+UNION ALL
+
+SELECT
+  attempts.user_id,
+  'recovery' AS source_type,
+  attempts.public_id AS attempt_public_id,
+  attempts.submitted_at AS attempt_submitted_at,
+  snapshots.public_id AS snapshot_public_id,
+  snapshots.skill_slug,
+  snapshots.generator_slug,
+  snapshots.generator_version,
+  snapshots.generator_seed,
+  selected.choice_text AS selected_answer,
+  correct.choice_text AS correct_answer,
+  COALESCE(answers.is_correct, 0) AS is_correct,
+  selected.distractor_type AS selected_distractor_type,
+  snapshots.subject_slug,
+  snapshots.topic_slug,
+  snapshots.related_lesson_slug
+FROM recovery_attempts attempts
+INNER JOIN courses ON courses.id = attempts.course_id
+INNER JOIN recovery_question_snapshots snapshots
+  ON snapshots.attempt_id = attempts.id
+LEFT JOIN recovery_answers answers
+  ON answers.attempt_id = attempts.id
+  AND answers.snapshot_id = snapshots.id
+LEFT JOIN recovery_question_choices selected
+  ON selected.id = answers.selected_choice_id
+INNER JOIN recovery_question_choices correct
+  ON correct.snapshot_id = snapshots.id
+  AND correct.is_correct = 1
+WHERE attempts.user_id = ?1
+  AND attempts.status = 'submitted'
+  AND attempts.submitted_at IS NOT NULL
+  AND datetime(attempts.submitted_at) >= datetime(?2)
+  AND snapshots.source_kind = 'generated'
+  AND courses.slug = 'cse-professional'
+
 ORDER BY attempt_submitted_at DESC, attempt_public_id, snapshot_public_id`
 
 export async function findSubmittedGeneratedEvidence(
@@ -169,6 +215,7 @@ export async function findSubmittedGeneratedEvidence(
     attemptPublicId: row.attempt_public_id,
     attemptSubmittedAt: row.attempt_submitted_at,
     snapshotPublicId: row.snapshot_public_id,
+    skillSlug: row.skill_slug,
     generatorSlug: row.generator_slug,
     generatorVersion: row.generator_version,
     generatorSeed: row.generator_seed,
@@ -178,6 +225,7 @@ export async function findSubmittedGeneratedEvidence(
     selectedDistractorType: row.selected_distractor_type,
     subjectSlug: row.subject_slug,
     topicSlug: row.topic_slug,
+    relatedLessonSlug: row.related_lesson_slug,
   }))
 }
 

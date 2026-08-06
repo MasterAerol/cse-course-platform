@@ -36,6 +36,7 @@ function item(index: number, wasCorrect: boolean): NormalizedSkillEvidence {
     distractorType: wasCorrect ? null : 'divide-instead-of-multiply',
     subjectSlug: skill.subjectSlug,
     topicSlug: skill.topicSlug,
+    relatedLessonSlug: skill.relatedLessonSlug,
   }
 }
 
@@ -68,12 +69,12 @@ describe('Smart Recovery learner statuses', () => {
     })
   })
 
-  it('caps one skill at the latest 20 unique evidence items', () => {
-    const evidence = Array.from({ length: 25 }, (_, index) =>
-      item(index, index >= 20),
+  it('caps one skill at the latest 50 unique evidence items', () => {
+    const evidence = Array.from({ length: 60 }, (_, index) =>
+      item(index, index >= 50),
     )
     const result = calculateSkillWeakness(skill, evidence, now)
-    expect(result.evidenceCount).toBe(20)
+    expect(result.evidenceCount).toBe(50)
     expect(result.correctCount).toBe(0)
   })
 })

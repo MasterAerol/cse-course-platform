@@ -2,20 +2,26 @@ import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
 import { SmartRecoveryOverview } from '../components/SmartRecoveryUi'
-import { useSmartRecoverySummary } from '../hooks/use-smart-recovery'
+import {
+  useSmartRecoveryHistory,
+  useSmartRecoverySummary,
+} from '../hooks/use-smart-recovery'
 import type { SmartRecoveryViewState } from '../hooks/use-smart-recovery'
 import {
   createSmartRecoveryAttempt,
+  type RecoveryHistory,
   type SmartRecoveryDashboard,
 } from '../lib/smart-recovery-api'
 
 export function SmartRecoveryPageView({
   state,
+  historyState,
   onStartRecovery,
   starting = false,
   startError = null,
 }: {
   state: SmartRecoveryViewState<SmartRecoveryDashboard>
+  historyState?: SmartRecoveryViewState<RecoveryHistory>
   onStartRecovery?: () => void
   starting?: boolean
   startError?: string | null
@@ -30,13 +36,14 @@ export function SmartRecoveryPageView({
       </header>
       {state.status === 'loading' && <section className="recovery-state-card" aria-busy="true" aria-live="polite"><h2>Loading your skill signals</h2><p>This may take a moment.</p></section>}
       {state.status === 'error' && <section className="recovery-state-card" role="alert"><h2>Smart Recovery could not be loaded</h2><p>{state.error}</p><button type="button" onClick={state.reload}>Try again</button></section>}
-      {state.status === 'loaded' && <SmartRecoveryOverview summary={state.data} onStartRecovery={onStartRecovery} starting={starting} startError={startError} />}
+      {state.status === 'loaded' && <SmartRecoveryOverview summary={state.data} historyState={historyState} onStartRecovery={onStartRecovery} starting={starting} startError={startError} />}
     </main>
   )
 }
 
 export function SmartRecoveryPage() {
   const state = useSmartRecoverySummary()
+  const historyState = useSmartRecoveryHistory()
   const navigate = useNavigate()
   const idempotencyKey = useRef(crypto.randomUUID())
   const [starting, setStarting] = useState(false)
@@ -58,5 +65,5 @@ export function SmartRecoveryPage() {
     }
   }
 
-  return <SmartRecoveryPageView state={state} onStartRecovery={() => void startRecovery()} starting={starting} startError={startError} />
+  return <SmartRecoveryPageView state={state} historyState={historyState} onStartRecovery={() => void startRecovery()} starting={starting} startError={startError} />
 }

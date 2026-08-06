@@ -35,6 +35,7 @@ import { AppError } from '../utils/app-error'
 const CSE_PROFESSIONAL_SLUG = 'cse-professional'
 const evidenceScope = {
   submittedGeneratedAttemptsOnly: true,
+  recoveryEvidenceIncluded: true,
   fixedQuestionEvidenceIncluded: false,
   ambiguousGeneratorMappingsIncluded: false,
 } as const
@@ -99,13 +100,19 @@ export async function loadSmartRecoveryEvidenceContext(
   database: D1Database,
   userId: number,
   calculatedAt: Date,
+  submittedAtOrAfter?: string,
 ): Promise<SmartRecoveryEvidenceContext> {
   assertValidCalculationDate(calculatedAt)
   const enrollment = await assertSmartRecoveryEnrollment(database, userId)
-  const cutoff = new Date(
-    calculatedAt.getTime() -
-      SMART_RECOVERY_EVIDENCE_WINDOW.lookbackDays * 24 * 60 * 60 * 1000,
-  ).toISOString()
+  const cutoff =
+    submittedAtOrAfter ??
+    new Date(
+      calculatedAt.getTime() -
+        SMART_RECOVERY_EVIDENCE_WINDOW.lookbackDays * 24 * 60 * 60 * 1000,
+    ).toISOString()
+  if (!Number.isFinite(Date.parse(cutoff))) {
+    throw new Error('The Smart Recovery evidence cutoff is invalid.')
+  }
   const [skills, records] = await Promise.all([
     findActiveSmartRecoverySkills(database, SMART_RECOVERY_TAXONOMY_VERSION),
     findSubmittedGeneratedEvidence(database, userId, cutoff),

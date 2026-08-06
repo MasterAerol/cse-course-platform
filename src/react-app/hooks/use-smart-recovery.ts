@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import {
+  fetchSmartRecoveryHistory,
   getSmartRecoverySkillDetails,
   getSmartRecoverySummary,
+  type RecoveryHistory,
   type SmartRecoveryDashboard,
   type SmartRecoveryDetails,
 } from '../lib/smart-recovery-api'
@@ -59,9 +61,14 @@ function useSmartRecoveryRequest<T>(
 }
 
 const loadSummary = (signal: AbortSignal) => getSmartRecoverySummary(signal)
+const loadHistory = (signal: AbortSignal) => fetchSmartRecoveryHistory(signal)
 
 export function useSmartRecoverySummary() {
   return useSmartRecoveryRequest<SmartRecoveryDashboard>(loadSummary)
+}
+
+export function useSmartRecoveryHistory() {
+  return useSmartRecoveryRequest<RecoveryHistory>(loadHistory)
 }
 
 export function useSmartRecoverySkillDetails(skillSlug: string) {

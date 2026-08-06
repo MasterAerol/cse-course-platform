@@ -7,12 +7,6 @@ import {
   type RecoveryResult,
 } from '../lib/smart-recovery-api'
 
-function resultMessage(score: number): string {
-  if (score >= 80) return 'Strong result'
-  if (score >= 60) return 'Improved'
-  if (score >= 40) return 'Keep training'
-  return 'Still needs practice'
-}
 
 export function SmartRecoveryResultPage() {
   const { attemptPublicId = '' } = useParams()
@@ -39,8 +33,9 @@ export function SmartRecoveryResultPage() {
       <Link to="/smart-recovery">Back to Smart Recovery</Link>
       <section className="recovery-summary-card">
         <p className="eyebrow">Recovery Set Complete</p>
-        <h1>{resultMessage(result.scorePercent)}</h1>
+        <h1>{result.interpretation.title}</h1>
         <p className="assessment-score">{result.correctCount}/{result.questionCount} · {result.scorePercent}%</p>
+        <p>{result.interpretation.message}</p>
         <p>This result is one practice signal, not a promise of mastery.</p>
       </section>
 
@@ -51,7 +46,12 @@ export function SmartRecoveryResultPage() {
             <article className="recovery-skill-card" key={item.skill.slug}>
               <h3>{item.skill.title}</h3>
               <p>{item.correct}/{item.questions} correct · {item.accuracyPercent}%</p>
-              <p className="meta-copy">Current signal: {formatSmartRecoveryLabel(item.currentStatus)}</p>
+              <dl className="recovery-progress-comparison">
+                <div><dt>Before</dt><dd>{formatSmartRecoveryLabel(item.statusBefore)} · {item.weightedAccuracyBefore ?? 'No'}% · {item.evidenceCountBefore} evidence</dd></div>
+                <div><dt>After</dt><dd>{formatSmartRecoveryLabel(item.statusAfter)} · {item.weightedAccuracyAfter ?? 'No'}% · {item.evidenceCountAfter} evidence</dd></div>
+                <div><dt>Change</dt><dd>{item.percentagePointChange === null ? 'Not enough data' : `${item.percentagePointChange > 0 ? '+' : ''}${item.percentagePointChange} points`} · {formatSmartRecoveryLabel(item.trend)}</dd></div>
+                <div><dt>Current signal</dt><dd>{formatSmartRecoveryLabel(item.currentStatus)}</dd></div>
+              </dl>
               {item.relatedLesson !== null && <Link to={`/courses/${item.relatedLesson.courseSlug}/lessons/${item.relatedLesson.publicId}`}>Review {item.relatedLesson.title}</Link>}
             </article>
           ))}

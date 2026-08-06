@@ -7,6 +7,7 @@ import { SmartRecoveryOverview } from '../src/react-app/components/SmartRecovery
 import {
   recoveryAttemptResponseSchema,
   recoveryResultResponseSchema,
+  type RecoveryHistory,
   type SmartRecoveryDashboard,
 } from '../src/react-app/lib/smart-recovery-api'
 import { SmartRecoveryAttemptPage } from '../src/react-app/pages/SmartRecoveryAttemptPage'
@@ -14,18 +15,19 @@ import { SmartRecoveryResultPage } from '../src/react-app/pages/SmartRecoveryRes
 
 const dashboard: SmartRecoveryDashboard = {
   taxonomyVersion: 1,
-  formulaVersion: 1,
+  formulaVersion: 2,
   calculatedAt: '2026-08-06T00:00:00.000Z',
   evidenceWindow: {
     lookbackDays: 180,
-    maximumItemsPerSkill: 20,
+    maximumItemsPerSkill: 50,
     minimumEvidenceItems: 5,
     recentItemCount: 5,
     recentWeightMultiplier: 1.5,
     sourceWeights: {
-      generated_practice: 1,
+      generated_practice: 0.75,
       subject_assessment: 1.25,
-      mock_exam: 1.5,
+      mock_exam: 1.25,
+      recovery: 1.25,
     },
     needsMorePracticeBelowPercent: 60,
     strongAtOrAbovePercent: 80,
@@ -34,6 +36,7 @@ const dashboard: SmartRecoveryDashboard = {
   },
   evidenceScope: {
     submittedGeneratedAttemptsOnly: true,
+    recoveryEvidenceIncluded: true,
     fixedQuestionEvidenceIncluded: false,
     ambiguousGeneratorMappingsIncluded: false,
   },
@@ -58,11 +61,55 @@ const dashboard: SmartRecoveryDashboard = {
   },
 }
 
+const history: RecoveryHistory = {
+  formulaVersion: 2,
+  activeAttemptPublicId: null,
+  totalSubmittedAttempts: 1,
+  historyLimit: 20,
+  attempts: [
+    {
+      attempt: {
+        publicId: 'recovery-attempt-11111111-1111-4111-8111-111111111111',
+        formulaVersion: 2,
+        startedAt: '2026-08-05T00:00:00.000Z',
+        submittedAt: '2026-08-05T00:10:00.000Z',
+      },
+      scorePercent: 75,
+      correctCount: 6,
+      questionCount: 8,
+      skillsTrained: 1,
+      interpretation: {
+        code: 'improved',
+        title: 'Improved',
+        message: 'Your submitted evidence improved.',
+      },
+      skillProgress: [
+        {
+          skill: { slug: 'finding-percentage', title: 'Finding Percentage' },
+          questions: 8,
+          correct: 6,
+          accuracyPercent: 75,
+          progress: {
+            statusBefore: 'needs_more_practice',
+            weightedAccuracyBefore: 20,
+            evidenceCountBefore: 5,
+            statusAfter: 'improving',
+            weightedAccuracyAfter: 65,
+            evidenceCountAfter: 13,
+            percentagePointChange: 45,
+            trend: 'improved',
+          },
+        },
+      ],
+    },
+  ],
+}
+
 function render(node: React.ReactNode): string {
   return renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>)
 }
 
-describe('Smart Recovery Phase D UI contracts', () => {
+describe('Smart Recovery Phase D/E UI contracts', () => {
   it('renders Start Recovery on the overview and dashboard when available', () => {
     const onStart = vi.fn()
     const overview = render(
@@ -75,6 +122,57 @@ describe('Smart Recovery Phase D UI contracts', () => {
     expect(overview).toContain('8 questions across 1 priority skill')
     expect(overview).toContain('Latest result: 6/8 (75%)')
     expect(card).toContain('Start Recovery Set')
+  })
+
+  it('renders submitted recovery history and the latest result summary', () => {
+    const markup = render(
+      <SmartRecoveryOverview
+        summary={dashboard}
+        historyState={{
+          status: 'loaded',
+          data: history,
+          error: null,
+          reload: vi.fn(),
+        }}
+      />,
+    )
+    expect(markup).toContain('Recovery history')
+    expect(markup).toContain('Improved')
+    expect(markup).toContain('6/8 correct (75%)')
+    expect(markup).toContain('/results')
+    expect(render(<SmartRecoveryCardView summary={dashboard} />)).toContain(
+      'Latest recovery: 6/8 (75%)',
+    )
+  })
+
+  it('renders recovery-history loading, empty, and error states accessibly', () => {
+    const loading = render(
+      <SmartRecoveryOverview
+        summary={dashboard}
+        historyState={{ status: 'loading', data: null, error: null, reload: vi.fn() }}
+      />,
+    )
+    const empty = render(
+      <SmartRecoveryOverview
+        summary={dashboard}
+        historyState={{
+          status: 'loaded',
+          data: { ...history, totalSubmittedAttempts: 0, attempts: [] },
+          error: null,
+          reload: vi.fn(),
+        }}
+      />,
+    )
+    const failed = render(
+      <SmartRecoveryOverview
+        summary={dashboard}
+        historyState={{ status: 'error', data: null, error: 'History unavailable.', reload: vi.fn() }}
+      />,
+    )
+    expect(loading).toContain('aria-busy="true"')
+    expect(empty).toContain('No submitted recovery sets yet.')
+    expect(failed).toContain('role="alert"')
+    expect(failed).toContain('Try again')
   })
 
   it('renders Continue Recovery instead of creating a duplicate active attempt', () => {
@@ -146,12 +244,19 @@ describe('Smart Recovery Phase D UI contracts', () => {
     const parsed = recoveryResultResponseSchema.safeParse({
       success: true,
       data: {
+        formulaVersion: 2,
         attempt: {
           publicId:
             'recovery-attempt-22222222-2222-4222-8222-222222222222',
           status: 'submitted',
+          formulaVersion: 2,
           startedAt: '2026-08-06T00:00:00.000Z',
           submittedAt: '2026-08-06T00:10:00.000Z',
+        },
+        interpretation: {
+          code: 'improved',
+          title: 'Improved',
+          message: 'Your evidence improved.',
         },
         scorePercent: 100,
         correctCount: 1,
@@ -166,6 +271,13 @@ describe('Smart Recovery Phase D UI contracts', () => {
             correct: 1,
             accuracyPercent: 100,
             statusBefore: 'needs_more_practice',
+            weightedAccuracyBefore: 0,
+            evidenceCountBefore: 5,
+            statusAfter: 'improving',
+            weightedAccuracyAfter: 62.5,
+            evidenceCountAfter: 6,
+            percentagePointChange: 62.5,
+            trend: 'improved',
             currentStatus: 'needs_more_practice',
             relatedLesson: {
               publicId: 'lesson-public-id',

@@ -176,9 +176,11 @@ async function get(path: string, cookie?: string): Promise<Response> {
 describe('Smart Recovery learner APIs', () => {
   it('requires authentication, learner role, and active enrollment', async () => {
     expect((await get('/api/student/smart-recovery')).status).toBe(401)
+    expect((await get('/api/student/smart-recovery/history')).status).toBe(401)
 
     const unenrolled = await register(`smart-unenrolled-${crypto.randomUUID()}@example.test`)
     expect((await get('/api/student/smart-recovery', unenrolled.cookie)).status).toBe(403)
+    expect((await get('/api/student/smart-recovery/history', unenrolled.cookie)).status).toBe(403)
 
     const administrator = await register(`smart-admin-${crypto.randomUUID()}@example.test`)
     await env.DB.prepare("UPDATE users SET role='admin' WHERE id=?1")
@@ -215,7 +217,7 @@ describe('Smart Recovery learner APIs', () => {
     }>()
     const secondBody = await second.json<typeof firstBody>()
     expect(firstBody.data).toMatchObject({
-      formulaVersion: 1,
+      formulaVersion: 2,
       state: 'has_priorities',
       eligibleEvidenceCount: 5,
       excludedEvidenceCount: 0,
@@ -266,7 +268,7 @@ describe('Smart Recovery learner APIs', () => {
       data: { summary: { evidenceCount: number; status: string } }
     }>()
     expect(ownerBody.data.summary.evidenceCount).toBe(5)
-    expect(ownerBody.data.sourceBreakdown).toHaveLength(3)
+    expect(ownerBody.data.sourceBreakdown).toHaveLength(4)
     expect(otherBody.data.summary).toMatchObject({
       evidenceCount: 0,
       status: 'not_enough_data',
@@ -366,6 +368,15 @@ describe('Smart Recovery learner APIs', () => {
     expect(injected.status).toBe(400)
 
     const attemptId = created.data.attempt.publicId
+    const activeSummary = await get('/api/student/smart-recovery', owner.cookie)
+    const activeSummaryPayload = await activeSummary.json<{
+      data: { eligibleEvidenceCount: number; activeRecoveryAttemptPublicId: string | null }
+    }>()
+    expect(activeSummaryPayload.data).toMatchObject({
+      eligibleEvidenceCount: 5,
+      activeRecoveryAttemptPublicId: attemptId,
+    })
+
     const ownerGet = await get(
       `/api/student/smart-recovery/attempts/${attemptId}`,
       owner.cookie,
@@ -455,10 +466,21 @@ describe('Smart Recovery learner APIs', () => {
     expect(submit.status).toBe(200)
     const result = await submit.json<{
       data: {
+        formulaVersion: number
+        attempt: { formulaVersion: number }
+        interpretation: { code: string }
         scorePercent: number
         correctCount: number
         questionCount: number
-        skillBreakdown: Array<{ questions: number; correct: number }>
+        skillBreakdown: Array<{
+          questions: number
+          correct: number
+          statusBefore: string
+          evidenceCountBefore: number
+          statusAfter: string
+          evidenceCountAfter: number
+          trend: string
+        }>
         questions: Array<{ correctChoice: { text: string } }>
       }
     }>()
@@ -467,8 +489,20 @@ describe('Smart Recovery learner APIs', () => {
       correctCount: 1,
       questionCount: 8,
     })
+    expect(result.data).toMatchObject({
+      formulaVersion: 2,
+      attempt: { formulaVersion: 2 },
+      interpretation: { code: 'still_needs_practice' },
+    })
     expect(result.data.skillBreakdown).toEqual([
-      expect.objectContaining({ questions: 8, correct: 1 }),
+      expect.objectContaining({
+        questions: 8,
+        correct: 1,
+        statusBefore: 'needs_more_practice',
+        evidenceCountBefore: 5,
+        statusAfter: 'needs_more_practice',
+        evidenceCountAfter: 13,
+      }),
     ])
     expect(result.data.questions).toHaveLength(8)
 
@@ -506,6 +540,60 @@ describe('Smart Recovery learner APIs', () => {
       result.data.scorePercent,
     )
 
+    const detailsAfterSubmit = await get(
+      '/api/student/smart-recovery/skills/finding-percentage',
+      owner.cookie,
+    )
+    const detailsAfterSubmitPayload = await detailsAfterSubmit.json<{
+      data: {
+        summary: { evidenceCount: number }
+        sourceBreakdown: Array<{ sourceType: string; evidenceCount: number }>
+      }
+    }>()
+    expect(detailsAfterSubmitPayload.data.summary.evidenceCount).toBe(13)
+    expect(detailsAfterSubmitPayload.data.sourceBreakdown).toContainEqual(
+      expect.objectContaining({ sourceType: 'recovery', evidenceCount: 8 }),
+    )
+
+    const ownerHistory = await get('/api/student/smart-recovery/history', owner.cookie)
+    expect(ownerHistory.status).toBe(200)
+    const ownerHistoryPayload = await ownerHistory.json<{
+      data: {
+        formulaVersion: number
+        totalSubmittedAttempts: number
+        attempts: Array<{
+          attempt: { publicId: string; formulaVersion: number }
+          interpretation: { code: string }
+          skillProgress: Array<{
+            progress: { evidenceCountBefore: number; evidenceCountAfter: number }
+          }>
+        }>
+      }
+    }>()
+    expect(ownerHistoryPayload.data).toMatchObject({
+      formulaVersion: 2,
+      totalSubmittedAttempts: 1,
+      attempts: [
+        {
+          attempt: { publicId: attemptId, formulaVersion: 2 },
+          interpretation: { code: 'still_needs_practice' },
+          skillProgress: [
+            { progress: { evidenceCountBefore: 5, evidenceCountAfter: 13 } },
+          ],
+        },
+      ],
+    })
+    const otherHistory = await get('/api/student/smart-recovery/history', other.cookie)
+    expect(otherHistory.status).toBe(200)
+    expect((await otherHistory.json<{ data: { attempts: unknown[] } }>()).data.attempts)
+      .toEqual([])
+    expect(
+      (await get(`/api/student/smart-recovery/attempts/${attemptId}/result`, other.cookie)).status,
+    ).toBe(403)
+    expect(
+      (await get(`/api/student/smart-recovery/attempts/${attemptId}/result`, owner.cookie)).status,
+    ).toBe(200)
+
     const closedSave = await app.request(
       `/api/student/smart-recovery/attempts/${attemptId}/answers/${firstQuestion.publicId}`,
       {
@@ -538,7 +626,7 @@ describe('Smart Recovery learner APIs', () => {
         attemptSeed: 'failure-seed',
         idempotencyKey: crypto.randomUUID(),
         taxonomyVersion: 1,
-        formulaVersion: 1,
+        formulaVersion: 2,
         questions: [
           {
             position: 1,
@@ -587,5 +675,38 @@ describe('Smart Recovery learner APIs', () => {
     expect(counts[2]?.results[0]).toEqual({ count: 32 })
     expect(counts[3]?.results[0]).toEqual(beforeFixed[0]?.results[0])
     expect(counts[4]?.results[0]).toEqual(beforeFixed[1]?.results[0])
+
+    const secondCreate = await app.request(
+      '/api/student/smart-recovery/attempts',
+      {
+        method: 'POST',
+        headers: { cookie: owner.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
+      },
+      bindings(),
+    )
+    expect(secondCreate.status).toBe(201)
+    const secondCreated = await secondCreate.json<typeof created>()
+    const secondAttemptId = secondCreated.data.attempt.publicId
+    expect(secondAttemptId).not.toBe(attemptId)
+    expect(
+      (
+        await app.request(
+          `/api/student/smart-recovery/attempts/${secondAttemptId}/submit`,
+          { method: 'POST', headers: { cookie: owner.cookie } },
+          bindings(),
+        )
+      ).status,
+    ).toBe(200)
+    const orderedHistory = await get('/api/student/smart-recovery/history', owner.cookie)
+    const orderedHistoryPayload = await orderedHistory.json<{
+      data: {
+        totalSubmittedAttempts: number
+        attempts: Array<{ attempt: { publicId: string } }>
+      }
+    }>()
+    expect(orderedHistoryPayload.data.totalSubmittedAttempts).toBe(2)
+    expect(orderedHistoryPayload.data.attempts.map((item) => item.attempt.publicId))
+      .toEqual([secondAttemptId, attemptId])
   })
 })

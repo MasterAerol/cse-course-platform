@@ -3,13 +3,14 @@ import {
   generatorSkillMappings,
 } from './smart-recovery-skills'
 
-export const SMART_RECOVERY_FORMULA_VERSION = 1 as const
+export const SMART_RECOVERY_FORMULA_VERSION = 2 as const
 
 export type WeaknessFormulaVersion = typeof SMART_RECOVERY_FORMULA_VERSION
 export type EvidenceSource =
   | 'generated_practice'
   | 'subject_assessment'
   | 'mock_exam'
+  | 'recovery'
 export type WeaknessStatus =
   | 'not_enough_data'
   | 'needs_more_practice'
@@ -37,14 +38,15 @@ export interface EvidenceWindowConfiguration {
 export const SMART_RECOVERY_EVIDENCE_WINDOW: EvidenceWindowConfiguration =
   Object.freeze({
     lookbackDays: 180,
-    maximumItemsPerSkill: 20,
+    maximumItemsPerSkill: 50,
     minimumEvidenceItems: 5,
     recentItemCount: 5,
     recentWeightMultiplier: 1.5,
     sourceWeights: Object.freeze({
-      generated_practice: 1,
+      generated_practice: 0.75,
       subject_assessment: 1.25,
-      mock_exam: 1.5,
+      mock_exam: 1.25,
+      recovery: 1.25,
     }),
     needsMorePracticeBelowPercent: 60,
     strongAtOrAbovePercent: 80,
@@ -67,6 +69,8 @@ export interface GeneratedEvidenceRecord {
   selectedDistractorType: string | null
   subjectSlug: string
   topicSlug: string | null
+  skillSlug: string | null
+  relatedLessonSlug: string | null
 }
 
 export interface NormalizedSkillEvidence {
@@ -84,6 +88,7 @@ export interface NormalizedSkillEvidence {
   distractorType: string | null
   subjectSlug: string
   topicSlug: string | null
+  relatedLessonSlug: string | null
 }
 
 export interface SkillCatalogEntry {
@@ -131,6 +136,7 @@ export interface SkillWeaknessSummary {
 
 export interface SmartRecoveryEvidenceScope {
   submittedGeneratedAttemptsOnly: true
+  recoveryEvidenceIncluded: true
   fixedQuestionEvidenceIncluded: false
   ambiguousGeneratorMappingsIncluded: false
 }
@@ -226,15 +232,31 @@ export function normalizeGeneratedEvidence(
     const mapping = directMappingByGenerator.get(
       `${record.generatorSlug}@${record.generatorVersion}`,
     )
+    const mappedSkillSlug =
+      record.sourceType === 'recovery' ? record.skillSlug : mapping?.skillSlug
     const skill =
-      mapping === undefined ? undefined : skillCatalog.get(mapping.skillSlug)
+      mappedSkillSlug === null || mappedSkillSlug === undefined
+        ? undefined
+        : skillCatalog.get(mappedSkillSlug)
     const contextMatches =
       skill !== undefined &&
       skill.taxonomyVersion === SMART_RECOVERY_TAXONOMY_VERSION &&
       skill.subjectSlug === record.subjectSlug &&
-      skill.topicSlug === record.topicSlug
+      skill.topicSlug === record.topicSlug &&
+      (record.sourceType !== 'recovery' ||
+        skill.relatedLessonSlug === record.relatedLessonSlug)
+    const sourceMappingValid =
+      record.sourceType === 'recovery'
+        ? record.skillSlug !== null
+        : mapping !== undefined
 
-    if (mapping === undefined || skill === undefined || !contextMatches) {
+    if (
+      mappedSkillSlug === null ||
+      mappedSkillSlug === undefined ||
+      !sourceMappingValid ||
+      skill === undefined ||
+      !contextMatches
+    ) {
       excludedCount += 1
       continue
     }
@@ -243,7 +265,7 @@ export function normalizeGeneratedEvidence(
     const wasCorrect = wasAnswered && record.isCorrect === 1
     evidence.push({
       userId: record.userId,
-      skillSlug: mapping.skillSlug,
+      skillSlug: mappedSkillSlug,
       sourceType: record.sourceType,
       attemptPublicId: record.attemptPublicId,
       attemptSubmittedAt: record.attemptSubmittedAt,
@@ -257,6 +279,7 @@ export function normalizeGeneratedEvidence(
         wasAnswered && !wasCorrect ? record.selectedDistractorType : null,
       subjectSlug: record.subjectSlug,
       topicSlug: record.topicSlug,
+      relatedLessonSlug: record.relatedLessonSlug,
     })
   }
 
@@ -423,6 +446,7 @@ export function calculateEvidenceSourceBreakdown(
     'generated_practice',
     'subject_assessment',
     'mock_exam',
+    'recovery',
   ]
   return sources.map((sourceType) => {
     const sourceItems = items.filter((item) => item.sourceType === sourceType)

@@ -47,6 +47,7 @@ function normalized(
     distractorType: correct ? null : 'wrong-base',
     subjectSlug: skill.subjectSlug,
     topicSlug: skill.topicSlug,
+    relatedLessonSlug: skill.relatedLessonSlug,
     ...options,
   }
 }
@@ -70,10 +71,12 @@ function record(
     selectedDistractorType: 'wrong-base',
     subjectSlug: skill.subjectSlug,
     topicSlug: skill.topicSlug,
+    skillSlug: null,
+    relatedLessonSlug: null,
   }
 }
 
-describe('Smart Recovery formula v1', () => {
+describe('Smart Recovery formula v2', () => {
   it('does not label a learner weak from one mistake', () => {
     const result = calculateSkillWeakness(
       skill,
@@ -161,12 +164,13 @@ describe('Smart Recovery formula v1', () => {
       normalized(4, true, { sourceType: 'subject_assessment' }),
     ]
     const result = calculateSkillWeakness(skill, evidence, calculatedAt)
-    expect(result.accuracyPercent).toBe(54.2)
+    expect(result.accuracyPercent).toBe(52.4)
     expect(calculateEvidenceSourceBreakdown(skill.slug, evidence, calculatedAt))
       .toEqual([
         expect.objectContaining({ sourceType: 'generated_practice', evidenceCount: 2 }),
         expect.objectContaining({ sourceType: 'subject_assessment', evidenceCount: 2 }),
         expect.objectContaining({ sourceType: 'mock_exam', evidenceCount: 1 }),
+        expect.objectContaining({ sourceType: 'recovery', evidenceCount: 0 }),
       ])
   })
 
@@ -201,10 +205,16 @@ describe('Smart Recovery formula v1', () => {
   it('keeps the approved evidence window constants explicit', () => {
     expect(SMART_RECOVERY_EVIDENCE_WINDOW).toMatchObject({
       lookbackDays: 180,
-      maximumItemsPerSkill: 20,
+      maximumItemsPerSkill: 50,
       minimumEvidenceItems: 5,
       recentItemCount: 5,
       recentWeightMultiplier: 1.5,
+      sourceWeights: {
+        generated_practice: 0.75,
+        subject_assessment: 1.25,
+        mock_exam: 1.25,
+        recovery: 1.25,
+      },
       needsMorePracticeBelowPercent: 60,
       strongAtOrAbovePercent: 80,
     })
