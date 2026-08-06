@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { evaluateRecoveryEligibility } from '../src/worker/domain/smart-recovery-eligibility'
+import {
+  evaluateRecoveryAvailability,
+  evaluateRecoveryEligibility,
+} from '../src/worker/domain/smart-recovery-eligibility'
 import {
   generatorSkillMappings,
   skillDefinitions,
@@ -90,6 +93,22 @@ function productionScaleObservedSkills(): SkillWeaknessSummary[] {
 }
 
 describe('shared Smart Recovery eligibility', () => {
+  it('uses metadata-only availability for the production-scale summary', () => {
+    const startedAt = performance.now()
+    const result = evaluateRecoveryAvailability({
+      observedSkills: productionScaleObservedSkills(),
+      hasEnoughEvidence: true,
+    })
+    const durationMs = performance.now() - startedAt
+
+    expect(result.recoveryAvailable).toBe(true)
+    expect(result.eligibleSkills).toHaveLength(201)
+    expect(result.selectedSkills).toHaveLength(5)
+    expect(result.recommendedQuestionCount).toBe(20)
+    expect('generatedQuestions' in result).toBe(false)
+    expect('questionPlan' in result).toBe(false)
+    expect(durationMs).toBeLessThan(100)
+  })
   it('turns 201 eligible weaknesses into one 20-question set for only the top five', () => {
     const result = evaluateRecoveryEligibility({
       observedSkills: productionScaleObservedSkills(),

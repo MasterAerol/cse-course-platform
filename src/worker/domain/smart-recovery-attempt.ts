@@ -9,6 +9,7 @@ import type {
 } from '../generators/generator.types'
 import {
   generatorSkillMappings,
+  type GeneratorSkillMapping,
   type SkillSlug,
 } from './smart-recovery-skills'
 import {
@@ -21,6 +22,13 @@ export const RECOVERY_MAXIMUM_QUESTIONS_PER_SKILL = 8
 export const RECOVERY_GENERATION_MAX_RETRIES = 40
 export const RECOVERY_RECENT_IDENTITIES_PER_GENERATOR = 1
 
+const directMappingsBySkill = new Map<string, GeneratorSkillMapping[]>()
+for (const mapping of generatorSkillMappings) {
+  if (mapping.mappingKind !== 'direct') continue
+  const mappings = directMappingsBySkill.get(mapping.skillSlug)
+  if (mappings === undefined) directMappingsBySkill.set(mapping.skillSlug, [mapping])
+  else mappings.push(mapping)
+}
 const allocationBySkillCount: Readonly<Record<number, readonly number[]>> = Object.freeze({
   0: [],
   1: [8],
@@ -91,11 +99,7 @@ export function allocateRecoveryQuestions(
 export function getRecoveryGeneratorEligibility(
   skillSlug: string,
 ): RecoveryGeneratorEligibility[] {
-  return generatorSkillMappings
-    .filter(
-      (mapping) =>
-        mapping.skillSlug === skillSlug && mapping.mappingKind === 'direct',
-    )
+  return (directMappingsBySkill.get(skillSlug) ?? [])
     .flatMap((mapping) => {
       const generator = getGenerator(
         mapping.generatorSlug,
@@ -231,10 +235,8 @@ function generatorConfiguration(skillSlug: string): {
   excluded: RecoverySkillFeasibilityDiagnostic['excludedGenerators']
   hasMapping: boolean
 } {
-  const mappings = generatorSkillMappings.filter(
-    (mapping) =>
-      mapping.skillSlug === skillSlug && mapping.mappingKind === 'direct',
-  )
+  const mappings = directMappingsBySkill.get(skillSlug) ?? []
+
   const active: RecoveryGeneratorEligibility[] = []
   const excluded: RecoverySkillFeasibilityDiagnostic['excludedGenerators'] = []
   for (const mapping of mappings) {

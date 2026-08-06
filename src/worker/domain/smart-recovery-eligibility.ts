@@ -32,22 +32,23 @@ export interface RecoveryEligibilityDiagnostics {
   invalidMappingOrContextEvidenceCount: number
 }
 
-export interface RecoveryEligibility {
+export interface RecoveryAvailabilitySummary {
   eligibleSkills: SkillWeaknessSummary[]
   selectedSkills: RecoverySkillAllocation[]
   recommendedQuestionCount: number
   recoveryAvailable: boolean
   unavailableReason: RecoveryUnavailableReason
-  generatedQuestions: RecoveryGeneratedQuestion[]
   diagnostics: RecoveryEligibilityDiagnostics
+}
+
+export interface RecoveryEligibility extends RecoveryAvailabilitySummary {
+  generatedQuestions: RecoveryGeneratedQuestion[]
   questionPlan: RecoveryQuestionPlan | null
 }
 
-export function evaluateRecoveryEligibility(input: {
+interface RecoveryAvailabilityInput {
   observedSkills: readonly SkillWeaknessSummary[]
   hasEnoughEvidence: boolean
-  attemptSeed: string
-  recentIdentities?: readonly RecentRecoveryIdentity[]
   activeAttempt?: {
     compatible: boolean
     questionCount: number
@@ -55,8 +56,11 @@ export function evaluateRecoveryEligibility(input: {
   ambiguousEvidenceCount?: number
   missingCanonicalSkillEvidenceCount?: number
   invalidMappingOrContextEvidenceCount?: number
-  maximumGenerationRetries?: number
-}): RecoveryEligibility {
+}
+
+export function evaluateRecoveryAvailability(
+  input: RecoveryAvailabilityInput,
+): RecoveryAvailabilitySummary {
   const statusCounts: RecoveryEligibilityDiagnostics['statusCounts'] = {
     not_enough_data: 0,
     needs_more_practice: 0,
@@ -81,7 +85,8 @@ export function evaluateRecoveryEligibility(input: {
     selectedSkillCount: selectedSkills.length,
     excludedSkillCount: candidates.length - eligibleSkills.length,
     ambiguousEvidenceCount: input.ambiguousEvidenceCount ?? 0,
-    missingCanonicalSkillEvidenceCount: input.missingCanonicalSkillEvidenceCount ?? 0,
+    missingCanonicalSkillEvidenceCount:
+      input.missingCanonicalSkillEvidenceCount ?? 0,
     missingGeneratorEligibilityCount: candidates.length - eligibleSkills.length,
     invalidMappingOrContextEvidenceCount:
       input.invalidMappingOrContextEvidenceCount ?? 0,
@@ -96,9 +101,7 @@ export function evaluateRecoveryEligibility(input: {
       unavailableReason: input.activeAttempt.compatible
         ? null
         : 'configuration_unavailable',
-      generatedQuestions: [],
       diagnostics,
-      questionPlan: null,
     }
   }
   if (candidates.length === 0) {
@@ -110,9 +113,7 @@ export function evaluateRecoveryEligibility(input: {
       unavailableReason: input.hasEnoughEvidence
         ? 'no_current_weakness'
         : 'not_enough_evidence',
-      generatedQuestions: [],
       diagnostics,
-      questionPlan: null,
     }
   }
   if (selectedSkills.length === 0) {
@@ -122,15 +123,39 @@ export function evaluateRecoveryEligibility(input: {
       recommendedQuestionCount: 0,
       recoveryAvailable: false,
       unavailableReason: 'no_generatable_skills',
-      generatedQuestions: [],
       diagnostics,
+    }
+  }
+  return {
+    eligibleSkills,
+    selectedSkills,
+    recommendedQuestionCount,
+    recoveryAvailable: true,
+    unavailableReason: null,
+    diagnostics,
+  }
+}
+
+export function evaluateRecoveryEligibility(input: RecoveryAvailabilityInput & {
+  attemptSeed: string
+  recentIdentities?: readonly RecentRecoveryIdentity[]
+  maximumGenerationRetries?: number
+}): RecoveryEligibility {
+  const availability = evaluateRecoveryAvailability(input)
+  if (
+    input.activeAttempt !== undefined && input.activeAttempt !== null ||
+    !availability.recoveryAvailable
+  ) {
+    return {
+      ...availability,
+      generatedQuestions: [],
       questionPlan: null,
     }
   }
 
   const questionPlan = planRecoveryQuestions({
     attemptSeed: input.attemptSeed,
-    allocations: selectedSkills,
+    allocations: availability.selectedSkills,
     recentIdentities: input.recentIdentities,
     maximumCandidateAttemptsPerQuestion: input.maximumGenerationRetries,
   })
@@ -142,13 +167,10 @@ export function evaluateRecoveryEligibility(input: {
         ? null
         : 'insufficient_fresh_questions'
   return {
-    eligibleSkills,
-    selectedSkills,
-    recommendedQuestionCount,
+    ...availability,
     recoveryAvailable: questionPlan.available,
     unavailableReason,
     generatedQuestions: questionPlan.generatedQuestions,
-    diagnostics,
     questionPlan,
   }
 }

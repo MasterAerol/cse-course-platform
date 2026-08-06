@@ -1,8 +1,7 @@
 import {
   SMART_RECOVERY_TAXONOMY_VERSION,
 } from '../domain/smart-recovery-skills'
-import type { RecentRecoveryIdentity } from '../domain/smart-recovery-attempt'
-import { evaluateRecoveryEligibility } from '../domain/smart-recovery-eligibility'
+import { evaluateRecoveryAvailability } from '../domain/smart-recovery-eligibility'
 import {
   SMART_RECOVERY_EVIDENCE_WINDOW,
   SMART_RECOVERY_FORMULA_VERSION,
@@ -21,7 +20,6 @@ import { findPublishedCourseEnrollment } from '../repositories/course.repository
 import {
   findActiveRecoveryAttempt,
   findLatestSubmittedRecoveryAttempt,
-  findRecentGeneratedIdentities,
 } from '../repositories/smart-recovery-attempt.repository'
 import {
   findActiveSmartRecoverySkills,
@@ -36,29 +34,6 @@ const evidenceScope = {
   fixedQuestionEvidenceIncluded: false,
   ambiguousGeneratorMappingsIncluded: false,
 } as const
-
-function mapRecentIdentities(
-  rows: Awaited<ReturnType<typeof findRecentGeneratedIdentities>>,
-): RecentRecoveryIdentity[] {
-  return rows.map((row) => {
-    let canonicalSignature: string | null
-    try {
-      const metadata = JSON.parse(row.metadata_json) as { canonicalSignature?: unknown }
-      canonicalSignature = typeof metadata.canonicalSignature === 'string'
-        ? metadata.canonicalSignature
-        : null
-    } catch {
-      canonicalSignature = null
-    }
-    return {
-      generatorSlug: row.generator_slug,
-      generatorVersion: row.generator_version,
-      generatorSeed: row.generator_seed,
-      canonicalSignature,
-      normalizedPrompt: row.prompt.trim().toLowerCase(),
-    }
-  })
-}
 
 export interface SmartRecoveryEvidenceContext {
   courseId: number
@@ -161,10 +136,11 @@ export async function getSmartRecoveryDashboard(
   const hasEnoughEvidence = summaries.some(
     (summary) => summary.status !== 'not_enough_data',
   )
-  const [activeAttempt, recentRows] = await Promise.all([
-    findActiveRecoveryAttempt(database, userId, context.courseId),
-    findRecentGeneratedIdentities(database, userId),
-  ])
+  const activeAttempt = await findActiveRecoveryAttempt(
+    database,
+    userId,
+    context.courseId,
+  )
   let latestAttempt: Awaited<
     ReturnType<typeof findLatestSubmittedRecoveryAttempt>
   > = null
@@ -186,15 +162,10 @@ export async function getSmartRecoveryDashboard(
     activeAttempt !== null &&
     activeAttempt.taxonomy_version === SMART_RECOVERY_TAXONOMY_VERSION &&
     activeAttempt.weakness_formula_version === SMART_RECOVERY_FORMULA_VERSION
-  const eligibility = evaluateRecoveryEligibility({
+  const eligibility = evaluateRecoveryAvailability({
     observedSkills: summaries,
     hasEnoughEvidence,
-    attemptSeed: [
-      'recovery-availability',
-      String(userId),
-      calculatedAt.toISOString().slice(0, 10),
-    ].join('|'),
-    recentIdentities: mapRecentIdentities(recentRows),
+
     activeAttempt:
       activeAttempt === null
         ? null
@@ -209,17 +180,6 @@ export async function getSmartRecoveryDashboard(
     invalidMappingOrContextEvidenceCount:
       context.exclusionDiagnostics.invalidMappingOrContextCount,
   })
-  if (!eligibility.recoveryAvailable && eligibility.questionPlan !== null) {
-    console.warn(JSON.stringify({
-      message: 'Smart Recovery summary plan unavailable',
-      stage: 'summary_feasibility',
-      unavailableReason: eligibility.questionPlan.unavailableReason,
-      plannedQuestionCount: eligibility.questionPlan.plannedQuestionCount,
-      feasibleQuestionCount: eligibility.questionPlan.feasibleQuestionCount,
-      diagnostics: eligibility.questionPlan.diagnostics,
-    }))
-  }
-
   console.info(JSON.stringify({
     message: 'Smart Recovery summary analysis completed',
     requestId: requestId ?? null,
@@ -229,7 +189,9 @@ export async function getSmartRecoveryDashboard(
     skillsProcessed: analysis.metrics.skillsProcessed,
     skillsObserved: summaries.length,
     formulaEvaluationCount: analysis.metrics.formulaEvaluationCount,
-    databaseRoundTrips: 6,
+    databaseRoundTrips: 5,
+    generatorMetadataEvaluations: eligibility.diagnostics.statusCounts.needs_more_practice,
+    freshQuestionCandidatesGenerated: 0,
     returnedPriorityCount: Math.min(needsMorePractice.length, 3),
     returnedImprovingCount: Math.min(improving.length, 3),
     returnedStrongCount: Math.min(strong.length, 3),

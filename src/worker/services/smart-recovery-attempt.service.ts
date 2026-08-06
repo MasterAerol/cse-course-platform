@@ -8,6 +8,7 @@ import { buildRecoveryAttemptProgress } from '../domain/smart-recovery-history'
 import {
   SMART_RECOVERY_EVIDENCE_WINDOW,
   SMART_RECOVERY_FORMULA_VERSION,
+  analyzeLearnerRecoveryEvidence,
   calculateSkillWeakness,
   type SkillWeaknessSummary,
   type SkillCatalogEntry,
@@ -344,9 +345,11 @@ async function planningSummaries(
   now: Date,
 ): Promise<SkillWeaknessSummary[]> {
   const context = await loadSmartRecoveryEvidenceContext(database, userId, now)
-  return context.skills
-    .map((skill) => calculateSkillWeakness(skill, context.evidence, now))
-    .filter((summary) => summary.evidenceCount > 0)
+  return analyzeLearnerRecoveryEvidence(
+    context.skills,
+    context.evidence,
+    now,
+  ).summaries.filter((summary) => summary.evidenceCount > 0)
 }
 
 async function loadAttemptPayload(
@@ -602,7 +605,11 @@ async function buildRecoveryResult(
   const currentBySkill = new Map(
     evidenceContext.skills.map((skill) => [
       skill.slug,
-      calculateSkillWeakness(skill, evidenceContext.evidence, now).status,
+      calculateSkillWeakness(
+        skill,
+        evidenceContext.evidenceBySkill.get(skill.slug) ?? [],
+        now,
+      ).status,
     ]),
   )
   const grouped = new Map<
