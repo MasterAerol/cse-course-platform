@@ -103,6 +103,13 @@ describe('shared Smart Recovery eligibility', () => {
     expect(result.selectedSkills).toHaveLength(5)
     expect(result.generatedQuestions).toHaveLength(20)
     expect(result.recommendedQuestionCount).toBe(20)
+    expect(result.questionPlan).toMatchObject({
+      plannedQuestionCount: 20,
+      feasibleQuestionCount: 20,
+      available: true,
+      unavailableReason: null,
+    })
+    expect(result.questionPlan?.diagnostics.map((item) => item.requestedQuestionCount)).toEqual([6, 5, 4, 3, 2])
     expect(result.diagnostics).toMatchObject({
       statusCounts: {
         not_enough_data: 20,
@@ -134,5 +141,17 @@ describe('shared Smart Recovery eligibility', () => {
     expect(result.unavailableReason).toBe('insufficient_fresh_questions')
     expect(result.recommendedQuestionCount).toBe(8)
     expect(result.selectedSkills).toHaveLength(1)
+    expect(result.questionPlan).toMatchObject({
+      plannedQuestionCount: 8,
+      feasibleQuestionCount: 0,
+      available: false,
+      unavailableReason: 'insufficient_fresh_questions',
+    })
+    expect(result.questionPlan?.diagnostics[0]).toMatchObject({
+      requestedQuestionCount: 8,
+      candidateAttemptsMade: 0,
+      finalFeasibleCount: 0,
+      blockingReason: 'insufficient_retry_budget',
+    })
   })
 })

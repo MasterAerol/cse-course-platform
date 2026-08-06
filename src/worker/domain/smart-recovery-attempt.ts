@@ -1,8 +1,7 @@
 import {
-  generateValidatedQuestion,
   getGenerator,
 } from '../generators/generator.registry'
-import { createSeededRandom } from '../generators/generator-random'
+import { createSeededRandom, deriveQuestionSeed } from '../generators/generator-random'
 import type {
   GeneratedQuestion,
   GeneratorDifficulty,
@@ -19,7 +18,8 @@ import {
 
 export const RECOVERY_MAXIMUM_SKILLS = 5
 export const RECOVERY_MAXIMUM_QUESTIONS_PER_SKILL = 8
-export const RECOVERY_GENERATION_MAX_RETRIES = 8
+export const RECOVERY_GENERATION_MAX_RETRIES = 200
+export const RECOVERY_RECENT_IDENTITIES_PER_GENERATOR = 1
 
 const allocationBySkillCount: Readonly<Record<number, readonly number[]>> = Object.freeze({
   0: [],
@@ -163,93 +163,391 @@ function generatorFor(
   return selected
 }
 
+export type RecoverySkillBlockingReason =
+  | 'no_eligible_generator'
+  | 'all_generators_excluded'
+  | 'seed_space_exhausted'
+  | 'signature_space_exhausted'
+  | 'generator_validation_failed'
+  | 'duplicate_within_attempt'
+  | 'insufficient_retry_budget'
+  | 'missing_skill_configuration'
+  | null
+
+export interface RecoverySkillFeasibilityDiagnostic {
+  skillSlug: string
+  skillTitle: string
+  requestedQuestionCount: number
+  activeGenerators: Array<{ slug: GeneratorSlug; version: number }>
+  excludedGenerators: Array<{
+    slug: GeneratorSlug
+    version: number
+    reason: 'not_registered' | 'no_supported_difficulty'
+  }>
+  recentlySeenSeedCount: number
+  recentlySeenCanonicalSignatureCount: number
+  candidateAttemptsMade: number
+  uniqueValidQuestionsFound: number
+  finalFeasibleCount: number
+  collisionFailures: {
+    recentSeed: number
+    recentSignatureOrPrompt: number
+    duplicateWithinAttempt: number
+    generatorValidation: number
+  }
+  blockingReason: RecoverySkillBlockingReason
+}
+
+export interface RecoveryQuestionPlan {
+  selectedSkills: RecoverySkillAllocation[]
+  plannedQuestionCount: number
+  feasibleQuestionCount: number
+  available: boolean
+  unavailableReason:
+    | 'no_eligible_skills'
+    | 'no_eligible_generators'
+    | 'insufficient_fresh_questions'
+    | 'configuration_unavailable'
+    | null
+  generatedQuestions: RecoveryGeneratedQuestion[]
+  diagnostics: RecoverySkillFeasibilityDiagnostic[]
+}
+
+function scopedRecentIdentities(
+  identities: readonly RecentRecoveryIdentity[],
+): RecentRecoveryIdentity[] {
+  const counts = new Map<string, number>()
+  return identities.filter((identity) => {
+    const key = identity.generatorSlug + '@' + identity.generatorVersion
+    const count = counts.get(key) ?? 0
+    if (count >= RECOVERY_RECENT_IDENTITIES_PER_GENERATOR) return false
+    counts.set(key, count + 1)
+    return true
+  })
+}
+
+function generatorConfiguration(skillSlug: string): {
+  active: RecoveryGeneratorEligibility[]
+  excluded: RecoverySkillFeasibilityDiagnostic['excludedGenerators']
+  hasMapping: boolean
+} {
+  const mappings = generatorSkillMappings.filter(
+    (mapping) =>
+      mapping.skillSlug === skillSlug && mapping.mappingKind === 'direct',
+  )
+  const active: RecoveryGeneratorEligibility[] = []
+  const excluded: RecoverySkillFeasibilityDiagnostic['excludedGenerators'] = []
+  for (const mapping of mappings) {
+    const generator = getGenerator(mapping.generatorSlug, mapping.generatorVersion)
+    if (generator === null) {
+      excluded.push({
+        slug: mapping.generatorSlug,
+        version: mapping.generatorVersion,
+        reason: 'not_registered',
+      })
+    } else if (generator.supportedDifficulties.length === 0) {
+      excluded.push({
+        slug: mapping.generatorSlug,
+        version: mapping.generatorVersion,
+        reason: 'no_supported_difficulty',
+      })
+    } else {
+      active.push({
+        skillSlug: mapping.skillSlug,
+        generatorSlug: mapping.generatorSlug,
+        generatorVersion: mapping.generatorVersion,
+        supportedDifficulties: generator.supportedDifficulties,
+      })
+    }
+  }
+  return { active, excluded, hasMapping: mappings.length > 0 }
+}
+
+function blockingReasonFor(input: {
+  hasMapping: boolean
+  activeGeneratorCount: number
+  excludedGeneratorCount: number
+  requested: number
+  feasible: number
+  attempts: number
+  retryBudget: number
+  recentSeed: number
+  recentSignatureOrPrompt: number
+  duplicateWithinAttempt: number
+  generatorValidation: number
+}): RecoverySkillBlockingReason {
+  if (!input.hasMapping) return 'missing_skill_configuration'
+  if (input.activeGeneratorCount === 0) {
+    return input.excludedGeneratorCount > 0
+      ? 'all_generators_excluded'
+      : 'no_eligible_generator'
+  }
+  if (input.feasible >= input.requested) return null
+  if (
+    input.generatorValidation > 0 &&
+    input.generatorValidation === input.attempts
+  ) {
+    return 'generator_validation_failed'
+  }
+  if (
+    input.recentSeed > 0 &&
+    input.recentSignatureOrPrompt === 0 &&
+    input.duplicateWithinAttempt === 0
+  ) {
+    return 'seed_space_exhausted'
+  }
+  if (input.recentSignatureOrPrompt > 0) {
+    return 'signature_space_exhausted'
+  }
+  if (input.duplicateWithinAttempt > 0) {
+    return 'duplicate_within_attempt'
+  }
+  if (input.attempts >= input.retryBudget) {
+    return 'insufficient_retry_budget'
+  }
+  return 'generator_validation_failed'
+}
+
+export function planRecoveryQuestions(input: {
+  attemptSeed: string
+  allocations: readonly RecoverySkillAllocation[]
+  recentIdentities?: readonly RecentRecoveryIdentity[]
+  maximumCandidateAttemptsPerQuestion?: number
+}): RecoveryQuestionPlan {
+  const retryBudget =
+    input.maximumCandidateAttemptsPerQuestion ??
+    RECOVERY_GENERATION_MAX_RETRIES
+  const recent = scopedRecentIdentities(input.recentIdentities ?? [])
+  const recentSeeds = new Set(
+    recent.map(
+      (item) =>
+        item.generatorSlug + '@' + item.generatorVersion + ':' + item.generatorSeed,
+    ),
+  )
+  const recentSignatures = new Set(
+    recent
+      .map((item) => item.canonicalSignature)
+      .filter((value): value is string => value !== null),
+  )
+  const recentPrompts = new Set(recent.map((item) => item.normalizedPrompt))
+  const attemptSignatures = new Set<string>()
+  const attemptPrompts = new Set<string>()
+  const generatedQuestions: RecoveryGeneratedQuestion[] = []
+  const diagnostics: RecoverySkillFeasibilityDiagnostic[] = []
+  let plannedPosition = 1
+
+  for (const allocation of input.allocations) {
+    const configuration = generatorConfiguration(allocation.skill.skill.slug)
+    const generatorKeys = new Set(
+      configuration.active.map(
+        (item) => item.generatorSlug + '@' + item.generatorVersion,
+      ),
+    )
+    const skillRecent = recent.filter((item) =>
+      generatorKeys.has(item.generatorSlug + '@' + item.generatorVersion),
+    )
+    const counters = {
+      attempts: 0,
+      recentSeed: 0,
+      recentSignatureOrPrompt: 0,
+      duplicateWithinAttempt: 0,
+      generatorValidation: 0,
+    }
+    let feasible = 0
+
+    for (let offset = 0; offset < allocation.questionCount; offset += 1) {
+      let accepted: GeneratedQuestion | null = null
+      if (configuration.active.length > 0 && retryBudget > 0) {
+        const generator = generatorFor(
+          configuration.active,
+          input.attemptSeed,
+          allocation.skill.skill.slug,
+          offset,
+        )
+        const difficulty = difficultyFor(generator.supportedDifficulties, offset)
+        const registered = getGenerator(
+          generator.generatorSlug,
+          generator.generatorVersion,
+        )
+        for (let retry = 0; retry < retryBudget; retry += 1) {
+          counters.attempts += 1
+          if (registered === null) {
+            counters.generatorValidation += 1
+            break
+          }
+          const seed = deriveQuestionSeed({
+            attemptSeed:
+              input.attemptSeed + '|' + allocation.skill.skill.slug,
+            generatorSlug: generator.generatorSlug,
+            generatorVersion: generator.generatorVersion,
+            difficulty,
+            position: plannedPosition,
+            retry,
+          })
+          const seedKey =
+            generator.generatorSlug + '@' + generator.generatorVersion + ':' + seed
+          if (recentSeeds.has(seedKey)) {
+            counters.recentSeed += 1
+            continue
+          }
+          let question: GeneratedQuestion
+          try {
+            question = registered.generate({ seed, difficulty })
+          } catch {
+            counters.generatorValidation += 1
+            continue
+          }
+          const normalizedPrompt = question.prompt.trim().toLowerCase()
+          const normalizedChoices = question.choices.map((choice) =>
+            choice.text.trim().toLowerCase(),
+          )
+          let valid: boolean
+          try {
+            valid = registered.validate(question).valid
+          } catch {
+            counters.generatorValidation += 1
+            continue
+          }
+          if (
+            !valid ||
+            new Set(normalizedChoices).size !== normalizedChoices.length
+          ) {
+            counters.generatorValidation += 1
+            continue
+          }
+          if (
+            recentSignatures.has(question.metadata.canonicalSignature) ||
+            recentPrompts.has(normalizedPrompt)
+          ) {
+            counters.recentSignatureOrPrompt += 1
+            continue
+          }
+          if (
+            attemptSignatures.has(question.metadata.canonicalSignature) ||
+            attemptPrompts.has(normalizedPrompt)
+          ) {
+            counters.duplicateWithinAttempt += 1
+            continue
+          }
+          accepted = question
+          break
+        }
+      }
+      if (accepted !== null) {
+        feasible += 1
+        attemptSignatures.add(accepted.metadata.canonicalSignature)
+        attemptPrompts.add(accepted.prompt.trim().toLowerCase())
+        generatedQuestions.push({
+          position: plannedPosition,
+          skill: allocation.skill,
+          question: accepted,
+        })
+      }
+      plannedPosition += 1
+    }
+
+    diagnostics.push({
+      skillSlug: allocation.skill.skill.slug,
+      skillTitle: allocation.skill.skill.title,
+      requestedQuestionCount: allocation.questionCount,
+      activeGenerators: configuration.active.map((item) => ({
+        slug: item.generatorSlug,
+        version: item.generatorVersion,
+      })),
+      excludedGenerators: configuration.excluded,
+      recentlySeenSeedCount: new Set(
+        skillRecent.map((item) => item.generatorSeed),
+      ).size,
+      recentlySeenCanonicalSignatureCount: new Set(
+        skillRecent
+          .map((item) => item.canonicalSignature)
+          .filter((value): value is string => value !== null),
+      ).size,
+      candidateAttemptsMade: counters.attempts,
+      uniqueValidQuestionsFound: feasible,
+      finalFeasibleCount: feasible,
+      collisionFailures: {
+        recentSeed: counters.recentSeed,
+        recentSignatureOrPrompt: counters.recentSignatureOrPrompt,
+        duplicateWithinAttempt: counters.duplicateWithinAttempt,
+        generatorValidation: counters.generatorValidation,
+      },
+      blockingReason: blockingReasonFor({
+        hasMapping: configuration.hasMapping,
+        activeGeneratorCount: configuration.active.length,
+        excludedGeneratorCount: configuration.excluded.length,
+        requested: allocation.questionCount,
+        feasible,
+        attempts: counters.attempts,
+        retryBudget: retryBudget * allocation.questionCount,
+        recentSeed: counters.recentSeed,
+        recentSignatureOrPrompt: counters.recentSignatureOrPrompt,
+        duplicateWithinAttempt: counters.duplicateWithinAttempt,
+        generatorValidation: counters.generatorValidation,
+      }),
+    })
+  }
+
+  const plannedQuestionCount = input.allocations.reduce(
+    (total, allocation) => total + allocation.questionCount,
+    0,
+  )
+  const feasibleQuestionCount = generatedQuestions.length
+  const blocked = diagnostics.filter((item) => item.blockingReason !== null)
+  const unavailableReason =
+    input.allocations.length === 0
+      ? 'no_eligible_skills'
+      : blocked.some((item) =>
+          item.blockingReason === 'no_eligible_generator' ||
+          item.blockingReason === 'all_generators_excluded'
+        )
+        ? 'no_eligible_generators'
+        : blocked.some((item) =>
+            item.blockingReason === 'generator_validation_failed' ||
+            item.blockingReason === 'missing_skill_configuration'
+          )
+          ? 'configuration_unavailable'
+          : feasibleQuestionCount < plannedQuestionCount
+            ? 'insufficient_fresh_questions'
+            : null
+  return {
+    selectedSkills: [...input.allocations],
+    plannedQuestionCount,
+    feasibleQuestionCount,
+    available: unavailableReason === null,
+    unavailableReason,
+    generatedQuestions:
+      unavailableReason === null ? generatedQuestions : [],
+    diagnostics,
+  }
+}
+
 export function generateRecoveryQuestions(input: {
   attemptSeed: string
   allocations: readonly RecoverySkillAllocation[]
   recentIdentities?: readonly RecentRecoveryIdentity[]
   maximumRetries?: number
 }): RecoveryGeneratedQuestion[] {
-  const maximumRetries =
-    input.maximumRetries ?? RECOVERY_GENERATION_MAX_RETRIES
-  const recentSeeds = new Set(
-    (input.recentIdentities ?? []).map(
-      (item) =>
-        `${item.generatorSlug}@${item.generatorVersion}:${item.generatorSeed}`,
-    ),
-  )
-  const signatures = new Set(
-    (input.recentIdentities ?? [])
-      .map((item) => item.canonicalSignature)
-      .filter((value): value is string => value !== null),
-  )
-  const prompts = new Set(
-    (input.recentIdentities ?? []).map((item) => item.normalizedPrompt),
-  )
-  const generated: RecoveryGeneratedQuestion[] = []
-  let position = 1
-
-  for (const allocation of input.allocations) {
-    const candidates = getRecoveryGeneratorEligibility(
-      allocation.skill.skill.slug,
+  const plan = planRecoveryQuestions({
+    attemptSeed: input.attemptSeed,
+    allocations: input.allocations,
+    recentIdentities: input.recentIdentities,
+    maximumCandidateAttemptsPerQuestion: input.maximumRetries,
+  })
+  if (!plan.available) {
+    const skillSlug =
+      plan.diagnostics.find((item) => item.blockingReason !== null)?.skillSlug ??
+      'unknown-skill'
+    throw new RecoveryGenerationError(
+      plan.unavailableReason === 'configuration_unavailable' ||
+      plan.unavailableReason === 'no_eligible_generators'
+        ? 'configuration_unavailable'
+        : 'insufficient_fresh_questions',
+      skillSlug,
     )
-    for (let offset = 0; offset < allocation.questionCount; offset += 1) {
-      const generator = generatorFor(
-        candidates,
-        input.attemptSeed,
-        allocation.skill.skill.slug,
-        offset,
-      )
-      const difficulty = difficultyFor(
-        generator.supportedDifficulties,
-        offset,
-      )
-      let accepted: GeneratedQuestion | null = null
-
-      for (let freshnessRetry = 0; freshnessRetry < maximumRetries; freshnessRetry += 1) {
-        const scopedAttemptSeed = [
-          input.attemptSeed,
-          allocation.skill.skill.slug,
-          String(freshnessRetry),
-        ].join('|')
-        try {
-          const question = generateValidatedQuestion({
-            attemptSeed: scopedAttemptSeed,
-            generatorSlug: generator.generatorSlug,
-            generatorVersion: generator.generatorVersion,
-            difficulty,
-            position,
-            existingSignatures: signatures,
-            existingPrompts: prompts,
-          })
-          const seedKey = `${question.generatorSlug}@${question.generatorVersion}:${question.seed}`
-          if (recentSeeds.has(seedKey)) continue
-          accepted = question
-          break
-        } catch {
-          // A bounded outer retry changes the scoped seed while preserving
-          // deterministic reproduction for the same attempt seed.
-        }
-      }
-
-      if (accepted === null) {
-        throw new RecoveryGenerationError(
-          'insufficient_fresh_questions',
-          allocation.skill.skill.slug,
-        )
-      }
-      signatures.add(accepted.metadata.canonicalSignature)
-      prompts.add(accepted.prompt.trim().toLowerCase())
-      recentSeeds.add(
-        `${accepted.generatorSlug}@${accepted.generatorVersion}:${accepted.seed}`,
-      )
-      generated.push({ position, skill: allocation.skill, question: accepted })
-      position += 1
-    }
   }
-
-  return generated
+  return plan.generatedQuestions
 }
-
 export function recommendedRecoveryQuestionCount(
   eligibleSkillCount: number,
 ): number {

@@ -1,10 +1,10 @@
 import {
-  RecoveryGenerationError,
   allocateRecoveryQuestions,
   filterGeneratableWeaknesses,
-  generateRecoveryQuestions,
+  planRecoveryQuestions,
   type RecentRecoveryIdentity,
   type RecoveryGeneratedQuestion,
+  type RecoveryQuestionPlan,
   type RecoverySkillAllocation,
 } from './smart-recovery-attempt'
 import type {
@@ -40,6 +40,7 @@ export interface RecoveryEligibility {
   unavailableReason: RecoveryUnavailableReason
   generatedQuestions: RecoveryGeneratedQuestion[]
   diagnostics: RecoveryEligibilityDiagnostics
+  questionPlan: RecoveryQuestionPlan | null
 }
 
 export function evaluateRecoveryEligibility(input: {
@@ -97,6 +98,7 @@ export function evaluateRecoveryEligibility(input: {
         : 'configuration_unavailable',
       generatedQuestions: [],
       diagnostics,
+      questionPlan: null,
     }
   }
   if (candidates.length === 0) {
@@ -110,6 +112,7 @@ export function evaluateRecoveryEligibility(input: {
         : 'not_enough_evidence',
       generatedQuestions: [],
       diagnostics,
+      questionPlan: null,
     }
   }
   if (selectedSkills.length === 0) {
@@ -121,37 +124,31 @@ export function evaluateRecoveryEligibility(input: {
       unavailableReason: 'no_generatable_skills',
       generatedQuestions: [],
       diagnostics,
+      questionPlan: null,
     }
   }
 
-  try {
-    const generatedQuestions = generateRecoveryQuestions({
-      attemptSeed: input.attemptSeed,
-      allocations: selectedSkills,
-      recentIdentities: input.recentIdentities,
-      maximumRetries: input.maximumGenerationRetries,
-    })
-    return {
-      eligibleSkills,
-      selectedSkills,
-      recommendedQuestionCount,
-      recoveryAvailable: true,
-      unavailableReason: null,
-      generatedQuestions,
-      diagnostics,
-    }
-  } catch (error) {
-    return {
-      eligibleSkills,
-      selectedSkills,
-      recommendedQuestionCount,
-      recoveryAvailable: false,
-      unavailableReason:
-        error instanceof RecoveryGenerationError
-          ? error.reason
-          : 'configuration_unavailable',
-      generatedQuestions: [],
-      diagnostics,
-    }
+  const questionPlan = planRecoveryQuestions({
+    attemptSeed: input.attemptSeed,
+    allocations: selectedSkills,
+    recentIdentities: input.recentIdentities,
+    maximumCandidateAttemptsPerQuestion: input.maximumGenerationRetries,
+  })
+  const unavailableReason =
+    questionPlan.unavailableReason === 'configuration_unavailable' ||
+    questionPlan.unavailableReason === 'no_eligible_generators'
+      ? 'configuration_unavailable'
+      : questionPlan.unavailableReason === null
+        ? null
+        : 'insufficient_fresh_questions'
+  return {
+    eligibleSkills,
+    selectedSkills,
+    recommendedQuestionCount,
+    recoveryAvailable: questionPlan.available,
+    unavailableReason,
+    generatedQuestions: questionPlan.generatedQuestions,
+    diagnostics,
+    questionPlan,
   }
 }

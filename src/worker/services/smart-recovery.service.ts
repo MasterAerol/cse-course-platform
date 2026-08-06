@@ -184,6 +184,16 @@ export async function getSmartRecoveryDashboard(
     invalidMappingOrContextEvidenceCount:
       context.exclusionDiagnostics.invalidMappingOrContextCount,
   })
+  if (!eligibility.recoveryAvailable && eligibility.questionPlan !== null) {
+    console.warn(JSON.stringify({
+      message: 'Smart Recovery summary plan unavailable',
+      stage: 'summary_feasibility',
+      unavailableReason: eligibility.questionPlan.unavailableReason,
+      plannedQuestionCount: eligibility.questionPlan.plannedQuestionCount,
+      feasibleQuestionCount: eligibility.questionPlan.feasibleQuestionCount,
+      diagnostics: eligibility.questionPlan.diagnostics,
+    }))
+  }
 
   return {
     taxonomyVersion: SMART_RECOVERY_TAXONOMY_VERSION,

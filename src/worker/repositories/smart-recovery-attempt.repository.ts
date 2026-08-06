@@ -177,7 +177,8 @@ export async function findRecentGeneratedIdentities(
       FROM (
         SELECT snapshots.generator_slug, snapshots.generator_version,
           snapshots.seed AS generator_seed, snapshots.metadata_json,
-          snapshots.prompt, attempts.started_at AS seen_at
+          snapshots.prompt, attempts.started_at AS seen_at,
+          snapshots.id AS snapshot_id
         FROM generated_question_snapshots snapshots
         INNER JOIN practice_attempts attempts
           ON attempts.id = snapshots.practice_attempt_id
@@ -185,7 +186,7 @@ export async function findRecentGeneratedIdentities(
         UNION ALL
         SELECT snapshots.generator_slug, snapshots.generator_version,
           snapshots.seed, snapshots.metadata_json, snapshots.prompt,
-          attempts.started_at
+          attempts.started_at, snapshots.id
         FROM subject_assessment_question_snapshots snapshots
         INNER JOIN subject_assessment_attempts attempts
           ON attempts.id = snapshots.attempt_id
@@ -193,7 +194,7 @@ export async function findRecentGeneratedIdentities(
         UNION ALL
         SELECT snapshots.generator_slug, snapshots.generator_version,
           snapshots.seed, snapshots.metadata_json, snapshots.prompt,
-          attempts.created_at
+          attempts.created_at, snapshots.id
         FROM mock_exam_question_snapshots snapshots
         INNER JOIN mock_exam_attempts attempts
           ON attempts.id = snapshots.attempt_id
@@ -201,13 +202,13 @@ export async function findRecentGeneratedIdentities(
         UNION ALL
         SELECT snapshots.generator_slug, snapshots.generator_version,
           snapshots.generator_seed, snapshots.metadata_json,
-          snapshots.prompt, attempts.created_at
+          snapshots.prompt, attempts.created_at, snapshots.id
         FROM recovery_question_snapshots snapshots
         INNER JOIN recovery_attempts attempts
           ON attempts.id = snapshots.attempt_id
         WHERE attempts.user_id = ?1 AND snapshots.source_kind = 'generated'
       ) recent
-      ORDER BY datetime(seen_at) DESC
+      ORDER BY datetime(seen_at) DESC, snapshot_id DESC
       LIMIT ?2`,
     )
     .bind(userId, limit)

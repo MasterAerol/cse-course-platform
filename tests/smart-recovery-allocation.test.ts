@@ -5,6 +5,7 @@ import {
   allocateRecoveryQuestions,
   generateRecoveryQuestions,
   getRecoveryGeneratorEligibility,
+  planRecoveryQuestions,
   recommendedRecoveryQuestionCount,
   type RecentRecoveryIdentity,
 } from '../src/worker/domain/smart-recovery-attempt'
@@ -153,10 +154,51 @@ describe('Smart Recovery deterministic generation', () => {
       allocations: allocation,
       recentIdentities: recent,
     })
-    const recentSeeds = new Set(recent.map((item) => item.generatorSeed))
     expect(
-      replacement.every((item) => !recentSeeds.has(item.question.seed)),
+      replacement.every(
+        (item) => item.question.seed !== recent[0]?.generatorSeed,
+      ),
     ).toBe(true)
+  })
+
+  it('caps recent exclusions per generator and reports safe feasibility counts', () => {
+    const generated = generateRecoveryQuestions({
+      attemptSeed: 'recent-diagnostic-source',
+      allocations: allocation,
+    })
+    const recent = Array.from({ length: 20 }, (_, index) => {
+      const question = generated[index % generated.length]?.question
+      if (question === undefined) throw new Error('Missing generated fixture.')
+      return {
+        generatorSlug: question.generatorSlug,
+        generatorVersion: question.generatorVersion,
+        generatorSeed: question.seed + '-' + index,
+        canonicalSignature:
+          question.metadata.canonicalSignature + '-' + index,
+        normalizedPrompt: question.prompt.trim().toLowerCase() + '-' + index,
+      }
+    })
+    const plan = planRecoveryQuestions({
+      attemptSeed: 'recent-diagnostic-plan',
+      allocations: allocation,
+      recentIdentities: recent,
+    })
+
+    expect(plan.available).toBe(true)
+    expect(plan.plannedQuestionCount).toBe(8)
+    expect(plan.feasibleQuestionCount).toBe(8)
+    expect(plan.diagnostics).toHaveLength(1)
+    expect(plan.diagnostics[0]).toMatchObject({
+      skillSlug: 'finding-percentage',
+      requestedQuestionCount: 8,
+      recentlySeenSeedCount: 1,
+      recentlySeenCanonicalSignatureCount: 1,
+      uniqueValidQuestionsFound: 8,
+      finalFeasibleCount: 8,
+      blockingReason: null,
+    })
+    expect(plan.diagnostics[0]?.activeGenerators).toHaveLength(1)
+    expect(plan.diagnostics[0]?.excludedGenerators).toEqual([])
   })
 
   it('produces complete validated questions with exactly one correct choice', () => {

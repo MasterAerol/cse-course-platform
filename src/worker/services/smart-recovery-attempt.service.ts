@@ -436,6 +436,16 @@ export async function createRecoveryAttempt(
     ),
   })
   if (!eligibility.recoveryAvailable) {
+    if (eligibility.questionPlan !== null) {
+      console.warn(JSON.stringify({
+        message: 'Smart Recovery creation plan unavailable',
+        stage: 'attempt_creation',
+        unavailableReason: eligibility.questionPlan.unavailableReason,
+        plannedQuestionCount: eligibility.questionPlan.plannedQuestionCount,
+        feasibleQuestionCount: eligibility.questionPlan.feasibleQuestionCount,
+        diagnostics: eligibility.questionPlan.diagnostics,
+      }))
+    }
     throw recoveryEligibilityError(eligibility.unavailableReason)
   }
   const questions = eligibility.generatedQuestions
