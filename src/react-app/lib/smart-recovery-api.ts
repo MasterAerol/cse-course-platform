@@ -146,3 +146,6 @@ export async function fetchSmartRecoverySkillDetails(
   )
   return response.data
 }
+
+export const getSmartRecoverySummary = fetchSmartRecoveryDashboard
+export const getSmartRecoverySkillDetails = fetchSmartRecoverySkillDetails

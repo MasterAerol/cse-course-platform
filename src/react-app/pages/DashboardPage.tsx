@@ -6,6 +6,7 @@ import { ContinueLearningCard } from '../components/ContinueLearningCard'
 import { EnrollmentBadge } from '../components/EnrollmentBadge'
 import { ProgressBar } from '../components/ProgressBar'
 import { SubjectAssessmentCard } from '../components/SubjectAssessmentCard'
+import { SmartRecoveryCard } from '../components/SmartRecoveryCard'
 import { MockExamCard } from '../components/MockExamCard'
 import {
   fetchStudentDashboard,
@@ -185,6 +186,7 @@ export function DashboardPage() {
                     <ContinueLearningCard progress={course} />
                     {course.subjectAssessments.map((assessment) => <SubjectAssessmentCard key={assessment.assessment.publicId} summary={assessment} />)}
                     {course.course.slug === 'cse-professional' && <MockExamCard />}
+                    {user.role === 'student' && course.course.slug === 'cse-professional' && <SmartRecoveryCard />}
                   </>
                 ) : (
                   <section className="continue-card continue-card--muted">

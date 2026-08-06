@@ -20,6 +20,8 @@ import { PracticeResultPage } from './pages/PracticeResultPage'
 import { QuizAttemptPage } from './pages/QuizAttemptPage'
 import { QuizResultPage } from './pages/QuizResultPage'
 import { RegistrationPage } from './pages/RegistrationPage'
+import { SmartRecoveryPage } from './pages/SmartRecoveryPage'
+import { SmartRecoverySkillPage } from './pages/SmartRecoverySkillPage'
 import { SubjectAssessmentPage } from './pages/SubjectAssessmentPage'
 import { SubjectAssessmentAttemptPage } from './pages/SubjectAssessmentAttemptPage'
 import { SubjectAssessmentResultPage } from './pages/SubjectAssessmentResultPage'
@@ -43,6 +45,11 @@ export function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="smart-recovery" element={<SmartRecoveryPage />} />
+        <Route
+          path="smart-recovery/skills/:skillSlug"
+          element={<SmartRecoverySkillPage />}
+        />
         <Route path="assessments/:assessmentSlug" element={<SubjectAssessmentPage />} />
         <Route path="assessment-attempts/:attemptPublicId" element={<SubjectAssessmentAttemptPage />} />
         <Route path="assessment-attempts/:attemptPublicId/results" element={<SubjectAssessmentResultPage />} />
