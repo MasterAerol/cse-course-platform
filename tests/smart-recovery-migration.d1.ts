@@ -115,6 +115,13 @@ describe('0015 fresh and upgrade migration paths', () => {
       "SELECT name FROM sqlite_schema WHERE type IN('index','trigger') AND (name LIKE 'idx_recovery_%' OR name LIKE 'trg_recovery_%' OR name LIKE 'idx_%question_skills%' OR name='trg_skills_slug_immutable')",
     ).all<{ name: string }>()
     expect(objects.results.length).toBeGreaterThanOrEqual(24)
+    const submitTriggers = await fresh.prepare(
+      "SELECT name FROM sqlite_schema WHERE type='trigger' AND name LIKE 'trg_recovery_attempt_submit_%' ORDER BY name",
+    ).all<{ name: string }>()
+    expect(submitTriggers.results.map((row) => row.name)).toEqual([
+      'trg_recovery_attempt_submit_correct_choice',
+      'trg_recovery_attempt_submit_snapshot_count',
+    ])
     expect((await fresh.prepare('PRAGMA foreign_key_check').all()).results).toHaveLength(0)
   })
 
@@ -199,8 +206,13 @@ describe('0015 constraints and lifecycle protections', () => {
     await expect(fresh.prepare('INSERT INTO recovery_answers(attempt_id,snapshot_id) VALUES(?1,?2)').bind(attempt,snapshot).run()).rejects.toThrow(/not open/)
   })
 
-  it('rejects submission without a correct choice but allows unanswered questions', async () => {
+  it('rejects incomplete snapshot counts and missing correct choices but allows unanswered questions', async () => {
     const skill = await addSkill(fresh, 'submission')
+    const countUser = await addUser(fresh, 'submission-count')
+    const countAttempt = await addAttempt(fresh, 'submission-count', countUser, 2)
+    const countSnapshot = await addSnapshot(fresh, 'submission-count', countAttempt, skill)
+    await fresh.prepare("INSERT INTO recovery_question_choices(public_id,snapshot_id,choice_text,is_correct,position) VALUES('submission-count-correct',?1,'Correct',1,1)").bind(countSnapshot).run()
+    await expect(fresh.prepare("UPDATE recovery_attempts SET status='submitted',score_percent=0,submitted_at=CURRENT_TIMESTAMP WHERE id=?1").bind(countAttempt).run()).rejects.toThrow(/snapshot count/)
     const badUser = await addUser(fresh, 'submission-bad')
     const badAttempt = await addAttempt(fresh, 'submission-bad', badUser)
     const badSnapshot = await addSnapshot(fresh, 'submission-bad', badAttempt, skill)

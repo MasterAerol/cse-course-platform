@@ -178,14 +178,22 @@ WHEN NEW.selected_choice_id IS NOT NULL AND NOT EXISTS(
   SELECT 1 FROM recovery_question_choices WHERE id=NEW.selected_choice_id AND snapshot_id=NEW.snapshot_id)
 BEGIN SELECT RAISE(ABORT,'selected choice does not belong to snapshot'); END;
 
+-- Keep one statement per trigger body for Wrangler remote migration parsing.
+CREATE TRIGGER trg_recovery_attempt_submit_snapshot_count
+BEFORE UPDATE OF status ON recovery_attempts
+WHEN NEW.status='submitted'
+  AND (SELECT COUNT(*) FROM recovery_question_snapshots WHERE attempt_id=NEW.id)<>NEW.question_count
+BEGIN
+  SELECT RAISE(ABORT,'recovery snapshot count does not match question count');
+END;
+
 -- Unanswered questions are allowed and score zero, matching existing assessments.
 -- Exactly one server-authored correct choice is required for every snapshot.
-CREATE TRIGGER trg_recovery_attempt_submit_integrity BEFORE UPDATE OF status ON recovery_attempts
-WHEN NEW.status='submitted' BEGIN
-  SELECT CASE WHEN (SELECT COUNT(*) FROM recovery_question_snapshots WHERE attempt_id=NEW.id)<>NEW.question_count
-    THEN RAISE(ABORT,'recovery snapshot count does not match question count') END;
-  SELECT CASE WHEN EXISTS(
-    SELECT 1 FROM recovery_question_snapshots s WHERE s.attempt_id=NEW.id
-      AND (SELECT COUNT(*) FROM recovery_question_choices c WHERE c.snapshot_id=s.id AND c.is_correct=1)<>1)
-    THEN RAISE(ABORT,'every recovery question must have exactly one correct choice') END;
+CREATE TRIGGER trg_recovery_attempt_submit_correct_choice
+BEFORE UPDATE OF status ON recovery_attempts
+WHEN NEW.status='submitted' AND EXISTS(
+  SELECT 1 FROM recovery_question_snapshots s WHERE s.attempt_id=NEW.id
+    AND (SELECT COUNT(*) FROM recovery_question_choices c WHERE c.snapshot_id=s.id AND c.is_correct=1)<>1)
+BEGIN
+  SELECT RAISE(ABORT,'every recovery question must have exactly one correct choice');
 END;
