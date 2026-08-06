@@ -21,6 +21,8 @@ import { QuizAttemptPage } from './pages/QuizAttemptPage'
 import { QuizResultPage } from './pages/QuizResultPage'
 import { RegistrationPage } from './pages/RegistrationPage'
 import { SmartRecoveryPage } from './pages/SmartRecoveryPage'
+import { SmartRecoveryAttemptPage } from './pages/SmartRecoveryAttemptPage'
+import { SmartRecoveryResultPage } from './pages/SmartRecoveryResultPage'
 import { SmartRecoverySkillPage } from './pages/SmartRecoverySkillPage'
 import { SubjectAssessmentPage } from './pages/SubjectAssessmentPage'
 import { SubjectAssessmentAttemptPage } from './pages/SubjectAssessmentAttemptPage'
@@ -49,6 +51,14 @@ export function App() {
         <Route
           path="smart-recovery/skills/:skillSlug"
           element={<SmartRecoverySkillPage />}
+        />
+        <Route
+          path="smart-recovery/attempts/:attemptPublicId"
+          element={<SmartRecoveryAttemptPage />}
+        />
+        <Route
+          path="smart-recovery/attempts/:attemptPublicId/results"
+          element={<SmartRecoveryResultPage />}
         />
         <Route path="assessments/:assessmentSlug" element={<SubjectAssessmentPage />} />
         <Route path="assessment-attempts/:attemptPublicId" element={<SubjectAssessmentAttemptPage />} />

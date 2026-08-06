@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers'
 import { describe, expect, it } from 'vitest'
 
 import { app } from '../src/worker'
+import { createRecoveryAttemptWithSnapshots } from '../src/worker/repositories/smart-recovery-attempt.repository'
 
 import type { Bindings } from '../src/worker/types/bindings'
 
@@ -285,5 +286,306 @@ describe('Smart Recovery learner APIs', () => {
       success: false,
       error: { code: 'SMART_RECOVERY_SKILL_NOT_FOUND' },
     })
+  })
+  it('creates, resumes, saves, submits, and protects an immutable recovery attempt', async () => {
+    const owner = await register(`recovery-owner-${crypto.randomUUID()}@example.test`)
+    const other = await register(`recovery-other-${crypto.randomUUID()}@example.test`)
+    await enroll(owner.userId)
+    await enroll(other.userId)
+    await seedFindingPercentageSkill()
+    await seedGeneratedAttempt(owner.userId, 'submitted', 5)
+
+    const beforeFixed = await env.DB.batch([
+      env.DB.prepare('SELECT COUNT(*) AS count FROM practice_question_skills'),
+      env.DB.prepare('SELECT COUNT(*) AS count FROM quiz_question_skills'),
+    ])
+    const idempotencyKey = crypto.randomUUID()
+    const create = await app.request(
+      '/api/student/smart-recovery/attempts',
+      {
+        method: 'POST',
+        headers: { cookie: owner.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ idempotencyKey }),
+      },
+      bindings(),
+    )
+    expect(create.status).toBe(201)
+    const created = await create.json<{
+      data: {
+        attempt: { publicId: string; status: string }
+        questions: Array<{
+          publicId: string
+          choices: Array<{ publicId: string; text: string }>
+        }>
+        totalCount: number
+      }
+    }>()
+    expect(created.data.totalCount).toBe(8)
+    expect(created.data.questions).toHaveLength(8)
+    expect(JSON.stringify(created)).not.toMatch(
+      /correctChoice|isCorrect|explanation|generatorSeed|attemptSeed/u,
+    )
+
+    const retry = await app.request(
+      '/api/student/smart-recovery/attempts',
+      {
+        method: 'POST',
+        headers: { cookie: owner.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ idempotencyKey }),
+      },
+      bindings(),
+    )
+    const retried = await retry.json<typeof created>()
+    expect(retried.data.attempt.publicId).toBe(created.data.attempt.publicId)
+
+    const activeRetry = await app.request(
+      '/api/student/smart-recovery/attempts',
+      {
+        method: 'POST',
+        headers: { cookie: owner.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
+      },
+      bindings(),
+    )
+    const activeRetried = await activeRetry.json<typeof created>()
+    expect(activeRetried.data.attempt.publicId).toBe(created.data.attempt.publicId)
+
+    const injected = await app.request(
+      '/api/student/smart-recovery/attempts',
+      {
+        method: 'POST',
+        headers: { cookie: owner.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          idempotencyKey: crypto.randomUUID(),
+          skillSlug: 'finding-base',
+          generatorSlug: 'finding-base',
+        }),
+      },
+      bindings(),
+    )
+    expect(injected.status).toBe(400)
+
+    const attemptId = created.data.attempt.publicId
+    const ownerGet = await get(
+      `/api/student/smart-recovery/attempts/${attemptId}`,
+      owner.cookie,
+    )
+    const otherGet = await get(
+      `/api/student/smart-recovery/attempts/${attemptId}`,
+      other.cookie,
+    )
+    expect(ownerGet.status).toBe(200)
+    expect(otherGet.status).toBe(403)
+
+    const firstQuestion = created.data.questions[0]
+    const secondQuestion = created.data.questions[1]
+    if (firstQuestion === undefined || secondQuestion === undefined) {
+      throw new Error('Recovery questions missing.')
+    }
+    const correct = await env.DB.prepare(
+      `SELECT choices.public_id
+      FROM recovery_question_choices choices
+      INNER JOIN recovery_question_snapshots snapshots
+        ON snapshots.id=choices.snapshot_id
+      WHERE snapshots.public_id=?1 AND choices.is_correct=1`,
+    )
+      .bind(firstQuestion.publicId)
+      .first<{ public_id: string }>()
+    if (correct === null) throw new Error('Correct recovery choice missing.')
+
+    const save = await app.request(
+      `/api/student/smart-recovery/attempts/${attemptId}/answers/${firstQuestion.publicId}`,
+      {
+        method: 'PUT',
+        headers: { cookie: owner.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ selectedChoicePublicId: correct.public_id }),
+      },
+      bindings(),
+    )
+    expect(save.status).toBe(200)
+    const saved = await save.json<{ data: { saved: true; answeredCount: number } }>()
+    expect(saved.data).toMatchObject({ saved: true, answeredCount: 1 })
+    expect(JSON.stringify(saved)).not.toMatch(/correct|isCorrect/u)
+
+    const crossUserSave = await app.request(
+      `/api/student/smart-recovery/attempts/${attemptId}/answers/${firstQuestion.publicId}`,
+      {
+        method: 'PUT',
+        headers: { cookie: other.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ selectedChoicePublicId: correct.public_id }),
+      },
+      bindings(),
+    )
+    expect(crossUserSave.status).toBe(403)
+
+    const duplicateSave = await app.request(
+      `/api/student/smart-recovery/attempts/${attemptId}/answers/${firstQuestion.publicId}`,
+      {
+        method: 'PUT',
+        headers: { cookie: owner.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ selectedChoicePublicId: correct.public_id }),
+      },
+      bindings(),
+    )
+    expect(duplicateSave.status).toBe(200)
+
+    const wrongSnapshot = await app.request(
+      `/api/student/smart-recovery/attempts/${attemptId}/answers/${secondQuestion.publicId}`,
+      {
+        method: 'PUT',
+        headers: { cookie: owner.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ selectedChoicePublicId: correct.public_id }),
+      },
+      bindings(),
+    )
+    expect(wrongSnapshot.status).toBe(400)
+
+    const crossUserSubmit = await app.request(
+      `/api/student/smart-recovery/attempts/${attemptId}/submit`,
+      { method: 'POST', headers: { cookie: other.cookie } },
+      bindings(),
+    )
+    expect(crossUserSubmit.status).toBe(403)
+
+    const submit = await app.request(
+      `/api/student/smart-recovery/attempts/${attemptId}/submit`,
+      { method: 'POST', headers: { cookie: owner.cookie } },
+      bindings(),
+    )
+    expect(submit.status).toBe(200)
+    const result = await submit.json<{
+      data: {
+        scorePercent: number
+        correctCount: number
+        questionCount: number
+        skillBreakdown: Array<{ questions: number; correct: number }>
+        questions: Array<{ correctChoice: { text: string } }>
+      }
+    }>()
+    expect(result.data).toMatchObject({
+      scorePercent: 12.5,
+      correctCount: 1,
+      questionCount: 8,
+    })
+    expect(result.data.skillBreakdown).toEqual([
+      expect.objectContaining({ questions: 8, correct: 1 }),
+    ])
+    expect(result.data.questions).toHaveLength(8)
+
+    const submittedAttempt = await get(
+      `/api/student/smart-recovery/attempts/${attemptId}`,
+      owner.cookie,
+    )
+    expect(submittedAttempt.status).toBe(200)
+    const submittedAttemptPayload = await submittedAttempt.json<{
+      data: { attempt: { status: string }; resultAvailable: boolean }
+    }>()
+    expect(submittedAttemptPayload.data.attempt.status).toBe('submitted')
+    expect(submittedAttemptPayload.data.resultAvailable).toBe(true)
+
+    const summaryAfterSubmit = await get('/api/student/smart-recovery', owner.cookie)
+    expect(summaryAfterSubmit.status).toBe(200)
+    const summaryAfterSubmitPayload = await summaryAfterSubmit.json<{
+      data: {
+        activeRecoveryAttemptPublicId: string | null
+        latestRecoveryResult: { attemptPublicId: string } | null
+      }
+    }>()
+    expect(summaryAfterSubmitPayload.data.activeRecoveryAttemptPublicId).toBeNull()
+    expect(summaryAfterSubmitPayload.data.latestRecoveryResult?.attemptPublicId).toBe(
+      attemptId,
+    )
+
+    const duplicateSubmit = await app.request(
+      `/api/student/smart-recovery/attempts/${attemptId}/submit`,
+      { method: 'POST', headers: { cookie: owner.cookie } },
+      bindings(),
+    )
+    expect(duplicateSubmit.status).toBe(200)
+    expect((await duplicateSubmit.json<typeof result>()).data.scorePercent).toBe(
+      result.data.scorePercent,
+    )
+
+    const closedSave = await app.request(
+      `/api/student/smart-recovery/attempts/${attemptId}/answers/${firstQuestion.publicId}`,
+      {
+        method: 'PUT',
+        headers: { cookie: owner.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ selectedChoicePublicId: correct.public_id }),
+      },
+      bindings(),
+    )
+    expect(closedSave.status).toBe(409)
+    expect(
+      (
+        await get(
+          `/api/student/smart-recovery/attempts/${attemptId}/results`,
+          other.cookie,
+        )
+      ).status,
+    ).toBe(403)
+
+    const course = await env.DB.prepare(
+      "SELECT id FROM courses WHERE slug='cse-professional'",
+    ).first<{ id: number }>()
+    if (course === null) throw new Error('CSE course missing.')
+    const failedPublicId = `recovery-attempt-${crypto.randomUUID()}`
+    await expect(
+      createRecoveryAttemptWithSnapshots(env.DB, {
+        attemptPublicId: failedPublicId,
+        userId: owner.userId,
+        courseId: course.id,
+        attemptSeed: 'failure-seed',
+        idempotencyKey: crypto.randomUUID(),
+        taxonomyVersion: 1,
+        formulaVersion: 1,
+        questions: [
+          {
+            position: 1,
+            skill: {
+              skill: {
+                slug: 'missing-skill', title: 'Missing Skill', description: null,
+                taxonomyVersion: 1, subjectSlug: 'numerical-ability',
+                subjectTitle: 'Numerical Ability', topicSlug: 'percentages',
+                topicTitle: 'Percentages', relatedLessonSlug: null,
+                relatedLessonTitle: null,
+              },
+              status: 'needs_more_practice', trend: 'stable', evidenceCount: 5,
+              answeredCount: 5, correctCount: 0, incorrectCount: 5,
+              unansweredCount: 0, accuracyPercent: 0, recentAccuracyPercent: 0,
+              previousAccuracyPercent: 0, lastPracticedAt: null,
+              mistakePatterns: [],
+            },
+            question: {
+              generatorSlug: 'finding-percentage', generatorVersion: 1,
+              difficulty: 'easy', seed: 'failure-question-seed',
+              prompt: 'This batch must roll back.', parameters: {},
+              choices: [
+                { text: 'Correct', isCorrect: true, distractorType: null, mistakeType: null, derivation: null, qualityScore: 1, numericValue: 1 },
+                { text: 'Wrong', isCorrect: false, distractorType: 'test', mistakeType: null, derivation: null, qualityScore: 1, numericValue: 2 },
+              ],
+              explanation: { title: 'Test', steps: ['Test.'], finalAnswer: 'Correct' },
+              metadata: { answerKind: 'text', unit: null, canonicalSignature: 'rollback-test' },
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow()
+    const partial = await env.DB.prepare(
+      'SELECT COUNT(*) AS count FROM recovery_attempts WHERE public_id=?1',
+    ).bind(failedPublicId).first<{ count: number }>()
+    expect(partial?.count).toBe(0)
+    const counts = await env.DB.batch([
+      env.DB.prepare('SELECT COUNT(*) AS count FROM recovery_attempts WHERE user_id=?1').bind(owner.userId),
+      env.DB.prepare('SELECT COUNT(*) AS count FROM recovery_question_snapshots'),
+      env.DB.prepare('SELECT COUNT(*) AS count FROM recovery_question_choices'),
+      env.DB.prepare('SELECT COUNT(*) AS count FROM practice_question_skills'),
+      env.DB.prepare('SELECT COUNT(*) AS count FROM quiz_question_skills'),
+    ])
+    expect(counts[0]?.results[0]).toEqual({ count: 1 })
+    expect(counts[1]?.results[0]).toEqual({ count: 8 })
+    expect(counts[2]?.results[0]).toEqual({ count: 32 })
+    expect(counts[3]?.results[0]).toEqual(beforeFixed[0]?.results[0])
+    expect(counts[4]?.results[0]).toEqual(beforeFixed[1]?.results[0])
   })
 })

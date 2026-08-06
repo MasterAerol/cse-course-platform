@@ -19,6 +19,7 @@
   "include": [
     "tests/lesson-curriculum-ui.test.tsx",
     "tests/registration-policy-ui.test.tsx",
-    "tests/smart-recovery-ui.test.tsx"
+    "tests/smart-recovery-ui.test.tsx",
+    "tests/smart-recovery-attempt-ui.test.tsx"
   ]
 }

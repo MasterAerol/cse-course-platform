@@ -148,6 +148,23 @@ export interface SmartRecoveryDashboardSummary {
   needsMorePractice: SkillWeaknessSummary[]
   improving: SkillWeaknessSummary[]
   strong: SkillWeaknessSummary[]
+  recoveryAvailable: boolean
+  activeRecoveryAttemptPublicId: string | null
+  recommendedRecoveryQuestionCount: number
+  eligibleRecoverySkillCount: number
+  recoveryUnavailableReason:
+    | 'not_enough_evidence'
+    | 'no_current_weakness'
+    | 'no_generatable_skills'
+    | 'configuration_unavailable'
+    | null
+  latestRecoveryResult: {
+    attemptPublicId: string
+    scorePercent: number
+    correctCount: number
+    questionCount: number
+    submittedAt: string
+  } | null
 }
 
 export interface SmartRecoveryDetailsResponse {

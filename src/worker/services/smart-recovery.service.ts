@@ -2,6 +2,13 @@ import {
   SMART_RECOVERY_TAXONOMY_VERSION,
 } from '../domain/smart-recovery-skills'
 import {
+  allocateRecoveryQuestions,
+  filterGeneratableWeaknesses,
+  generateRecoveryQuestions,
+  recommendedRecoveryQuestionCount,
+  type RecentRecoveryIdentity,
+} from '../domain/smart-recovery-attempt'
+import {
   SMART_RECOVERY_EVIDENCE_WINDOW,
   SMART_RECOVERY_FORMULA_VERSION,
   calculateEvidenceSourceBreakdown,
@@ -15,6 +22,11 @@ import {
 } from '../domain/smart-recovery-weakness'
 import { findPublishedCourseEnrollment } from '../repositories/course.repository'
 import {
+  findActiveRecoveryAttempt,
+  findLatestSubmittedRecoveryAttempt,
+  findRecentGeneratedIdentities,
+} from '../repositories/smart-recovery-attempt.repository'
+import {
   findActiveSmartRecoverySkills,
   findSubmittedGeneratedEvidence,
 } from '../repositories/smart-recovery.repository'
@@ -27,7 +39,31 @@ const evidenceScope = {
   ambiguousGeneratorMappingsIncluded: false,
 } as const
 
-interface SmartRecoveryEvidenceContext {
+function mapRecentIdentities(
+  rows: Awaited<ReturnType<typeof findRecentGeneratedIdentities>>,
+): RecentRecoveryIdentity[] {
+  return rows.map((row) => {
+    let canonicalSignature: string | null
+    try {
+      const metadata = JSON.parse(row.metadata_json) as { canonicalSignature?: unknown }
+      canonicalSignature = typeof metadata.canonicalSignature === 'string'
+        ? metadata.canonicalSignature
+        : null
+    } catch {
+      canonicalSignature = null
+    }
+    return {
+      generatorSlug: row.generator_slug,
+      generatorVersion: row.generator_version,
+      generatorSeed: row.generator_seed,
+      canonicalSignature,
+      normalizedPrompt: row.prompt.trim().toLowerCase(),
+    }
+  })
+}
+
+export interface SmartRecoveryEvidenceContext {
+  courseId: number
   skills: SkillCatalogEntry[]
   skillsBySlug: Map<string, SkillCatalogEntry>
   evidence: NormalizedSkillEvidence[]
@@ -43,7 +79,7 @@ function assertValidCalculationDate(calculatedAt: Date): void {
 async function assertSmartRecoveryEnrollment(
   database: D1Database,
   userId: number,
-): Promise<void> {
+) {
   const enrollment = await findPublishedCourseEnrollment(
     database,
     userId,
@@ -56,15 +92,16 @@ async function assertSmartRecoveryEnrollment(
       'An active CSE Professional enrollment is required.',
     )
   }
+  return enrollment
 }
 
-async function loadEvidenceContext(
+export async function loadSmartRecoveryEvidenceContext(
   database: D1Database,
   userId: number,
   calculatedAt: Date,
 ): Promise<SmartRecoveryEvidenceContext> {
   assertValidCalculationDate(calculatedAt)
-  await assertSmartRecoveryEnrollment(database, userId)
+  const enrollment = await assertSmartRecoveryEnrollment(database, userId)
   const cutoff = new Date(
     calculatedAt.getTime() -
       SMART_RECOVERY_EVIDENCE_WINDOW.lookbackDays * 24 * 60 * 60 * 1000,
@@ -76,6 +113,7 @@ async function loadEvidenceContext(
   const skillsBySlug = new Map(skills.map((skill) => [skill.slug, skill]))
   const normalized = normalizeGeneratedEvidence(records, skillsBySlug)
   return {
+    courseId: enrollment.course_id,
     skills,
     skillsBySlug,
     evidence: normalized.evidence,
@@ -88,7 +126,7 @@ export async function getSmartRecoveryDashboard(
   userId: number,
   calculatedAt = new Date(),
 ): Promise<SmartRecoveryDashboardSummary> {
-  const context = await loadEvidenceContext(database, userId, calculatedAt)
+  const context = await loadSmartRecoveryEvidenceContext(database, userId, calculatedAt)
   const summaries = context.skills
     .map((skill) =>
       calculateSkillWeakness(skill, context.evidence, calculatedAt),
@@ -106,6 +144,49 @@ export async function getSmartRecoveryDashboard(
   const hasEnoughEvidence = summaries.some(
     (summary) => summary.status !== 'not_enough_data',
   )
+  const generatableWeaknesses = filterGeneratableWeaknesses(needsMorePractice)
+  const allocations = allocateRecoveryQuestions(generatableWeaknesses)
+  const [activeAttempt, latestAttempt, recentRows] = await Promise.all([
+    findActiveRecoveryAttempt(database, userId, context.courseId),
+    findLatestSubmittedRecoveryAttempt(database, userId, context.courseId),
+    findRecentGeneratedIdentities(database, userId),
+  ])
+  const activeIsCompatible =
+    activeAttempt !== null &&
+    activeAttempt.taxonomy_version === SMART_RECOVERY_TAXONOMY_VERSION &&
+    activeAttempt.weakness_formula_version === SMART_RECOVERY_FORMULA_VERSION
+  let recoveryAvailable = activeIsCompatible
+  let recoveryUnavailableReason:
+    | 'not_enough_evidence'
+    | 'no_current_weakness'
+    | 'no_generatable_skills'
+    | 'configuration_unavailable'
+    | null = null
+
+  if (activeAttempt !== null && !activeIsCompatible) {
+    recoveryUnavailableReason = 'configuration_unavailable'
+  } else if (activeAttempt === null && needsMorePractice.length === 0) {
+    recoveryUnavailableReason = hasEnoughEvidence
+      ? 'no_current_weakness'
+      : 'not_enough_evidence'
+  } else if (activeAttempt === null && allocations.length === 0) {
+    recoveryUnavailableReason = 'no_generatable_skills'
+  } else if (activeAttempt === null) {
+    try {
+      generateRecoveryQuestions({
+        attemptSeed: [
+          'recovery-availability',
+          String(userId),
+          calculatedAt.toISOString().slice(0, 10),
+        ].join('|'),
+        allocations,
+        recentIdentities: mapRecentIdentities(recentRows),
+      })
+      recoveryAvailable = true
+    } catch {
+      recoveryUnavailableReason = 'configuration_unavailable'
+    }
+  }
 
   return {
     taxonomyVersion: SMART_RECOVERY_TAXONOMY_VERSION,
@@ -125,6 +206,25 @@ export async function getSmartRecoveryDashboard(
     needsMorePractice,
     improving,
     strong,
+    recoveryAvailable,
+    activeRecoveryAttemptPublicId: activeAttempt?.public_id ?? null,
+    recommendedRecoveryQuestionCount:
+      activeAttempt?.question_count ??
+      recommendedRecoveryQuestionCount(generatableWeaknesses.length),
+    eligibleRecoverySkillCount: generatableWeaknesses.length,
+    recoveryUnavailableReason,
+    latestRecoveryResult:
+      latestAttempt === null ||
+      latestAttempt.submitted_at === null ||
+      latestAttempt.score_percent === null
+        ? null
+        : {
+            attemptPublicId: latestAttempt.public_id,
+            scorePercent: latestAttempt.score_percent,
+            correctCount: latestAttempt.correct_count,
+            questionCount: latestAttempt.question_count,
+            submittedAt: latestAttempt.submitted_at,
+          },
   }
 }
 
@@ -134,7 +234,7 @@ export async function getSmartRecoverySkillDetails(
   skillSlug: string,
   calculatedAt = new Date(),
 ): Promise<SmartRecoveryDetailsResponse> {
-  const context = await loadEvidenceContext(database, userId, calculatedAt)
+  const context = await loadSmartRecoveryEvidenceContext(database, userId, calculatedAt)
   const skill = context.skillsBySlug.get(skillSlug)
   if (skill === undefined) {
     throw new AppError(

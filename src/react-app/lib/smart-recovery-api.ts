@@ -90,6 +90,23 @@ export const smartRecoveryDashboardResponseSchema = z.object({
     needsMorePractice: z.array(skillWeaknessSummarySchema),
     improving: z.array(skillWeaknessSummarySchema),
     strong: z.array(skillWeaknessSummarySchema),
+    recoveryAvailable: z.boolean(),
+    activeRecoveryAttemptPublicId: z.string().nullable(),
+    recommendedRecoveryQuestionCount: z.number().int().nonnegative(),
+    eligibleRecoverySkillCount: z.number().int().nonnegative(),
+    recoveryUnavailableReason: z.enum([
+      'not_enough_evidence',
+      'no_current_weakness',
+      'no_generatable_skills',
+      'configuration_unavailable',
+    ]).nullable(),
+    latestRecoveryResult: z.object({
+      attemptPublicId: z.string(),
+      scorePercent: z.number().min(0).max(100),
+      correctCount: z.number().int().nonnegative(),
+      questionCount: z.number().int().positive(),
+      submittedAt: z.string(),
+    }).nullable(),
   }),
 })
 
@@ -149,3 +166,169 @@ export async function fetchSmartRecoverySkillDetails(
 
 export const getSmartRecoverySummary = fetchSmartRecoveryDashboard
 export const getSmartRecoverySkillDetails = fetchSmartRecoverySkillDetails
+const recoveryChoiceSchema = z.object({
+  publicId: z.string(),
+  text: z.string(),
+  position: z.number().int().positive(),
+}).strict()
+
+const recoveryAttemptPayloadSchema = z.object({
+  attempt: z.object({
+    publicId: z.string(),
+    status: z.literal('in_progress'),
+    questionCount: z.number().int().positive(),
+    answeredCount: z.number().int().nonnegative(),
+    startedAt: z.string(),
+  }).strict(),
+  questions: z.array(z.object({
+    publicId: z.string(),
+    position: z.number().int().positive(),
+    prompt: z.string(),
+    difficulty: z.enum(['easy', 'medium', 'hard']),
+    selectedChoicePublicId: z.string().nullable(),
+    skill: z.object({ slug: z.string(), title: z.string() }).strict(),
+    subject: z.object({ slug: z.string(), title: z.string() }).strict(),
+    topic: z.object({ slug: z.string(), title: z.string() }).strict().nullable(),
+    choices: z.array(recoveryChoiceSchema),
+  }).strict()),
+  answeredCount: z.number().int().nonnegative(),
+  totalCount: z.number().int().positive(),
+}).strict()
+
+const recoveryResultAvailableSchema = z.object({
+  attempt: z.object({
+    publicId: z.string(),
+    status: z.literal('submitted'),
+  }).strict(),
+  resultAvailable: z.literal(true),
+}).strict()
+
+export const recoveryAttemptResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.union([recoveryAttemptPayloadSchema, recoveryResultAvailableSchema]),
+})
+
+const weaknessStatusSchema = z.enum([
+  'not_enough_data',
+  'needs_more_practice',
+  'improving',
+  'strong',
+])
+
+export const recoveryResultResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    attempt: z.object({
+      publicId: z.string(),
+      status: z.literal('submitted'),
+      startedAt: z.string(),
+      submittedAt: z.string(),
+    }),
+    scorePercent: z.number().min(0).max(100),
+    correctCount: z.number().int().nonnegative(),
+    questionCount: z.number().int().positive(),
+    skillsTrained: z.number().int().positive(),
+    strongestRecoverySkill: z.string().nullable(),
+    stillNeedsPractice: z.array(z.string()),
+    skillBreakdown: z.array(z.object({
+      skill: z.object({ slug: z.string(), title: z.string() }),
+      questions: z.number().int().positive(),
+      correct: z.number().int().nonnegative(),
+      accuracyPercent: z.number().min(0).max(100),
+      statusBefore: weaknessStatusSchema,
+      currentStatus: weaknessStatusSchema,
+      relatedLesson: z.object({
+        publicId: z.string(),
+        slug: z.string(),
+        title: z.string(),
+        courseSlug: z.string(),
+      }).nullable(),
+    })),
+    questions: z.array(z.object({
+      publicId: z.string(),
+      position: z.number().int().positive(),
+      prompt: z.string(),
+      skillTitle: z.string(),
+      selectedChoice: z.object({ publicId: z.string(), text: z.string() }).nullable(),
+      correctChoice: z.object({ publicId: z.string(), text: z.string() }),
+      isCorrect: z.boolean(),
+      explanation: z.string(),
+      mistakePattern: z.string().nullable(),
+      choices: z.array(recoveryChoiceSchema),
+    })),
+  }),
+})
+
+const saveRecoveryAnswerResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    saved: z.literal(true),
+    selectedChoicePublicId: z.string(),
+    answeredCount: z.number().int().nonnegative(),
+    totalCount: z.number().int().positive(),
+    savedAt: z.string(),
+  }),
+})
+
+export type RecoveryAttempt = z.infer<typeof recoveryAttemptPayloadSchema>
+export type RecoveryAttemptResponse = z.infer<typeof recoveryAttemptResponseSchema>['data']
+export type RecoveryResult = z.infer<typeof recoveryResultResponseSchema>['data']
+
+export async function createSmartRecoveryAttempt(
+  idempotencyKey: string,
+): Promise<RecoveryAttemptResponse> {
+  const response = await request(
+    '/api/student/smart-recovery/attempts',
+    recoveryAttemptResponseSchema,
+    { method: 'POST', body: JSON.stringify({ idempotencyKey }) },
+  )
+  return response.data
+}
+
+export async function fetchSmartRecoveryAttempt(
+  attemptPublicId: string,
+  signal?: AbortSignal,
+): Promise<RecoveryAttemptResponse> {
+  const response = await request(
+    `/api/student/smart-recovery/attempts/${encodeURIComponent(attemptPublicId)}`,
+    recoveryAttemptResponseSchema,
+    { signal },
+  )
+  return response.data
+}
+
+export async function saveSmartRecoveryAnswer(
+  attemptPublicId: string,
+  snapshotPublicId: string,
+  selectedChoicePublicId: string,
+): Promise<z.infer<typeof saveRecoveryAnswerResponseSchema>['data']> {
+  const response = await request(
+    `/api/student/smart-recovery/attempts/${encodeURIComponent(attemptPublicId)}/answers/${encodeURIComponent(snapshotPublicId)}`,
+    saveRecoveryAnswerResponseSchema,
+    { method: 'PUT', body: JSON.stringify({ selectedChoicePublicId }) },
+  )
+  return response.data
+}
+
+export async function submitSmartRecoveryAttempt(
+  attemptPublicId: string,
+): Promise<RecoveryResult> {
+  const response = await request(
+    `/api/student/smart-recovery/attempts/${encodeURIComponent(attemptPublicId)}/submit`,
+    recoveryResultResponseSchema,
+    { method: 'POST' },
+  )
+  return response.data
+}
+
+export async function fetchSmartRecoveryResult(
+  attemptPublicId: string,
+  signal?: AbortSignal,
+): Promise<RecoveryResult> {
+  const response = await request(
+    `/api/student/smart-recovery/attempts/${encodeURIComponent(attemptPublicId)}/results`,
+    recoveryResultResponseSchema,
+    { signal },
+  )
+  return response.data
+}

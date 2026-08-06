@@ -87,6 +87,12 @@ const dashboard: SmartRecoveryDashboard = {
   needsMorePractice: [weakSkill],
   improving: [],
   strong: [],
+  recoveryAvailable: false,
+  activeRecoveryAttemptPublicId: null,
+  recommendedRecoveryQuestionCount: 0,
+  eligibleRecoverySkillCount: 0,
+  recoveryUnavailableReason: 'not_enough_evidence',
+  latestRecoveryResult: null,
 }
 
 const details: SmartRecoveryDetails = {
