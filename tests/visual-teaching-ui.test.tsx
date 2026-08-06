@@ -96,7 +96,9 @@ describe('visual teaching lesson blocks', () => {
   })
 
   it('validates every authored numerical teaching visual against the shared contract', () => {
-    const visuals = Object.values(authoredVisuals)
+    const visuals = Object.entries(authoredVisuals)
+      .filter(([name]) => name.endsWith('Visual'))
+      .map(([, visual]) => visual)
     expect(visuals).toHaveLength(6)
 
     for (const visual of visuals) {

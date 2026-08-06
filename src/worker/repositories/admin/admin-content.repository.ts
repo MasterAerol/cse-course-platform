@@ -588,6 +588,48 @@ export async function updateLessonBlockRow(
     .first<AdminLessonBlockRow>()
 }
 
+export async function updateLessonBlockWithAudit(
+  database: D1Database,
+  input: {
+    block: AdminLessonBlockRow
+    actorUserId: number
+    metadataJson: string
+  },
+): Promise<AdminLessonBlockRow | null> {
+  const results = await database.batch<AdminLessonBlockRow>([
+    database
+      .prepare(
+        `UPDATE lesson_blocks
+        SET
+          block_type = ?2,
+          content_json = ?3,
+          position = ?4,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?1
+        RETURNING *`,
+      )
+      .bind(
+        input.block.id,
+        input.block.block_type,
+        input.block.content_json,
+        input.block.position,
+      ),
+    database
+      .prepare(
+        `INSERT INTO audit_logs (
+          actor_user_id,
+          action,
+          entity_type,
+          entity_id,
+          metadata_json
+        ) VALUES (?1, 'update', 'lesson_block', ?2, ?3)`,
+      )
+      .bind(input.actorUserId, String(input.block.id), input.metadataJson),
+  ])
+
+  return results[0]?.results[0] ?? null
+}
+
 export async function deleteLessonBlockRow(
   database: D1Database,
   blockId: number,

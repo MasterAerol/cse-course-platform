@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { percentageOfVisual } from './lib/visual-teaching-content.mjs'
+import { percentageExampleContent } from './lib/visual-teaching-content.mjs'
 
 const confirmation = 'publish-percentage-visual-teaching'
 const csrfHeaderValue = 'same-origin-admin-mutation'
@@ -29,18 +29,7 @@ function parseArgs() {
 }
 
 function desiredContent() {
-  return {
-    title: 'Find 20% of 80',
-    problem: 'What is 20% of 80?',
-    steps: [
-      'Remove the percent sign, reveal the hidden decimal point in 20., and move it two places left because percent means divide by 100.',
-      'Therefore, 20% = 0.20.',
-      'The word “of” means multiply, so write 0.20 × 80.',
-      'Multiply to get 16.',
-    ],
-    answer: '20% of 80 is 16.',
-    visual: percentageOfVisual,
-  }
+  return structuredClone(percentageExampleContent)
 }
 
 async function main() {

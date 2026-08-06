@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import migration0008Sql from '../migrations/0008_upgrade_percentages_course_content.sql?raw'
 import percentageGridSvg from '../public/images/percentage-grid-25.svg?raw'
+import { percentageExampleContent } from '../scripts/lib/visual-teaching-content.mjs'
 import { app } from '../src/worker'
 import {
   hashPassword,
@@ -7661,6 +7662,196 @@ describe('Admin Content Builder Lite API', () => {
     })
   })
 
+  it('accepts the exact Percentage visual payload and updates only the target block plus audit log', async () => {
+    const { cookie } = await registerAdmin('admin-percentage-visual@example.com')
+    const shell = await createCurriculumShell(cookie)
+    const createResponse = await app.request(
+      `/api/admin/lessons/${shell.lessonId}/blocks`,
+      adminJsonRequest(
+        {
+          blockType: 'example',
+          content: {
+            title: 'Original example',
+            problem: 'Original problem?',
+            steps: ['Original step.'],
+            answer: 'Original answer.',
+          },
+          position: 5,
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const created = await createResponse.json<{
+      success: true
+      data: { block: { id: number; lessonId: number; createdAt: string } }
+    }>()
+    const payload = {
+      blockType: 'example' as const,
+      content: percentageExampleContent,
+      position: 5,
+    }
+
+    expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength).toBeLessThan(
+      256 * 1024,
+    )
+
+    for (let requestNumber = 0; requestNumber < 2; requestNumber += 1) {
+      const response = await app.request(
+        `/api/admin/lesson-blocks/${created.data.block.id}`,
+        adminJsonRequest(payload, cookie, 'PATCH'),
+        createBindings('production'),
+      )
+      const body = await response.json<{
+        success: true
+        data: { block: { id: number; lessonId: number; content: unknown; position: number; createdAt: string } }
+      }>()
+
+      expect(response.status).toBe(200)
+      expect(body.data.block).toMatchObject({
+        id: created.data.block.id,
+        lessonId: shell.lessonId,
+        content: percentageExampleContent,
+        position: 5,
+        createdAt: created.data.block.createdAt,
+      })
+    }
+
+    const auditCount = await env.DB.prepare(
+      `SELECT COUNT(*) AS count
+       FROM audit_logs
+       WHERE action = 'update'
+         AND entity_type = 'lesson_block'
+         AND entity_id = ?1`,
+    )
+      .bind(String(created.data.block.id))
+      .first<{ count: number }>()
+    expect(auditCount?.count).toBe(2)
+  })
+
+  it('returns a safe validation error before writing an invalid visual payload', async () => {
+    const { cookie } = await registerAdmin('admin-invalid-visual@example.com')
+    const shell = await createCurriculumShell(cookie)
+    const createResponse = await app.request(
+      `/api/admin/lessons/${shell.lessonId}/blocks`,
+      adminJsonRequest(
+        {
+          blockType: 'example',
+          content: {
+            title: 'Original example',
+            problem: 'Original problem?',
+            steps: ['Original step.'],
+            answer: 'Original answer.',
+          },
+          position: 5,
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const created = await createResponse.json<{
+      success: true
+      data: { block: { id: number } }
+    }>()
+
+    const response = await app.request(
+      `/api/admin/lesson-blocks/${created.data.block.id}`,
+      adminJsonRequest(
+        {
+          blockType: 'example',
+          content: {
+            ...percentageExampleContent,
+            visual: { ...percentageExampleContent.visual, transitions: [] },
+          },
+          position: 5,
+        },
+        cookie,
+        'PATCH',
+      ),
+      createBindings('production'),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: 'INVALID_LESSON_BLOCK_CONTENT' },
+    })
+    const stored = await env.DB.prepare(
+      'SELECT content_json FROM lesson_blocks WHERE id = ?1',
+    )
+      .bind(created.data.block.id)
+      .first<{ content_json: string }>()
+    expect(JSON.parse(stored?.content_json ?? '{}')).toMatchObject({
+      title: 'Original example',
+    })
+  })
+
+  it('rolls back the lesson-block update when its audit write fails', async () => {
+    const { cookie } = await registerAdmin('admin-visual-rollback@example.com')
+    const shell = await createCurriculumShell(cookie)
+    const createResponse = await app.request(
+      `/api/admin/lessons/${shell.lessonId}/blocks`,
+      adminJsonRequest(
+        {
+          blockType: 'example',
+          content: {
+            title: 'Original example',
+            problem: 'Original problem?',
+            steps: ['Original step.'],
+            answer: 'Original answer.',
+          },
+          position: 5,
+        },
+        cookie,
+      ),
+      createBindings('production'),
+    )
+    const created = await createResponse.json<{
+      success: true
+      data: { block: { id: number } }
+    }>()
+    const before = await env.DB.prepare(
+      'SELECT content_json, position, updated_at FROM lesson_blocks WHERE id = ?1',
+    )
+      .bind(created.data.block.id)
+      .first<{ content_json: string; position: number; updated_at: string }>()
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_test_lesson_block_audit
+       BEFORE INSERT ON audit_logs
+       WHEN NEW.entity_type = 'lesson_block'
+         AND NEW.entity_id = '${created.data.block.id}'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced audit failure');
+       END`,
+    ).run()
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const response = await app.request(
+        `/api/admin/lesson-blocks/${created.data.block.id}`,
+        adminJsonRequest(
+          {
+            blockType: 'example',
+            content: percentageExampleContent,
+            position: 5,
+          },
+          cookie,
+          'PATCH',
+        ),
+        createBindings('production'),
+      )
+      expect(response.status).toBe(500)
+      const after = await env.DB.prepare(
+        'SELECT content_json, position, updated_at FROM lesson_blocks WHERE id = ?1',
+      )
+        .bind(created.data.block.id)
+        .first<typeof before>()
+      expect(after).toEqual(before)
+    } finally {
+      errorLog.mockRestore()
+      await env.DB.prepare('DROP TRIGGER fail_test_lesson_block_audit').run()
+    }
+  })
   it('publishes a draft reading lesson without sending lessonType', async () => {
     const { cookie } = await registerAdmin(
       'admin-builder-reading-publish@example.com',

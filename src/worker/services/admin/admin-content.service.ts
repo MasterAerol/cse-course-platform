@@ -1,3 +1,5 @@
+import { ZodError } from 'zod'
+
 import {
   getGenerator,
   getRegisteredGenerators,
@@ -38,7 +40,7 @@ import {
   shiftPositionsForInsert,
   swapAdjacentPositions,
   updateCourseRow,
-  updateLessonBlockRow,
+  updateLessonBlockWithAudit,
   updateLessonRow,
   updateSubjectRow,
   updateTopicRow,
@@ -395,6 +397,29 @@ function assertNoRawHtmlContent(value: unknown): void {
   }
 }
 
+function validateAdminLessonBlockContent(
+  blockType: AdminLessonBlockRow['block_type'],
+  content: unknown,
+): ReturnType<typeof validateLessonBlockContent> {
+  try {
+    return validateLessonBlockContent(blockType, content)
+  } catch (error: unknown) {
+    if (error instanceof ZodError) {
+      throw new AppError(
+        400,
+        'INVALID_LESSON_BLOCK_CONTENT',
+        `The content is not valid for a ${blockType} lesson block.`,
+        {
+          fieldErrors: {
+            content: ['The lesson block content has an invalid shape.'],
+          },
+        },
+      )
+    }
+
+    throw error
+  }
+}
 function mapArchiveAwareStatus(row: {
   status: AdminEntityStatus
   archived_at: string | null
@@ -1368,6 +1393,7 @@ export async function updateAdminLessonBlock(
   actor: AuthenticatedPrincipal,
   blockId: number,
   input: LessonBlockUpdateInput,
+  requestId: string,
 ): Promise<{ block: AdminLessonBlock }> {
   const existing = await findLessonBlockById(database, blockId)
 
@@ -1381,24 +1407,36 @@ export async function updateAdminLessonBlock(
       ? JSON.parse(existing.content_json) as unknown
       : input.content
   assertNoRawHtmlContent(rawContent)
-  const content = validateLessonBlockContent(blockType, rawContent)
-  const updated = await updateLessonBlockRow(database, {
-    ...existing,
-    block_type: blockType,
-    content_json: JSON.stringify(content),
-    position: input.position ?? existing.position,
-  })
+  const content = validateAdminLessonBlockContent(blockType, rawContent)
+  let updated: AdminLessonBlockRow | null
+
+  try {
+    updated = await updateLessonBlockWithAudit(database, {
+      block: {
+        ...existing,
+        block_type: blockType,
+        content_json: JSON.stringify(content),
+        position: input.position ?? existing.position,
+      },
+      actorUserId: actor.internalUserId,
+      metadataJson: JSON.stringify({ blockType }),
+    })
+  } catch (error: unknown) {
+    console.error(
+      JSON.stringify({
+        message: 'Admin lesson block update failed',
+        requestId,
+        stage: 'atomic_update_and_audit',
+        blockId,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+      }),
+    )
+    throw error
+  }
 
   if (updated === null) {
     throw new Error('Lesson block could not be updated.')
   }
-
-  await recordAdminAuditLog(database, actor, {
-    action: 'update',
-    entityType: 'lesson_block',
-    entityId: updated.id,
-    metadata: { blockType: updated.block_type },
-  })
 
   return { block: mapBlock(updated) }
 }

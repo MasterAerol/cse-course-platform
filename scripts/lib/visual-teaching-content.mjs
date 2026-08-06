@@ -26,6 +26,18 @@ export const percentageOfVisual = {
   },
 }
 
+export const percentageExampleContent = {
+  title: 'Find 20% of 80',
+  problem: 'What is 20% of 80?',
+  steps: [
+    'Remove the percent sign, reveal the hidden decimal point in 20., and move it two places left because percent means divide by 100.',
+    'Therefore, 20% = 0.20.',
+    'The word “of” means multiply, so write 0.20 × 80.',
+    'Multiply to get 16.',
+  ],
+  answer: '20% of 80 is 16.',
+  visual: percentageOfVisual,
+}
 export const fractionCommonDenominatorVisual = {
   kind: 'fraction-equivalence',
   ariaLabel: 'Board demonstration giving one fourth and one sixth a common denominator before adding',

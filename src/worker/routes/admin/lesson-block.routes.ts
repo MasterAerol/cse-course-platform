@@ -67,6 +67,7 @@ adminLessonBlockRoutes.patch('/lesson-blocks/:blockId', async (context) => {
       context.get('authUser'),
       params.blockId,
       input,
+      context.get('requestId'),
     ),
   )
 })
