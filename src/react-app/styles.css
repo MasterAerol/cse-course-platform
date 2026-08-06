@@ -1083,6 +1083,10 @@ input[aria-invalid="true"] {
   line-height: 1.6;
 }
 .visual-teaching-board {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   margin: 1.25rem 0;
   padding: 1rem;
   overflow-x: auto;
@@ -1097,19 +1101,24 @@ input[aria-invalid="true"] {
 
 .visual-teaching-board__sequence {
   display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   align-items: stretch;
-  min-width: max-content;
+  gap: 0.75rem;
 }
 
 .visual-teaching-board__pair {
   display: flex;
+  min-width: 0;
   align-items: center;
 }
 
 .visual-teaching-board__stage {
   display: grid;
-  min-width: 9rem;
-  max-width: 15rem;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   min-height: 8.5rem;
   align-content: center;
   gap: 0.55rem;
@@ -1169,7 +1178,9 @@ input[aria-invalid="true"] {
 .visual-teaching-board__transition {
   position: relative;
   display: grid;
-  width: 13rem;
+  width: 100%;
+  min-width: 0;
+  flex: 0 1 45%;
   gap: 0.3rem;
   padding: 2.2rem 0.75rem 0.5rem;
   color: #52657d;
@@ -1264,6 +1275,28 @@ input[aria-invalid="true"] {
     border-top: 0;
   }
 }
+
+@media (min-width: 1200px) {
+  .visual-teaching-board__sequence {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: start;
+    gap: 1rem;
+  }
+
+  .visual-teaching-board__pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.2fr);
+    gap: 0.65rem;
+    align-items: start;
+  }
+
+  .visual-teaching-board__transition,
+  .visual-teaching-board__stage {
+    width: 100%;
+  }
+}
+
 
 .lesson-image-block img {
   display: block;
@@ -3444,5 +3477,6 @@ input[aria-invalid="true"] {
   .recovery-attempt-actions button { flex: 1; }
   .recovery-action-card { align-items: stretch; }
 }
+
 
 
