@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { app } from '../src/worker'
 import { createRecoveryAttemptWithSnapshots } from '../src/worker/repositories/smart-recovery-attempt.repository'
 
+
 import type { Bindings } from '../src/worker/types/bindings'
 
 const allowAllRateLimiter = {
@@ -100,6 +101,14 @@ async function seedGeneratedAttempt(
   ).first<{ id: number }>()
   if (practiceSet === null) throw new Error('Generated practice set missing.')
   const attemptPublicId = `smart-practice-${crypto.randomUUID()}`
+  const nextAttempt = await env.DB.prepare(
+    `SELECT COALESCE(MAX(attempt_number), 0) + 1 AS attempt_number
+    FROM practice_attempts
+    WHERE practice_set_id=?1 AND user_id=?2`,
+  )
+    .bind(practiceSet.id, userId)
+    .first<{ attempt_number: number }>()
+  if (nextAttempt === null) throw new Error('Practice attempt number missing.')
   const attemptResult = await env.DB.prepare(
     `INSERT INTO practice_attempts(
       public_id,practice_set_id,user_id,attempt_number,status,total_points,
@@ -110,7 +119,7 @@ async function seedGeneratedAttempt(
       attemptPublicId,
       practiceSet.id,
       userId,
-      status === 'submitted' ? 1 : 2,
+      nextAttempt.attempt_number,
       status,
       questionCount,
       status === 'submitted' ? 0 : null,
@@ -243,6 +252,34 @@ describe('Smart Recovery learner APIs', () => {
     expect(recoveryCount?.count).toBe(0)
   })
 
+  it('deduplicates and bounds evidence to the latest 50 rows per skill in D1', async () => {
+    const learner = await register(`smart-bound-${crypto.randomUUID()}@example.test`)
+    await enroll(learner.userId)
+    await seedFindingPercentageSkill()
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      await seedGeneratedAttempt(learner.userId, 'submitted', 5)
+    }
+
+    const summary = await get('/api/student/smart-recovery', learner.cookie)
+    expect(summary.status).toBe(200)
+    const summaryBody = await summary.json<{
+      data: { eligibleEvidenceCount: number; skillsWithEvidence: number }
+    }>()
+    expect(summaryBody.data).toMatchObject({
+      eligibleEvidenceCount: 50,
+      skillsWithEvidence: 1,
+    })
+
+    const details = await get(
+      '/api/student/smart-recovery/skills/finding-percentage',
+      learner.cookie,
+    )
+    expect(details.status).toBe(200)
+    expect(
+      (await details.json<{ data: { summary: { evidenceCount: number } } }>())
+        .data.summary.evidenceCount,
+    ).toBe(50)
+  })
   it('returns learner-owned details without leaking another learner evidence', async () => {
     const owner = await register(`smart-owner-${crypto.randomUUID()}@example.test`)
     const other = await register(`smart-other-${crypto.randomUUID()}@example.test`)
@@ -451,6 +488,31 @@ describe('Smart Recovery learner APIs', () => {
     )
     expect(wrongSnapshot.status).toBe(400)
 
+    for (const question of created.data.questions.slice(1)) {
+      const incorrect = await env.DB.prepare(
+        `SELECT choices.public_id
+        FROM recovery_question_choices choices
+        INNER JOIN recovery_question_snapshots snapshots
+          ON snapshots.id=choices.snapshot_id
+        WHERE snapshots.public_id=?1 AND choices.is_correct=0
+        ORDER BY choices.position
+        LIMIT 1`,
+      )
+        .bind(question.publicId)
+        .first<{ public_id: string }>()
+      if (incorrect === null) throw new Error('Incorrect recovery choice missing.')
+      const answer = await app.request(
+        `/api/student/smart-recovery/attempts/${attemptId}/answers/${question.publicId}`,
+        {
+          method: 'PUT',
+          headers: { cookie: owner.cookie, 'content-type': 'application/json' },
+          body: JSON.stringify({ selectedChoicePublicId: incorrect.public_id }),
+        },
+        bindings(),
+      )
+      expect(answer.status).toBe(200)
+    }
+
     const crossUserSubmit = await app.request(
       `/api/student/smart-recovery/attempts/${attemptId}/submit`,
       { method: 'POST', headers: { cookie: other.cookie } },
@@ -542,6 +604,18 @@ describe('Smart Recovery learner APIs', () => {
     expect(duplicateResult.data.attempt.formulaVersion).toBe(
       result.data.attempt.formulaVersion,
     )
+    const persisted = await env.DB.prepare(
+      `SELECT
+        COUNT(DISTINCT attempts.id) AS attempt_count,
+        COUNT(DISTINCT answers.id) AS answer_count
+      FROM recovery_attempts attempts
+      LEFT JOIN recovery_question_snapshots snapshots ON snapshots.attempt_id=attempts.id
+      LEFT JOIN recovery_answers answers ON answers.snapshot_id=snapshots.id
+      WHERE attempts.public_id=?1 AND attempts.status='submitted'`,
+    )
+      .bind(attemptId)
+      .first<{ attempt_count: number; answer_count: number }>()
+    expect(persisted).toEqual({ attempt_count: 1, answer_count: 8 })
 
     const detailsAfterSubmit = await get(
       '/api/student/smart-recovery/skills/finding-percentage',

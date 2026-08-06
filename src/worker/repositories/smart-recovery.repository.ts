@@ -1,3 +1,4 @@
+import { generatorSkillMappings } from '../domain/smart-recovery-skills'
 import type {
   EvidenceSource,
   GeneratedEvidenceRecord,
@@ -36,7 +37,7 @@ interface SkillCatalogRow {
   related_lesson_title: string | null
 }
 
-const submittedGeneratedEvidenceSql = `
+const submittedGeneratedEvidenceUnionSql = `
 SELECT
   attempts.user_id,
   'generated_practice' AS source_type,
@@ -197,8 +198,79 @@ WHERE attempts.user_id = ?1
   AND snapshots.source_kind = 'generated'
   AND courses.slug = 'cse-professional'
 
-ORDER BY attempt_submitted_at DESC, attempt_public_id, snapshot_public_id`
+`
 
+const directGeneratorSkillMappingValues = generatorSkillMappings
+  .filter((mapping) => mapping.mappingKind === 'direct')
+  .map((mapping) =>
+    `('${mapping.generatorSlug.replaceAll("'", "''")}',${mapping.generatorVersion},'${mapping.skillSlug.replaceAll("'", "''")}')`,
+  )
+  .join(',')
+
+const submittedGeneratedEvidenceSql = `
+WITH generator_skill_map(generator_slug, generator_version, skill_slug) AS (
+  VALUES ${directGeneratorSkillMappingValues}
+),
+raw_evidence AS (
+  ${submittedGeneratedEvidenceUnionSql}
+),
+mapped_evidence AS (
+  SELECT
+    raw_evidence.*,
+    CASE
+      WHEN raw_evidence.source_type = 'recovery' THEN raw_evidence.skill_slug
+      ELSE generator_skill_map.skill_slug
+    END AS mapped_skill_slug
+  FROM raw_evidence
+  LEFT JOIN generator_skill_map
+    ON generator_skill_map.generator_slug = raw_evidence.generator_slug
+    AND generator_skill_map.generator_version = raw_evidence.generator_version
+),
+deduplicated_evidence AS (
+  SELECT
+    mapped_evidence.*,
+    ROW_NUMBER() OVER (
+      PARTITION BY source_type, snapshot_public_id
+      ORDER BY datetime(attempt_submitted_at) DESC, attempt_public_id DESC
+    ) AS duplicate_rank
+  FROM mapped_evidence
+),
+ranked_evidence AS (
+  SELECT
+    deduplicated_evidence.*,
+    ROW_NUMBER() OVER (
+      PARTITION BY COALESCE(mapped_skill_slug, '__excluded__')
+      ORDER BY
+        datetime(attempt_submitted_at) DESC,
+        attempt_public_id DESC,
+        snapshot_public_id DESC
+    ) AS evidence_rank
+  FROM deduplicated_evidence
+  WHERE duplicate_rank = 1
+)
+SELECT
+  user_id,
+  source_type,
+  attempt_public_id,
+  attempt_submitted_at,
+  snapshot_public_id,
+  mapped_skill_slug AS skill_slug,
+  generator_slug,
+  generator_version,
+  generator_seed,
+  selected_answer,
+  correct_answer,
+  is_correct,
+  selected_distractor_type,
+  subject_slug,
+  topic_slug,
+  related_lesson_slug
+FROM ranked_evidence
+WHERE evidence_rank <= 50
+ORDER BY
+  datetime(attempt_submitted_at) DESC,
+  attempt_public_id DESC,
+  snapshot_public_id DESC`
 export async function findSubmittedGeneratedEvidence(
   database: D1Database,
   userId: number,

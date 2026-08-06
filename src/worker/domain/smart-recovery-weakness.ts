@@ -379,29 +379,57 @@ export function normalizeGeneratedEvidence(
   return { evidence, excludedCount, exclusionDiagnostics }
 }
 
-function windowEvidence(
+export function groupEvidenceBySkill(
   evidence: readonly NormalizedSkillEvidence[],
-  skillSlug: string,
+): Map<string, NormalizedSkillEvidence[]> {
+  const grouped = new Map<string, NormalizedSkillEvidence[]>()
+  for (const item of evidence) {
+    const items = grouped.get(item.skillSlug)
+    if (items === undefined) grouped.set(item.skillSlug, [item])
+    else items.push(item)
+  }
+  return grouped
+}
+
+export function groupWindowedEvidenceBySkill(
+  evidence: readonly NormalizedSkillEvidence[],
   calculatedAt: Date,
-  configuration: EvidenceWindowConfiguration,
-): NormalizedSkillEvidence[] {
+  configuration: EvidenceWindowConfiguration = SMART_RECOVERY_EVIDENCE_WINDOW,
+): Map<string, NormalizedSkillEvidence[]> {
   const cutoff =
     calculatedAt.getTime() - configuration.lookbackDays * 24 * 60 * 60 * 1000
-  const deduplicated = new Map<string, NormalizedSkillEvidence>()
+  const grouped = new Map<string, NormalizedSkillEvidence[]>()
+  const seen = new Set<string>()
   for (const item of [...evidence].sort(compareEvidence)) {
     const timestamp = Date.parse(item.attemptSubmittedAt)
     if (
-      item.skillSlug !== skillSlug ||
       !Number.isFinite(timestamp) ||
       timestamp < cutoff ||
       timestamp > calculatedAt.getTime()
     ) {
       continue
     }
-    const key = `${item.sourceType}:${item.snapshotPublicId}`
-    if (!deduplicated.has(key)) deduplicated.set(key, item)
+    const key = `${item.skillSlug}:${item.sourceType}:${item.snapshotPublicId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const items = grouped.get(item.skillSlug)
+    if (items === undefined) grouped.set(item.skillSlug, [item])
+    else if (items.length < configuration.maximumItemsPerSkill) items.push(item)
   }
-  return [...deduplicated.values()].slice(0, configuration.maximumItemsPerSkill)
+  return grouped
+}
+
+function windowEvidence(
+  evidence: readonly NormalizedSkillEvidence[],
+  skillSlug: string,
+  calculatedAt: Date,
+  configuration: EvidenceWindowConfiguration,
+): NormalizedSkillEvidence[] {
+  return groupWindowedEvidenceBySkill(
+    evidence,
+    calculatedAt,
+    configuration,
+  ).get(skillSlug) ?? []
 }
 
 function trendFor(
@@ -474,7 +502,18 @@ export function calculateSkillWeakness(
   calculatedAt: Date,
   configuration: EvidenceWindowConfiguration = SMART_RECOVERY_EVIDENCE_WINDOW,
 ): SkillWeaknessSummary {
-  const items = windowEvidence(evidence, skill.slug, calculatedAt, configuration)
+  return calculateSkillWeaknessFromWindowedEvidence(
+    skill,
+    windowEvidence(evidence, skill.slug, calculatedAt, configuration),
+    configuration,
+  )
+}
+
+export function calculateSkillWeaknessFromWindowedEvidence(
+  skill: SkillCatalogEntry,
+  items: readonly NormalizedSkillEvidence[],
+  configuration: EvidenceWindowConfiguration = SMART_RECOVERY_EVIDENCE_WINDOW,
+): SkillWeaknessSummary {
   const recent = items.slice(0, configuration.recentItemCount)
   const previous = items.slice(
     configuration.recentItemCount,
@@ -555,6 +594,57 @@ export function calculateEvidenceSourceBreakdown(
   })
 }
 
+export interface LearnerRecoveryAnalysis {
+  summaries: SkillWeaknessSummary[]
+  summariesBySkill: Map<string, SkillWeaknessSummary>
+  evidenceBySkill: Map<string, NormalizedSkillEvidence[]>
+  statusCounts: Record<WeaknessStatus, number>
+  metrics: {
+    inputEvidenceCount: number
+    boundedEvidenceCount: number
+    skillsProcessed: number
+    formulaEvaluationCount: number
+  }
+}
+
+export function analyzeLearnerRecoveryEvidence(
+  skills: readonly SkillCatalogEntry[],
+  evidence: readonly NormalizedSkillEvidence[],
+  calculatedAt: Date,
+): LearnerRecoveryAnalysis {
+  const evidenceBySkill = groupWindowedEvidenceBySkill(evidence, calculatedAt)
+  const summaries = skills.map((skill) =>
+    calculateSkillWeaknessFromWindowedEvidence(
+      skill,
+      evidenceBySkill.get(skill.slug) ?? [],
+    ),
+  )
+  const summariesBySkill = new Map(
+    summaries.map((summary) => [summary.skill.slug, summary]),
+  )
+  const statusCounts: Record<WeaknessStatus, number> = {
+    not_enough_data: 0,
+    needs_more_practice: 0,
+    improving: 0,
+    strong: 0,
+  }
+  for (const summary of summaries) statusCounts[summary.status] += 1
+  return {
+    summaries,
+    summariesBySkill,
+    evidenceBySkill,
+    statusCounts,
+    metrics: {
+      inputEvidenceCount: evidence.length,
+      boundedEvidenceCount: [...evidenceBySkill.values()].reduce(
+        (total, items) => total + items.length,
+        0,
+      ),
+      skillsProcessed: skills.length,
+      formulaEvaluationCount: skills.length,
+    },
+  }
+}
 export function compareWeaknessPriority(
   left: SkillWeaknessSummary,
   right: SkillWeaknessSummary,

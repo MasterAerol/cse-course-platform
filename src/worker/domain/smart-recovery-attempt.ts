@@ -18,7 +18,7 @@ import {
 
 export const RECOVERY_MAXIMUM_SKILLS = 5
 export const RECOVERY_MAXIMUM_QUESTIONS_PER_SKILL = 8
-export const RECOVERY_GENERATION_MAX_RETRIES = 200
+export const RECOVERY_GENERATION_MAX_RETRIES = 40
 export const RECOVERY_RECENT_IDENTITIES_PER_GENERATOR = 1
 
 const allocationBySkillCount: Readonly<Record<number, readonly number[]>> = Object.freeze({

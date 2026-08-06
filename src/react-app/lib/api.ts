@@ -770,6 +770,11 @@ export async function request<T>(
       )
     }
 
+    console.error('API error response validation failed.', {
+      path,
+      status: response.status,
+      requestId: response.headers.get('x-request-id'),
+    })
     throw new ApiClientError(
       'The request could not be completed.',
       'REQUEST_FAILED',
@@ -781,13 +786,15 @@ export async function request<T>(
   const result = schema.safeParse(body)
 
   if (!result.success) {
-    if (import.meta.env.DEV) {
-      console.error('API response schema validation failed.', {
-        path,
-        status: response.status,
-        issues: result.error.issues,
-      })
-    }
+    console.error('API response schema validation failed.', {
+      path,
+      status: response.status,
+      requestId: response.headers.get('x-request-id'),
+      issues: result.error.issues.map((issue) => ({
+        code: issue.code,
+        path: issue.path,
+      })),
+    })
     throw new ApiClientError(
       'The API returned an unexpected response.',
       'INVALID_API_RESPONSE',

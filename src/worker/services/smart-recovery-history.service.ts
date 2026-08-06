@@ -70,7 +70,9 @@ export async function getRecoveryHistory(
   database: D1Database,
   userId: number,
   calculatedAt = new Date(),
+  requestId?: string,
 ): Promise<RecoveryHistoryPayload> {
+  const analysisStartedAt = performance.now()
   const currentContext = await loadSmartRecoveryEvidenceContext(
     database,
     userId,
@@ -104,13 +106,29 @@ export async function getRecoveryHistory(
           ).toISOString(),
         )
       : currentContext
+  const attempts = groupHistoryRows(rows).map((attempt) =>
+    buildRecoveryAttemptProgress(attempt, context.evidenceBySkill),
+  )
+  console.info(JSON.stringify({
+    message: 'Smart Recovery history analysis completed',
+    requestId: requestId ?? null,
+    durationMs: Math.round((performance.now() - analysisStartedAt) * 10) / 10,
+    evidenceCount: context.evidence.length,
+    groupedSkillCount: context.evidenceBySkill.size,
+    historyRowCount: rows.length,
+    attemptCount: attempts.length,
+    formulaEvaluationCount: attempts.reduce(
+      (total, attempt) => total + attempt.skillsTrained * 2,
+      0,
+    ),
+    databaseRoundTrips: context === currentContext ? 5 : 8,
+  }))
   return {
     formulaVersion: SMART_RECOVERY_FORMULA_VERSION,
     activeAttemptPublicId: active?.public_id ?? null,
     totalSubmittedAttempts: rows[0]?.total_submitted_attempts ?? 0,
     historyLimit: HISTORY_LIMIT,
-    attempts: groupHistoryRows(rows).map((attempt) =>
-      buildRecoveryAttemptProgress(attempt, context.evidence),
-    ),
+    attempts,
+
   }
 }

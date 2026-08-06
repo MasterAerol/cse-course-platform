@@ -53,7 +53,7 @@ export interface RecoveryAttemptProgressSummary {
 
 export function buildRecoveryAttemptProgress(
   input: RecoveryAttemptProgressInput,
-  evidence: readonly NormalizedSkillEvidence[],
+  evidence: readonly NormalizedSkillEvidence[] | Map<string, NormalizedSkillEvidence[]>,
 ): RecoveryAttemptProgressSummary {
   const skillProgress = input.skills.map((item) => ({
     skill: { slug: item.skill.slug, title: item.skill.title },
@@ -63,7 +63,7 @@ export function buildRecoveryAttemptProgress(
       Math.round((item.correct / item.questions) * 1000) / 10,
     progress: calculateRecoverySkillProgress(
       item.skill,
-      evidence,
+      evidence instanceof Map ? evidence.get(item.skill.slug) ?? [] : evidence,
       input.attemptPublicId,
       input.submittedAt,
       input.attemptFormulaVersion,

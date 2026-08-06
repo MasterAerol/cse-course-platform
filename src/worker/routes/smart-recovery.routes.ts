@@ -38,6 +38,8 @@ smartRecoveryRoutes.get('/smart-recovery', async (context) =>
     await getSmartRecoveryDashboard(
       context.env.DB,
       context.get('authUser').internalUserId,
+      new Date(),
+      context.get('requestId'),
     ),
   ),
 )
@@ -48,6 +50,8 @@ smartRecoveryRoutes.get('/smart-recovery/history', async (context) =>
     await getRecoveryHistory(
       context.env.DB,
       context.get('authUser').internalUserId,
+      new Date(),
+      context.get('requestId'),
     ),
   ),
 )
@@ -126,14 +130,25 @@ smartRecoveryRoutes.post(
     const params = parseValidatedInput(
       smartRecoveryAttemptParamsSchema.safeParse(context.req.param()),
     )
-    return successResponse(
-      context,
-      await submitRecoveryAttempt(
-        context.env.DB,
-        context.get('authUser').internalUserId,
-        params.attemptPublicId,
-      ),
+    const result = await submitRecoveryAttempt(
+      context.env.DB,
+      context.get('authUser').internalUserId,
+      params.attemptPublicId,
     )
+    console.info(JSON.stringify({
+      message: 'Smart Recovery submission available',
+      requestId: context.get('requestId'),
+      attemptPublicId: result.attempt.publicId,
+      status: result.attempt.status,
+      questionCount: result.questionCount,
+      answerCount: result.questions.filter(
+        (question) => question.selectedChoice !== null,
+      ).length,
+      correctCount: result.correctCount,
+      scorePercent: result.scorePercent,
+      submittedAt: result.attempt.submittedAt,
+    }))
+    return successResponse(context, result)
   },
 )
 
@@ -143,14 +158,25 @@ smartRecoveryRoutes.get(
     const params = parseValidatedInput(
       smartRecoveryAttemptParamsSchema.safeParse(context.req.param()),
     )
-    return successResponse(
-      context,
-      await getRecoveryAttemptResult(
-        context.env.DB,
-        context.get('authUser').internalUserId,
-        params.attemptPublicId,
-      ),
+    const result = await getRecoveryAttemptResult(
+      context.env.DB,
+      context.get('authUser').internalUserId,
+      params.attemptPublicId,
     )
+    console.info({
+      message: 'Smart Recovery submitted result loaded',
+      requestId: context.get('requestId'),
+      attemptPublicId: result.attempt.publicId,
+      status: result.attempt.status,
+      questionCount: result.questionCount,
+      answerCount: result.questions.filter(
+        (question) => question.selectedChoice !== null,
+      ).length,
+      correctCount: result.correctCount,
+      scorePercent: result.scorePercent,
+      submittedAt: result.attempt.submittedAt,
+    })
+    return successResponse(context, result)
   },
 )
 
@@ -160,13 +186,24 @@ smartRecoveryRoutes.get(
     const params = parseValidatedInput(
       smartRecoveryAttemptParamsSchema.safeParse(context.req.param()),
     )
-    return successResponse(
-      context,
-      await getRecoveryAttemptResult(
-        context.env.DB,
-        context.get('authUser').internalUserId,
-        params.attemptPublicId,
-      ),
+    const result = await getRecoveryAttemptResult(
+      context.env.DB,
+      context.get('authUser').internalUserId,
+      params.attemptPublicId,
     )
+    console.info({
+      message: 'Smart Recovery submitted result loaded',
+      requestId: context.get('requestId'),
+      attemptPublicId: result.attempt.publicId,
+      status: result.attempt.status,
+      questionCount: result.questionCount,
+      answerCount: result.questions.filter(
+        (question) => question.selectedChoice !== null,
+      ).length,
+      correctCount: result.correctCount,
+      scorePercent: result.scorePercent,
+      submittedAt: result.attempt.submittedAt,
+    })
+    return successResponse(context, result)
   },
 )

@@ -6,8 +6,10 @@ import { evaluateRecoveryEligibility } from '../domain/smart-recovery-eligibilit
 import {
   SMART_RECOVERY_EVIDENCE_WINDOW,
   SMART_RECOVERY_FORMULA_VERSION,
+  analyzeLearnerRecoveryEvidence,
   calculateEvidenceSourceBreakdown,
   calculateSkillWeakness,
+  groupEvidenceBySkill,
   compareWeaknessPriority,
   normalizeGeneratedEvidence,
   type NormalizedSkillEvidence,
@@ -63,6 +65,7 @@ export interface SmartRecoveryEvidenceContext {
   skills: SkillCatalogEntry[]
   skillsBySlug: Map<string, SkillCatalogEntry>
   evidence: NormalizedSkillEvidence[]
+  evidenceBySkill: Map<string, NormalizedSkillEvidence[]>
   excludedEvidenceCount: number
   exclusionDiagnostics: {
     ambiguousMappingCount: number
@@ -124,6 +127,7 @@ export async function loadSmartRecoveryEvidenceContext(
     skills,
     skillsBySlug,
     evidence: normalized.evidence,
+    evidenceBySkill: groupEvidenceBySkill(normalized.evidence),
     excludedEvidenceCount: normalized.excludedCount,
     exclusionDiagnostics: normalized.exclusionDiagnostics,
   }
@@ -133,13 +137,18 @@ export async function getSmartRecoveryDashboard(
   database: D1Database,
   userId: number,
   calculatedAt = new Date(),
+  requestId?: string,
 ): Promise<SmartRecoveryDashboardSummary> {
   const context = await loadSmartRecoveryEvidenceContext(database, userId, calculatedAt)
-  const summaries = context.skills
-    .map((skill) =>
-      calculateSkillWeakness(skill, context.evidence, calculatedAt),
-    )
-    .filter((summary) => summary.evidenceCount > 0)
+  const analysisStartedAt = performance.now()
+  const analysis = analyzeLearnerRecoveryEvidence(
+    context.skills,
+    context.evidence,
+    calculatedAt,
+  )
+  const summaries = analysis.summaries.filter(
+    (summary) => summary.evidenceCount > 0,
+  )
   const needsMorePractice = summaries
     .filter((summary) => summary.status === 'needs_more_practice')
     .sort(compareWeaknessPriority)
@@ -152,11 +161,27 @@ export async function getSmartRecoveryDashboard(
   const hasEnoughEvidence = summaries.some(
     (summary) => summary.status !== 'not_enough_data',
   )
-  const [activeAttempt, latestAttempt, recentRows] = await Promise.all([
+  const [activeAttempt, recentRows] = await Promise.all([
     findActiveRecoveryAttempt(database, userId, context.courseId),
-    findLatestSubmittedRecoveryAttempt(database, userId, context.courseId),
     findRecentGeneratedIdentities(database, userId),
   ])
+  let latestAttempt: Awaited<
+    ReturnType<typeof findLatestSubmittedRecoveryAttempt>
+  > = null
+  try {
+    latestAttempt = await findLatestSubmittedRecoveryAttempt(
+      database,
+      userId,
+      context.courseId,
+    )
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: 'Smart Recovery latest result lookup failed',
+      requestId: requestId ?? null,
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      stage: 'latest_recovery_result',
+    }))
+  }
   const activeIsCompatible =
     activeAttempt !== null &&
     activeAttempt.taxonomy_version === SMART_RECOVERY_TAXONOMY_VERSION &&
@@ -195,6 +220,20 @@ export async function getSmartRecoveryDashboard(
     }))
   }
 
+  console.info(JSON.stringify({
+    message: 'Smart Recovery summary analysis completed',
+    requestId: requestId ?? null,
+    durationMs: Math.round((performance.now() - analysisStartedAt) * 10) / 10,
+    inputEvidenceCount: analysis.metrics.inputEvidenceCount,
+    boundedEvidenceCount: analysis.metrics.boundedEvidenceCount,
+    skillsProcessed: analysis.metrics.skillsProcessed,
+    skillsObserved: summaries.length,
+    formulaEvaluationCount: analysis.metrics.formulaEvaluationCount,
+    databaseRoundTrips: 6,
+    returnedPriorityCount: Math.min(needsMorePractice.length, 3),
+    returnedImprovingCount: Math.min(improving.length, 3),
+    returnedStrongCount: Math.min(strong.length, 3),
+  }))
   return {
     taxonomyVersion: SMART_RECOVERY_TAXONOMY_VERSION,
     formulaVersion: SMART_RECOVERY_FORMULA_VERSION,
@@ -211,9 +250,9 @@ export async function getSmartRecoveryDashboard(
     excludedEvidenceCount: context.excludedEvidenceCount,
     skillsWithEvidence: summaries.length,
     prioritySkillCount: needsMorePractice.length,
-    needsMorePractice,
-    improving,
-    strong,
+    needsMorePractice: needsMorePractice.slice(0, 3),
+    improving: improving.slice(0, 3),
+    strong: strong.slice(0, 3),
     recoveryAvailable: eligibility.recoveryAvailable,
     activeRecoveryAttemptPublicId: activeAttempt?.public_id ?? null,
     recommendedRecoveryQuestionCount: eligibility.recommendedQuestionCount,
