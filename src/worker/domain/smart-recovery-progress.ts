@@ -1,6 +1,7 @@
 import {
-  SMART_RECOVERY_EVIDENCE_WINDOW,
   calculateSkillWeakness,
+  getWeaknessFormulaDefinition,
+  SMART_RECOVERY_FORMULA_VERSION,
   type NormalizedSkillEvidence,
   type SkillCatalogEntry,
   type WeaknessStatus,
@@ -55,19 +56,33 @@ export function calculateRecoverySkillProgress(
   evidence: readonly NormalizedSkillEvidence[],
   attemptPublicId: string,
   submittedAt: string,
+  formulaVersion: number = SMART_RECOVERY_FORMULA_VERSION,
 ): RecoverySkillProgress {
   const submittedAtMs = Date.parse(submittedAt)
   if (!Number.isFinite(submittedAtMs)) {
     throw new Error('Recovery submission timestamp is invalid.')
   }
   const calculationDate = new Date(submittedAtMs)
-  const eligible = evidenceAtOrBefore(evidence, submittedAtMs)
+  const formula = getWeaknessFormulaDefinition(formulaVersion)
+  const eligible = evidenceAtOrBefore(evidence, submittedAtMs).filter((item) =>
+    formula.supportedSources.includes(item.sourceType),
+  )
   const beforeEvidence = eligible.filter((item) => {
     const itemTime = Date.parse(item.attemptSubmittedAt)
     return item.attemptPublicId !== attemptPublicId && itemTime < submittedAtMs
   })
-  const before = calculateSkillWeakness(skill, beforeEvidence, calculationDate)
-  const after = calculateSkillWeakness(skill, eligible, calculationDate)
+  const before = calculateSkillWeakness(
+    skill,
+    beforeEvidence,
+    calculationDate,
+    formula.evidenceWindow,
+  )
+  const after = calculateSkillWeakness(
+    skill,
+    eligible,
+    calculationDate,
+    formula.evidenceWindow,
+  )
   const percentagePointChange =
     before.accuracyPercent === null || after.accuracyPercent === null
       ? null
@@ -83,13 +98,13 @@ export function calculateRecoverySkillProgress(
   } else if (
     statusRank[after.status] > statusRank[before.status] ||
     percentagePointChange >=
-      SMART_RECOVERY_EVIDENCE_WINDOW.meaningfulTrendPercent
+      formula.evidenceWindow.meaningfulTrendPercent
   ) {
     trend = 'improved'
   } else if (
     statusRank[after.status] < statusRank[before.status] ||
     percentagePointChange <=
-      -SMART_RECOVERY_EVIDENCE_WINDOW.meaningfulTrendPercent
+      -formula.evidenceWindow.meaningfulTrendPercent
   ) {
     trend = 'declined'
   } else {

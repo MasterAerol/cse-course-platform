@@ -243,7 +243,7 @@ const recoveryInterpretationSchema = z.object({
 export const recoveryResultResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
-    formulaVersion: z.literal(2),
+    formulaVersion: z.number().int().positive(),
     attempt: z.object({
       publicId: z.string(),
       status: z.literal('submitted'),

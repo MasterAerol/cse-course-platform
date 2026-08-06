@@ -31,8 +31,9 @@ is the latest 50 distinct items per learner and skill.
 
 New recovery attempts are stamped with formula version 2. Historical attempts
 retain their immutable stored formula version. Their score and question review
-never change; the Phase E progress interpretation states which current formula
-version performed the evidence comparison.
+never change; before/after progress is calculated with the attempt's recorded
+formula definition and fails closed if that version is unsupported. The live
+`currentStatus` remains a separate current-v2 signal.
 
 ## Recovery evidence
 

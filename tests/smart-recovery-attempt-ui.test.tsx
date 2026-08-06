@@ -305,6 +305,17 @@ describe('Smart Recovery Phase D/E UI contracts', () => {
       },
     })
     expect(parsed.success).toBe(true)
+    if (!parsed.success) throw new Error('Expected a valid recovery result fixture.')
+    expect(
+      recoveryResultResponseSchema.safeParse({
+        success: true,
+        data: {
+          ...parsed.data.data,
+          formulaVersion: 1,
+          attempt: { ...parsed.data.data.attempt, formulaVersion: 1 },
+        },
+      }).success,
+    ).toBe(true)
   })
 
   it('renders accessible loading states at the attempt and result routes', () => {

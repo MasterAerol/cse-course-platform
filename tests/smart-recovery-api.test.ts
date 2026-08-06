@@ -536,8 +536,11 @@ describe('Smart Recovery learner APIs', () => {
       bindings(),
     )
     expect(duplicateSubmit.status).toBe(200)
-    expect((await duplicateSubmit.json<typeof result>()).data.scorePercent).toBe(
-      result.data.scorePercent,
+    const duplicateResult = await duplicateSubmit.json<typeof result>()
+    expect(duplicateResult.data.scorePercent).toBe(result.data.scorePercent)
+    expect(duplicateResult.data.formulaVersion).toBe(result.data.formulaVersion)
+    expect(duplicateResult.data.attempt.formulaVersion).toBe(
+      result.data.attempt.formulaVersion,
     )
 
     const detailsAfterSubmit = await get(

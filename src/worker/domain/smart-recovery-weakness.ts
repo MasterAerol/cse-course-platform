@@ -6,6 +6,7 @@ import {
 export const SMART_RECOVERY_FORMULA_VERSION = 2 as const
 
 export type WeaknessFormulaVersion = typeof SMART_RECOVERY_FORMULA_VERSION
+export type SupportedWeaknessFormulaVersion = 1 | WeaknessFormulaVersion
 export type EvidenceSource =
   | 'generated_practice'
   | 'subject_assessment'
@@ -35,6 +36,25 @@ export interface EvidenceWindowConfiguration {
   maximumMistakePatterns: number
 }
 
+const SMART_RECOVERY_V1_EVIDENCE_WINDOW: EvidenceWindowConfiguration =
+  Object.freeze({
+    lookbackDays: 180,
+    maximumItemsPerSkill: 20,
+    minimumEvidenceItems: 5,
+    recentItemCount: 5,
+    recentWeightMultiplier: 1.5,
+    sourceWeights: Object.freeze({
+      generated_practice: 1,
+      subject_assessment: 1.25,
+      mock_exam: 1.5,
+      recovery: 0,
+    }),
+    needsMorePracticeBelowPercent: 60,
+    strongAtOrAbovePercent: 80,
+    meaningfulTrendPercent: 15,
+    maximumMistakePatterns: 3,
+  })
+
 export const SMART_RECOVERY_EVIDENCE_WINDOW: EvidenceWindowConfiguration =
   Object.freeze({
     lookbackDays: 180,
@@ -53,6 +73,45 @@ export const SMART_RECOVERY_EVIDENCE_WINDOW: EvidenceWindowConfiguration =
     meaningfulTrendPercent: 15,
     maximumMistakePatterns: 3,
   })
+
+export interface WeaknessFormulaDefinition {
+  version: SupportedWeaknessFormulaVersion
+  supportedSources: readonly EvidenceSource[]
+  evidenceWindow: EvidenceWindowConfiguration
+}
+
+const FORMULA_DEFINITIONS: Readonly<
+  Record<SupportedWeaknessFormulaVersion, WeaknessFormulaDefinition>
+> = Object.freeze({
+  1: Object.freeze({
+    version: 1,
+    supportedSources: Object.freeze([
+      'generated_practice',
+      'subject_assessment',
+      'mock_exam',
+    ] as const),
+    evidenceWindow: SMART_RECOVERY_V1_EVIDENCE_WINDOW,
+  }),
+  2: Object.freeze({
+    version: 2,
+    supportedSources: Object.freeze([
+      'generated_practice',
+      'subject_assessment',
+      'mock_exam',
+      'recovery',
+    ] as const),
+    evidenceWindow: SMART_RECOVERY_EVIDENCE_WINDOW,
+  }),
+})
+
+export function getWeaknessFormulaDefinition(
+  version: number,
+): WeaknessFormulaDefinition {
+  if (version !== 1 && version !== SMART_RECOVERY_FORMULA_VERSION) {
+    throw new Error(`Unsupported Smart Recovery formula version: ${version}.`)
+  }
+  return FORMULA_DEFINITIONS[version]
+}
 
 export interface GeneratedEvidenceRecord {
   userId: number

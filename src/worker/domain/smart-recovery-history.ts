@@ -66,6 +66,7 @@ export function buildRecoveryAttemptProgress(
       evidence,
       input.attemptPublicId,
       input.submittedAt,
+      input.attemptFormulaVersion,
     ),
   }))
   return {

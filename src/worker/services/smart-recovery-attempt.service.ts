@@ -99,7 +99,7 @@ export interface RecoveryAttemptPayload {
 }
 
 export interface RecoveryResultPayload {
-  formulaVersion: typeof SMART_RECOVERY_FORMULA_VERSION
+  formulaVersion: number
   attempt: {
     publicId: string
     status: 'submitted'
@@ -679,7 +679,7 @@ async function buildRecoveryResult(
   )[0]
 
   return {
-    formulaVersion: SMART_RECOVERY_FORMULA_VERSION,
+    formulaVersion: attempt.weakness_formula_version,
     attempt: {
       publicId: attempt.public_id,
       status: attempt.status,
