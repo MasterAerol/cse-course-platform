@@ -216,25 +216,37 @@ export function SmartRecoveryAttemptPage() {
         <section className="quiz-attempt-card">
           <p className="eyebrow">Review</p>
           <h1 id="recovery-review-heading">Review &amp; Submit Recovery Set</h1>
-          <p>
-            {answeredCount} answered and {unansweredCount} unanswered. Unanswered
-            questions score zero.
+          <div className="question-status-chips smart-recovery-review-summary">
+            <span className="question-status-chip">Answered {answeredCount}</span>
+            <span className="question-status-chip">
+              Unanswered {unansweredCount}
+            </span>
+          </div>
+          <p className="meta-copy">
+            You can review any question, then return to answer again before
+            submitting. Unanswered questions score zero.
           </p>
           <div className="recovery-review-list">
             {attempt.questions.map((item, index) => (
               <button
                 type="button"
                 key={item.publicId}
+                className={`recovery-review-question ${item.selectedChoicePublicId === null ? 'is-unanswered' : 'is-answered'}`}
+                aria-label={`Question ${item.position}, ${item.selectedChoicePublicId === null ? 'unanswered' : 'answered'}`}
                 onClick={() => {
                   setCurrentIndex(index)
                   setReviewing(false)
                 }}
               >
-                Question {item.position}: {item.selectedChoicePublicId === null ? 'Unanswered' : 'Answered'}
+                <span>Question {item.position}</span>
+                <span className="recovery-review-question__meta">{item.skill.title}</span>
+                <span className="recovery-review-question__status">
+                  {item.selectedChoicePublicId === null ? 'Unanswered' : 'Answered'}
+                </span>
               </button>
             ))}
           </div>
-          <div className="quiz-submit-row">
+          <div className="quiz-submit-row smart-recovery-review-submit">
             <button
               type="button"
               disabled={submitting || saveState === 'saving'}
