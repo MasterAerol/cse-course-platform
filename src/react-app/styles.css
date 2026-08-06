@@ -2946,6 +2946,13 @@ input[aria-invalid="true"] {
   }
 }
 
+.smart-recovery-attempt-page {
+  width: min(100%, 1080px);
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  justify-items: stretch;
+}
+
 .smart-recovery-attempt-page .quiz-question-nav {
   margin-bottom: 0.75rem;
 }
@@ -3166,4 +3173,5 @@ input[aria-invalid="true"] {
   .recovery-attempt-actions button { flex: 1; }
   .recovery-action-card { align-items: stretch; }
 }
+
 
