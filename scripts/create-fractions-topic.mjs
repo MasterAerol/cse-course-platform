@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { fractionCommonDenominatorVisual } from './lib/visual-teaching-content.mjs'
+
 const csrfHeaderValue = 'same-origin-admin-mutation'
 const lessonSpecs = [
   ['Introduction to Fractions', 'introduction-to-fractions', 'reading', 8],
@@ -67,8 +69,8 @@ function formula(expression, description) {
   return { blockType: 'formula', content: { expression, description } }
 }
 
-function example(title, problem, steps, answer) {
-  return { blockType: 'example', content: { title, problem, steps, answer } }
+function example(title, problem, steps, answer, visual) {
+  return { blockType: 'example', content: { title, problem, steps, answer, ...(visual === undefined ? {} : { visual }) } }
 }
 
 function summary(items) {
@@ -109,7 +111,7 @@ function lessonBlocks(slug) {
       procedure: 'Use a common denominator, add the numerators, and simplify the result.',
       examples: [
         ['Like denominators', 'Add 2/7 + 3/7.', ['The denominator is already 7.', '2 + 3 = 5.'], '2/7 + 3/7 = 5/7.'],
-        ['Unlike denominators', 'Add 1/4 + 1/6.', ['The least common denominator is 12.', '1/4 = 3/12 and 1/6 = 2/12.', '3/12 + 2/12 = 5/12.'], 'The sum is 5/12.'],
+        ['Unlike denominators', 'Add 1/4 + 1/6.', ['The least common denominator is 12.', '1/4 = 3/12 and 1/6 = 2/12.', '3/12 + 2/12 = 5/12.'], 'The sum is 5/12.', fractionCommonDenominatorVisual],
       ],
       mistakes: 'Do not add denominators. Denominators describe the size of the parts.',
     },

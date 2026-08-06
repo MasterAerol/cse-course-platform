@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { visualTeachingSchema } from '../../shared/visual-teaching.schema'
 import { subjectAssessmentResultSchema } from '../../shared/subject-assessment-result.schema'
 
 const userSchema = z.object({
@@ -253,6 +254,7 @@ const lessonBlockSchema = z.union([
       problem: z.string(),
       steps: z.array(z.string()),
       answer: z.string(),
+      visual: visualTeachingSchema.optional(),
     }),
   }),
   baseLessonBlockSchema.extend({
@@ -726,6 +728,15 @@ export class ApiClientError extends Error {
   }
 }
 
+type BrowserFetchInit = RequestInit & {
+  credentials?: 'omit' | 'same-origin' | 'include'
+}
+
+const browserFetch = fetch as unknown as (
+  input: string,
+  init?: BrowserFetchInit,
+) => Promise<Response>
+
 export async function request<T>(
   path: string,
   schema: z.ZodType<T>,
@@ -738,7 +749,7 @@ export async function request<T>(
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(path, {
+  const response = await browserFetch(path, {
     ...init,
     credentials: 'same-origin',
     headers,

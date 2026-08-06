@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { visualTeachingSchema } from '../../shared/visual-teaching.schema'
 
 interface BaseLessonBlock {
   id: number
@@ -55,6 +56,7 @@ const exampleContentSchema = z
     problem: z.string().min(1).max(1_000),
     steps: z.array(z.string().min(1).max(500)).min(1).max(12),
     answer: z.string().min(1).max(500),
+    visual: visualTeachingSchema.optional(),
   })
   .strict()
 

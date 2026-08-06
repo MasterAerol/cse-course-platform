@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { ratioScalingVisual } from './lib/visual-teaching-content.mjs'
 
 const confirmation = 'create-validate-publish-ratio-proportion'
 const csrfHeaderValue = 'same-origin-admin-mutation'
@@ -70,9 +71,9 @@ const callout = (title, text, variant = 'info') => ({
   blockType: 'callout',
   content: { title, text, variant },
 })
-const example = (title, problem, steps, answer) => ({
+const example = (title, problem, steps, answer, visual) => ({
   blockType: 'example',
-  content: { title, problem, steps, answer },
+  content: { title, problem, steps, answer, ...(visual === undefined ? {} : { visual }) },
 })
 const summary = (items) => ({ blockType: 'summary', content: { items } })
 
@@ -195,7 +196,7 @@ function lessonBlocks(slug) {
       'Translate the context into an ordered ratio, identify the known scale factor, and keep units and assumptions consistent.',
       { expression: 'known quantity/known ratio part = value of one part', description: 'Find one ratio part, then scale to the requested group.' },
       [
-        ['Employees', 'Male to female employees is 3:5. There are 24 male employees.', ['One part is 24 \u00f7 3 = 8.', 'Female employees: 5 \u00d7 8 = 40.'], 'There are 40 female employees.'],
+        ['Employees', 'Male to female employees is 3:5. There are 24 male employees.', ['One part is 24 \u00f7 3 = 8.', 'Female employees: 5 \u00d7 8 = 40.'], 'There are 40 female employees.', ratioScalingVisual],
         ['Concrete mix', 'Cement to sand is 1:3. Eight bags of cement are used.', ['One ratio part equals 8 bags.', 'Sand: 3 \u00d7 8 = 24.'], 'Use 24 bags of sand in this simplified educational example.'],
       ],
       'Avoid reversing the ratio, using a difference as a scale factor, or mixing units. Treat construction examples as simplified mathematics, not engineering specifications.',

@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { workRateVisual } from './lib/visual-teaching-content.mjs'
 
 const confirmation = 'create-validate-publish-work-rate'
 const csrfHeaderValue = 'same-origin-admin-mutation'
@@ -38,7 +39,7 @@ const heading = (text, level = 2) => ({ blockType: 'heading', content: { level, 
 const paragraph = (text) => ({ blockType: 'paragraph', content: { text } })
 const formula = (expression, description) => ({ blockType: 'formula', content: { expression, description } })
 const callout = (title, text, variant = 'info') => ({ blockType: 'callout', content: { title, text, variant } })
-const example = (title, problem, steps, answer) => ({ blockType: 'example', content: { title, problem, steps, answer } })
+const example = (title, problem, steps, answer, visual) => ({ blockType: 'example', content: { title, problem, steps, answer, ...(visual === undefined ? {} : { visual }) } })
 const summary = (items) => ({ blockType: 'summary', content: { items } })
 
 function practiceBlocks(title, concept, equation, rateTable, firstExample, secondExample, mistakes, transition) {
@@ -141,7 +142,7 @@ function lessonBlocks(slug) {
     formula('Time = Work ÷ Rate', 'Divide the required work by a positive rate to find duration.'),
     formula('Individual rate = 1 ÷ completion time', 'For a worker who completes one job in t hours, rate is 1/t job per hour.'),
     heading('Rate table', 3), callout('Recommended columns', 'List worker or machine, work definition, time, signed rate, and work completed. Use one time unit throughout.'),
-    example('Individual rate', 'A worker finishes a job in 6 hours.', ['Work = 1 and time = 6.', 'Rate = 1 ÷ 6.'], 'The rate is 1/6 job per hour.'),
+    example('Individual rate', 'A worker finishes a job in 6 hours.', ['Work = 1 and time = 6.', 'Rate = 1 ÷ 6.'], 'The rate is 1/6 job per hour.', workRateVisual),
     example('Combined rate', 'A and B work at 1/6 and 1/3 job per hour.', ['Add the rates: 1/6 + 1/3 = 1/2.', 'Time = 1 ÷ 1/2.'], 'Together they finish in 2 hours.'),
     callout('Assumptions', 'Rates are constant, the job definition is unchanged, there are no interruptions unless stated, workers begin together unless a timeline says otherwise, and drains oppose filling rates.', 'important'),
     callout('Common mistakes', 'Do not add completion times, confuse rate and time, forget the whole job is 1, multiply where division is required, add a drain rate, or mix time units.', 'warning'),

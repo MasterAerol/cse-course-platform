@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { averageSharingVisual } from './lib/visual-teaching-content.mjs'
 
 const confirmation = 'create-validate-publish-average'
 const csrfHeaderValue = 'same-origin-admin-mutation'
@@ -53,7 +54,7 @@ const heading = (text, level = 2) => ({ blockType: 'heading', content: { level, 
 const paragraph = (text) => ({ blockType: 'paragraph', content: { text } })
 const formula = (expression, description) => ({ blockType: 'formula', content: { expression, description } })
 const callout = (title, text, variant = 'info') => ({ blockType: 'callout', content: { title, text, variant } })
-const example = (title, problem, steps, answer) => ({ blockType: 'example', content: { title, problem, steps, answer } })
+const example = (title, problem, steps, answer, visual) => ({ blockType: 'example', content: { title, problem, steps, answer, ...(visual === undefined ? {} : { visual }) } })
 const summary = (items) => ({ blockType: 'summary', content: { items } })
 
 function practiceBlocks(title, concept, process, firstExample, secondExample, mistakes, transition) {
@@ -71,7 +72,7 @@ function lessonBlocks(slug) {
       heading('What average represents'),
       paragraph('An average is a representative value for a group of observations. The arithmetic mean balances the total equally across all observations.'),
       formula('Average = Sum of values ÷ Number of values', 'Add every value, count the observations, then divide.'),
-      example('Small values', 'Find the average of 4, 6, and 8.', ['Add: 4 + 6 + 8 = 18.', 'There are 3 values.', '18 ÷ 3 = 6.'], 'The average is 6.'),
+      example('Small values', 'Find the average of 4, 6, and 8.', ['Add: 4 + 6 + 8 = 18.', 'There are 3 values.', '18 ÷ 3 = 6.'], 'The average is 6.', averageSharingVisual),
       example('Scores', 'Find the average of 75, 80, and 85.', ['The total is 240.', 'There are 3 scores.', '240 ÷ 3 = 80.'], 'The average score is 80.'),
       example('Salary', 'Three daily salaries are ₱900, ₱1,000, and ₱1,100.', ['Total: ₱3,000.', 'Divide by 3 employees.'], 'The average salary is ₱1,000.'),
       callout('Equal-sharing idea', 'Imagine redistributing the total equally. Each observation would receive the average amount.'),

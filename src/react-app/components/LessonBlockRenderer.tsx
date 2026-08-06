@@ -1,4 +1,5 @@
 import type { LessonBlock } from '../lib/api'
+import { VisualTeachingBoard } from './VisualTeachingBoard'
 
 interface LessonBlockRendererProps {
   block: LessonBlock
@@ -90,6 +91,9 @@ function ExampleBlock({
           <li key={step}>{step}</li>
         ))}
       </ol>
+      {block.content.visual !== undefined && (
+        <VisualTeachingBoard visual={block.content.visual} />
+      )}
       <p>
         <strong>Answer:</strong> {block.content.answer}
       </p>

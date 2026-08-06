@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { distanceFormulaVisual } from './lib/visual-teaching-content.mjs'
 
 const confirmation = 'create-validate-publish-distance-speed-time'
 const csrfHeaderValue = 'same-origin-admin-mutation'
@@ -39,7 +40,7 @@ const heading = (text, level = 2) => ({ blockType: 'heading', content: { level, 
 const paragraph = (text) => ({ blockType: 'paragraph', content: { text } })
 const formula = (expression, description) => ({ blockType: 'formula', content: { expression, description } })
 const callout = (title, text, variant = 'info') => ({ blockType: 'callout', content: { title, text, variant } })
-const example = (title, problem, steps, answer) => ({ blockType: 'example', content: { title, problem, steps, answer } })
+const example = (title, problem, steps, answer, visual) => ({ blockType: 'example', content: { title, problem, steps, answer, ...(visual === undefined ? {} : { visual }) } })
 const summary = (items) => ({ blockType: 'summary', content: { items } })
 
 const lessons = {
@@ -57,7 +58,7 @@ const lessons = {
 
 function lessonBlocks(slug) {
   const data = lessons[slug]
-  if (data !== undefined) return [heading(data[0]), paragraph(data[0]), formula(data[1], data[2]), callout('Unit and timeline check', data[2]), example('Worked example', data[3], data[4], data[5]), callout('Common mistake', data[6], 'warning'), heading('Independent practice', 3), summary([data[1], data[2], data[6]])]
+  if (data !== undefined) return [heading(data[0]), paragraph(data[0]), formula(data[1], data[2]), callout('Unit and timeline check', data[2]), example('Worked example', data[3], data[4], data[5], slug === 'understanding-distance-speed-and-time' ? distanceFormulaVisual : undefined), callout('Common mistake', data[6], 'warning'), heading('Independent practice', 3), summary([data[1], data[2], data[6]])]
   return [heading(slug.includes('quiz') ? 'Topic Quiz Review' : 'Mixed Practice Review'), paragraph('Review direct formulas, exact unit conversions, total-distance average speed, relative motion, delayed starts, and multi-leg travel.'), formula('d = st; s = d/t; t = d/s', 'Choose the formula for the requested quantity.'), callout('Classification', 'Subtract speeds for same-direction pursuit and add speeds for opposite-direction approach.'), example('Review', 'A 50 km/h bus has a one-hour head start over a 75 km/h car.', ['Head start = 50 km.', 'Closing speed = 25 km/h.'], 'Catch time is 2 hours after the car leaves.'), callout('Common mistakes', 'Do not mix units, average speeds naively, omit stop time, or confuse catch time with total elapsed time.', 'warning'), heading('Assessment readiness', 3), summary(['Normalize units first.', 'Use total distance divided by total elapsed time.', 'Label the motion direction and requested clock interval.'])]
 }
 
