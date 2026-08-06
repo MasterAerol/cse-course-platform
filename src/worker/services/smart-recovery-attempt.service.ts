@@ -24,6 +24,7 @@ import {
   createRecoveryAttemptWithSnapshots,
   findActiveRecoveryAttempt,
   findLatestSubmittedRecoveryAttempt,
+  findRecoveryAttemptSkillSlugs,
   findRecentGeneratedIdentities,
   findRecoveryAnswers,
   findRecoveryAttemptByIdempotencyKey,
@@ -427,6 +428,15 @@ export async function createRecoveryAttempt(
   if (active !== null) return loadAttemptPayload(database, active)
 
   const observedSkills = await planningSummaries(database, userId, now)
+  const latestSubmitted = await findLatestSubmittedRecoveryAttempt(
+    database,
+    userId,
+    enrollment.course_id,
+  )
+  const recentlyTrainedSkillSlugs =
+    latestSubmitted === null
+      ? []
+      : await findRecoveryAttemptSkillSlugs(database, latestSubmitted.id)
   const attemptSeed = createAttemptSeed()
   const eligibility = evaluateRecoveryEligibility({
     observedSkills,
@@ -434,6 +444,7 @@ export async function createRecoveryAttempt(
       (summary) => summary.status !== 'not_enough_data',
     ),
     attemptSeed,
+    recentlyTrainedSkillSlugs,
     recentIdentities: recentIdentities(
       await findRecentGeneratedIdentities(database, userId),
     ),
@@ -451,8 +462,21 @@ export async function createRecoveryAttempt(
     }
     throw recoveryEligibilityError(eligibility.unavailableReason)
   }
+  console.info(JSON.stringify({
+    message: 'Smart Recovery rotated creation plan completed',
+    weakSkillCount: eligibility.diagnostics.statusCounts.needs_more_practice,
+    generatableWeakSkillCount: eligibility.diagnostics.generatableSkillCount,
+    recentlyTrainedSkillCount: eligibility.diagnostics.recentlyTrainedSkillCount,
+    alternativeCandidateSkillCount:
+      eligibility.diagnostics.rotationCandidateSkillCount,
+    freshnessBlockedSkillCount:
+      eligibility.questionPlan?.diagnostics.filter(
+        (diagnostic) => diagnostic.blockingReason !== null,
+      ).length ?? 0,
+    selectedSkillCount: eligibility.selectedSkills.length,
+    questionCount: eligibility.generatedQuestions.length,
+  }))
   const questions = eligibility.generatedQuestions
-
   const attemptPublicId = `recovery-attempt-${crypto.randomUUID()}`
   try {
     const created = await createRecoveryAttemptWithSnapshots(database, {

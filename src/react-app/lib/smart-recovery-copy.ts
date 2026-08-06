@@ -11,7 +11,7 @@ export function smartRecoveryUnavailableMessage(
     case 'no_generatable_skills':
       return 'Your current weak skills do not have an eligible targeted generator.'
     case 'insufficient_fresh_questions':
-      return 'You have eligible weak skills, but a fresh question set is not available yet.'
+      return 'You’ve recently trained your current priority skills. Complete more practice or assessments to unlock another fresh recovery set.'
     case 'active_attempt_exists':
       return 'Continue your current recovery set before starting another.'
     case 'configuration_unavailable':

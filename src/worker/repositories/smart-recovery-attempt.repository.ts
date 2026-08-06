@@ -165,6 +165,21 @@ export async function findLatestSubmittedRecoveryAttempt(
     .first<RecoveryAttemptRow>()
 }
 
+export async function findRecoveryAttemptSkillSlugs(
+  database: D1Database,
+  attemptId: number,
+): Promise<string[]> {
+  const result = await database
+    .prepare(
+      `SELECT DISTINCT skill_slug
+      FROM recovery_question_snapshots
+      WHERE attempt_id = ?1
+      ORDER BY skill_slug`,
+    )
+    .bind(attemptId)
+    .all<{ skill_slug: string }>()
+  return result.results.map((row) => row.skill_slug)
+}
 export async function findRecentGeneratedIdentities(
   database: D1Database,
   userId: number,

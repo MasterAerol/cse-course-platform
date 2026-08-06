@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import type { RecentRecoveryIdentity } from '../src/worker/domain/smart-recovery-attempt'
+
 import {
   evaluateRecoveryAvailability,
   evaluateRecoveryEligibility,
@@ -146,6 +148,142 @@ describe('shared Smart Recovery eligibility', () => {
     })
   })
 
+  it('rotates a poor second recovery set away from the immediately trained five', () => {
+    const observedSkills = productionScaleObservedSkills()
+    const first = evaluateRecoveryEligibility({
+      observedSkills,
+      hasEnoughEvidence: true,
+      attemptSeed: 'rotation-first',
+    })
+    const recentlyTrainedSkillSlugs = first.selectedSkills.map(
+      (allocation) => allocation.skill.skill.slug,
+    )
+    const recentIdentities: RecentRecoveryIdentity[] = first.generatedQuestions.map(
+      ({ question }) => ({
+        generatorSlug: question.generatorSlug,
+        generatorVersion: question.generatorVersion,
+        generatorSeed: question.seed,
+        canonicalSignature: question.metadata.canonicalSignature,
+        normalizedPrompt: question.prompt.trim().toLowerCase(),
+      }),
+    )
+
+    const summary = evaluateRecoveryAvailability({
+      observedSkills,
+      hasEnoughEvidence: true,
+      recentlyTrainedSkillSlugs,
+    })
+    const second = evaluateRecoveryEligibility({
+      observedSkills,
+      hasEnoughEvidence: true,
+      attemptSeed: 'rotation-second',
+      recentlyTrainedSkillSlugs,
+      recentIdentities,
+    })
+
+    expect(summary.recoveryAvailable).toBe(true)
+    expect(summary.selectedSkills).toHaveLength(5)
+    expect(summary.diagnostics).toMatchObject({
+      recentlyTrainedSkillCount: 5,
+      rotationCandidateSkillCount: 196,
+    })
+    expect(second.recoveryAvailable).toBe(true)
+    expect(second.selectedSkills).toHaveLength(5)
+    expect(second.generatedQuestions).toHaveLength(20)
+    expect(
+      second.selectedSkills.every(
+        (allocation) =>
+          !recentlyTrainedSkillSlugs.includes(allocation.skill.skill.slug),
+      ),
+    ).toBe(true)
+    const firstSignatures = new Set(
+      first.generatedQuestions.map(
+        ({ question }) => question.metadata.canonicalSignature,
+      ),
+    )
+    expect(
+      second.generatedQuestions.every(
+        ({ question }) => !firstSignatures.has(question.metadata.canonicalSignature),
+      ),
+    ).toBe(true)
+  })
+
+  it('searches beyond freshness-blocked top-five candidates', () => {
+    const observedSkills = productionScaleObservedSkills()
+    const initial = evaluateRecoveryEligibility({
+      observedSkills,
+      hasEnoughEvidence: true,
+      attemptSeed: 'blocked-candidate-search',
+      maximumGenerationRetries: 1,
+    })
+    const recentIdentities: RecentRecoveryIdentity[] = initial.generatedQuestions.map(
+      ({ question }) => ({
+        generatorSlug: question.generatorSlug,
+        generatorVersion: question.generatorVersion,
+        generatorSeed: question.seed,
+        canonicalSignature: question.metadata.canonicalSignature,
+        normalizedPrompt: question.prompt.trim().toLowerCase(),
+      }),
+    )
+    const blocked = new Set(
+      initial.selectedSkills.map((allocation) => allocation.skill.skill.slug),
+    )
+
+    const rotated = evaluateRecoveryEligibility({
+      observedSkills,
+      hasEnoughEvidence: true,
+      attemptSeed: 'blocked-candidate-search',
+      recentIdentities,
+      maximumGenerationRetries: 1,
+    })
+
+    expect(rotated.recoveryAvailable).toBe(true)
+    expect(rotated.selectedSkills).toHaveLength(5)
+    expect(rotated.generatedQuestions).toHaveLength(20)
+    expect(
+      rotated.selectedSkills.every(
+        (allocation) => !blocked.has(allocation.skill.skill.slug),
+      ),
+    ).toBe(true)
+    expect(
+      rotated.questionPlan?.diagnostics.filter(
+        (diagnostic) => diagnostic.blockingReason !== null,
+      ).length,
+    ).toBeGreaterThanOrEqual(5)
+  })
+
+  it('marks an exhausted immediately trained single skill unavailable', () => {
+    const onlySkill = [
+      summary('finding-percentage', 'needs_more_practice', 10, 0),
+    ]
+    const result = evaluateRecoveryAvailability({
+      observedSkills: onlySkill,
+      hasEnoughEvidence: true,
+      recentlyTrainedSkillSlugs: ['finding-percentage'],
+    })
+
+    expect(result.recoveryAvailable).toBe(false)
+    expect(result.unavailableReason).toBe('insufficient_fresh_questions')
+    expect(result.selectedSkills).toHaveLength(0)
+    expect(result.recommendedQuestionCount).toBe(0)
+  })
+
+  it('skips two recently trained skills and selects three fresh skills', () => {
+    const observedSkills = selectedPrioritySlugs.map((slug, index) =>
+      summary(slug, 'needs_more_practice', 10 + index, index),
+    )
+    const result = evaluateRecoveryAvailability({
+      observedSkills,
+      hasEnoughEvidence: true,
+      recentlyTrainedSkillSlugs: selectedPrioritySlugs.slice(0, 2),
+    })
+
+    expect(result.recoveryAvailable).toBe(true)
+    expect(result.selectedSkills.map((item) => item.skill.skill.slug)).toEqual(
+      [...selectedPrioritySlugs.slice(2)],
+    )
+    expect(result.recommendedQuestionCount).toBe(20)
+  })
   it('reports exhausted generation as insufficient fresh questions', () => {
     const result = evaluateRecoveryEligibility({
       observedSkills: [

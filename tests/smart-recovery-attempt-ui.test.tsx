@@ -136,6 +136,24 @@ describe('Smart Recovery Phase D/E UI contracts', () => {
     expect(card).toContain('Start Recovery Set')
   })
 
+  it('hides Start Recovery when only immediately trained priorities remain', () => {
+    const unavailable: SmartRecoveryDashboard = {
+      ...dashboard,
+      recoveryAvailable: false,
+      recommendedRecoveryQuestionCount: 0,
+      selectedRecoverySkillCount: 0,
+      recoveryUnavailableReason: 'insufficient_fresh_questions',
+    }
+    const expected =
+      'You’ve recently trained your current priority skills. Complete more practice or assessments to unlock another fresh recovery set.'
+    const overview = render(<SmartRecoveryOverview summary={unavailable} />)
+    const card = render(<SmartRecoveryCardView summary={unavailable} />)
+
+    expect(overview).not.toContain('Start Recovery Set')
+    expect(card).not.toContain('Start Recovery Set')
+    expect(overview).toContain(expected)
+    expect(card).toContain(expected)
+  })
   it('renders submitted recovery history and the latest result summary', () => {
     const markup = render(
       <SmartRecoveryOverview

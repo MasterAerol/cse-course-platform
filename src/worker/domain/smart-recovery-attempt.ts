@@ -524,6 +524,75 @@ export function planRecoveryQuestions(input: {
   }
 }
 
+export function planRecoveryQuestionsAcrossCandidates(input: {
+  attemptSeed: string
+  candidateSkills: readonly SkillWeaknessSummary[]
+  recentIdentities?: readonly RecentRecoveryIdentity[]
+  maximumCandidateAttemptsPerQuestion?: number
+}): RecoveryQuestionPlan {
+  let remaining = [...input.candidateSkills].sort(compareWeaknessPriority)
+  const skippedDiagnostics: RecoverySkillFeasibilityDiagnostic[] = []
+  let lastPlan: RecoveryQuestionPlan | null = null
+
+  while (remaining.length > 0) {
+    const allocations = allocateRecoveryQuestions(
+      remaining.slice(0, RECOVERY_MAXIMUM_SKILLS),
+    )
+    const plan = planRecoveryQuestions({
+      attemptSeed: input.attemptSeed,
+      allocations,
+      recentIdentities: input.recentIdentities,
+      maximumCandidateAttemptsPerQuestion:
+        input.maximumCandidateAttemptsPerQuestion,
+    })
+    lastPlan = plan
+    if (plan.available) {
+      return {
+        ...plan,
+        diagnostics: [...skippedDiagnostics, ...plan.diagnostics],
+      }
+    }
+
+    const blockedSlugs = new Set(
+      plan.diagnostics
+        .filter(
+          (diagnostic) =>
+            diagnostic.blockingReason !== null ||
+            diagnostic.finalFeasibleCount < diagnostic.requestedQuestionCount,
+        )
+        .map((diagnostic) => diagnostic.skillSlug),
+    )
+    if (blockedSlugs.size === 0) {
+      return {
+        ...plan,
+        diagnostics: [...skippedDiagnostics, ...plan.diagnostics],
+      }
+    }
+    skippedDiagnostics.push(
+      ...plan.diagnostics.filter((diagnostic) =>
+        blockedSlugs.has(diagnostic.skillSlug),
+      ),
+    )
+    remaining = remaining.filter(
+      (summary) => !blockedSlugs.has(summary.skill.slug),
+    )
+  }
+
+  return lastPlan === null
+    ? {
+        selectedSkills: [],
+        plannedQuestionCount: 0,
+        feasibleQuestionCount: 0,
+        available: false,
+        unavailableReason: 'insufficient_fresh_questions',
+        generatedQuestions: [],
+        diagnostics: skippedDiagnostics,
+      }
+    : {
+        ...lastPlan,
+        diagnostics: skippedDiagnostics,
+      }
+}
 export function generateRecoveryQuestions(input: {
   attemptSeed: string
   allocations: readonly RecoverySkillAllocation[]

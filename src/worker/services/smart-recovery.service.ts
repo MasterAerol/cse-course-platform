@@ -20,6 +20,7 @@ import { findPublishedCourseEnrollment } from '../repositories/course.repository
 import {
   findActiveRecoveryAttempt,
   findLatestSubmittedRecoveryAttempt,
+  findRecoveryAttemptSkillSlugs,
 } from '../repositories/smart-recovery-attempt.repository'
 import {
   findActiveSmartRecoverySkills,
@@ -158,6 +159,10 @@ export async function getSmartRecoveryDashboard(
       stage: 'latest_recovery_result',
     }))
   }
+  const recentlyTrainedSkillSlugs =
+    latestAttempt === null
+      ? []
+      : await findRecoveryAttemptSkillSlugs(database, latestAttempt.id)
   const activeIsCompatible =
     activeAttempt !== null &&
     activeAttempt.taxonomy_version === SMART_RECOVERY_TAXONOMY_VERSION &&
@@ -166,6 +171,7 @@ export async function getSmartRecoveryDashboard(
     observedSkills: summaries,
     hasEnoughEvidence,
 
+    recentlyTrainedSkillSlugs,
     activeAttempt:
       activeAttempt === null
         ? null
@@ -189,7 +195,9 @@ export async function getSmartRecoveryDashboard(
     skillsProcessed: analysis.metrics.skillsProcessed,
     skillsObserved: summaries.length,
     formulaEvaluationCount: analysis.metrics.formulaEvaluationCount,
-    databaseRoundTrips: 5,
+    databaseRoundTrips: latestAttempt === null ? 5 : 6,
+    recentlyTrainedSkillCount: eligibility.diagnostics.recentlyTrainedSkillCount,
+    rotationCandidateSkillCount: eligibility.diagnostics.rotationCandidateSkillCount,
     generatorMetadataEvaluations: eligibility.diagnostics.statusCounts.needs_more_practice,
     freshQuestionCandidatesGenerated: 0,
     returnedPriorityCount: Math.min(needsMorePractice.length, 3),

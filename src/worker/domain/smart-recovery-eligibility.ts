@@ -1,14 +1,15 @@
 import {
   allocateRecoveryQuestions,
   filterGeneratableWeaknesses,
-  planRecoveryQuestions,
+  planRecoveryQuestionsAcrossCandidates,
   type RecentRecoveryIdentity,
   type RecoveryGeneratedQuestion,
   type RecoveryQuestionPlan,
   type RecoverySkillAllocation,
 } from './smart-recovery-attempt'
-import type {
-  SkillWeaknessSummary,
+import {
+  compareWeaknessPriority,
+  type SkillWeaknessSummary,
   WeaknessStatus,
 } from './smart-recovery-weakness'
 
@@ -30,10 +31,13 @@ export interface RecoveryEligibilityDiagnostics {
   missingCanonicalSkillEvidenceCount: number
   missingGeneratorEligibilityCount: number
   invalidMappingOrContextEvidenceCount: number
+  recentlyTrainedSkillCount: number
+  rotationCandidateSkillCount: number
 }
 
 export interface RecoveryAvailabilitySummary {
   eligibleSkills: SkillWeaknessSummary[]
+  candidateSkills: SkillWeaknessSummary[]
   selectedSkills: RecoverySkillAllocation[]
   recommendedQuestionCount: number
   recoveryAvailable: boolean
@@ -56,6 +60,7 @@ interface RecoveryAvailabilityInput {
   ambiguousEvidenceCount?: number
   missingCanonicalSkillEvidenceCount?: number
   invalidMappingOrContextEvidenceCount?: number
+  recentlyTrainedSkillSlugs?: readonly string[]
 }
 
 export function evaluateRecoveryAvailability(
@@ -74,7 +79,12 @@ export function evaluateRecoveryAvailability(
     (summary) => summary.status === 'needs_more_practice',
   )
   const eligibleSkills = filterGeneratableWeaknesses(candidates)
-  const selectedSkills = allocateRecoveryQuestions(eligibleSkills)
+    .sort(compareWeaknessPriority)
+  const recentlyTrained = new Set(input.recentlyTrainedSkillSlugs ?? [])
+  const candidateSkills = eligibleSkills.filter(
+    (summary) => !recentlyTrained.has(summary.skill.slug),
+  )
+  const selectedSkills = allocateRecoveryQuestions(candidateSkills)
   const recommendedQuestionCount = selectedSkills.reduce(
     (total, allocation) => total + allocation.questionCount,
     0,
@@ -90,11 +100,14 @@ export function evaluateRecoveryAvailability(
     missingGeneratorEligibilityCount: candidates.length - eligibleSkills.length,
     invalidMappingOrContextEvidenceCount:
       input.invalidMappingOrContextEvidenceCount ?? 0,
+    recentlyTrainedSkillCount: eligibleSkills.length - candidateSkills.length,
+    rotationCandidateSkillCount: candidateSkills.length,
   }
 
   if (input.activeAttempt !== undefined && input.activeAttempt !== null) {
     return {
       eligibleSkills,
+      candidateSkills,
       selectedSkills,
       recommendedQuestionCount: input.activeAttempt.questionCount,
       recoveryAvailable: input.activeAttempt.compatible,
@@ -107,6 +120,7 @@ export function evaluateRecoveryAvailability(
   if (candidates.length === 0) {
     return {
       eligibleSkills,
+      candidateSkills,
       selectedSkills,
       recommendedQuestionCount: 0,
       recoveryAvailable: false,
@@ -119,15 +133,20 @@ export function evaluateRecoveryAvailability(
   if (selectedSkills.length === 0) {
     return {
       eligibleSkills,
+      candidateSkills,
       selectedSkills,
       recommendedQuestionCount: 0,
       recoveryAvailable: false,
-      unavailableReason: 'no_generatable_skills',
+      unavailableReason:
+        eligibleSkills.length > 0
+          ? 'insufficient_fresh_questions'
+          : 'no_generatable_skills',
       diagnostics,
     }
   }
   return {
     eligibleSkills,
+    candidateSkills,
     selectedSkills,
     recommendedQuestionCount,
     recoveryAvailable: true,
@@ -153,9 +172,9 @@ export function evaluateRecoveryEligibility(input: RecoveryAvailabilityInput & {
     }
   }
 
-  const questionPlan = planRecoveryQuestions({
+  const questionPlan = planRecoveryQuestionsAcrossCandidates({
     attemptSeed: input.attemptSeed,
-    allocations: availability.selectedSkills,
+    candidateSkills: availability.candidateSkills,
     recentIdentities: input.recentIdentities,
     maximumCandidateAttemptsPerQuestion: input.maximumGenerationRetries,
   })
@@ -168,6 +187,8 @@ export function evaluateRecoveryEligibility(input: RecoveryAvailabilityInput & {
         : 'insufficient_fresh_questions'
   return {
     ...availability,
+    selectedSkills: questionPlan.selectedSkills,
+    recommendedQuestionCount: questionPlan.plannedQuestionCount,
     recoveryAvailable: questionPlan.available,
     unavailableReason,
     generatedQuestions: questionPlan.generatedQuestions,

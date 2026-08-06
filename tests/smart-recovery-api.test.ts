@@ -67,12 +67,12 @@ async function enroll(userId: number): Promise<void> {
     .run()
 }
 
-async function seedFindingPercentageSkill(): Promise<void> {
+async function seedPercentageSkill(slug: string, title: string): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO skills(
       public_id,slug,taxonomy_version,subject_id,topic_id,title,description,status
-    ) SELECT ?1,'finding-percentage',1,subjects.id,topics.id,
-      'Finding Percentage','Questions that exercise Finding Percentage.','active'
+    ) SELECT ?1,?2,1,subjects.id,topics.id,
+      ?3,'Smart Recovery percentage skill.','active'
     FROM topics
     INNER JOIN subjects ON subjects.id=topics.subject_id
     INNER JOIN courses ON courses.id=subjects.course_id
@@ -81,14 +81,19 @@ async function seedFindingPercentageSkill(): Promise<void> {
       AND topics.slug='percentages'
     ON CONFLICT(slug) DO NOTHING`,
   )
-    .bind(`skill-${crypto.randomUUID()}`)
+    .bind(`skill-${crypto.randomUUID()}`, slug, title)
     .run()
+}
+
+async function seedFindingPercentageSkill(): Promise<void> {
+  return seedPercentageSkill('finding-percentage', 'Finding Percentage')
 }
 
 async function seedGeneratedAttempt(
   userId: number,
   status: 'in_progress' | 'submitted',
   questionCount: number,
+  generatorSlug = 'finding-percentage',
 ): Promise<void> {
   const practiceSet = await env.DB.prepare(
     `SELECT practice_sets.id
@@ -136,13 +141,14 @@ async function seedGeneratedAttempt(
         public_id,owner_user_id,practice_attempt_id,source_position,
         generator_slug,generator_version,seed,difficulty,prompt,
         explanation_json,parameters_json,metadata_json
-      ) VALUES(?1,?2,?3,?4,'finding-percentage',1,?5,'easy',?6,'{}','{}','{}')`,
+      ) VALUES(?1,?2,?3,?4,?5,1,?6,'easy',?7,'{}','{}','{}')`,
     )
       .bind(
         snapshotPublicId,
         userId,
         attemptId,
         index + 1,
+        generatorSlug,
         `seed-${attemptPublicId}-${index}`,
         `Smart Recovery test prompt ${attemptPublicId}-${index}`,
       )
@@ -753,8 +759,28 @@ describe('Smart Recovery learner APIs', () => {
     expect(counts[3]?.results[0]).toEqual(beforeFixed[0]?.results[0])
     expect(counts[4]?.results[0]).toEqual(beforeFixed[1]?.results[0])
 
-    const secondCreate = await app.request(
-      '/api/student/smart-recovery/attempts',
+    await seedPercentageSkill('finding-base', 'Finding Base')
+    await seedPercentageSkill('finding-rate', 'Finding Rate')
+    await seedGeneratedAttempt(owner.userId, 'submitted', 5, 'finding-base')
+    await seedGeneratedAttempt(owner.userId, 'submitted', 5, 'finding-rate')
+
+    const rotatedSummary = await get('/api/student/smart-recovery', owner.cookie)
+    expect(rotatedSummary.status).toBe(200)
+    expect(
+      (await rotatedSummary.json<{
+        data: {
+          recoveryAvailable: boolean
+          selectedRecoverySkillCount: number
+          recommendedRecoveryQuestionCount: number
+        }
+      }>()).data,
+    ).toMatchObject({
+      recoveryAvailable: true,
+      selectedRecoverySkillCount: 2,
+      recommendedRecoveryQuestionCount: 16,
+    })
+
+    const secondCreate = await app.request(      '/api/student/smart-recovery/attempts',
       {
         method: 'POST',
         headers: { cookie: owner.cookie, 'content-type': 'application/json' },
@@ -766,6 +792,35 @@ describe('Smart Recovery learner APIs', () => {
     const secondCreated = await secondCreate.json<typeof created>()
     const secondAttemptId = secondCreated.data.attempt.publicId
     expect(secondAttemptId).not.toBe(attemptId)
+    expect(secondCreated.data.totalCount).toBe(16)
+    const secondSkillRows = await env.DB.prepare(
+      `SELECT DISTINCT skill_slug
+      FROM recovery_question_snapshots
+      INNER JOIN recovery_attempts ON recovery_attempts.id=recovery_question_snapshots.attempt_id
+      WHERE recovery_attempts.public_id=?1
+      ORDER BY skill_slug`,
+    )
+      .bind(secondAttemptId)
+      .all<{ skill_slug: string }>()
+    expect(secondSkillRows.results.map((row) => row.skill_slug)).toEqual([
+      'finding-base',
+      'finding-rate',
+    ])
+    const duplicateSignatures = await env.DB.prepare(
+      `SELECT COUNT(*) AS count
+      FROM recovery_question_snapshots first_snapshots
+      INNER JOIN recovery_attempts first_attempt
+        ON first_attempt.id=first_snapshots.attempt_id
+      INNER JOIN recovery_question_snapshots second_snapshots
+        ON json_extract(second_snapshots.metadata_json, '$.canonicalSignature') =
+          json_extract(first_snapshots.metadata_json, '$.canonicalSignature')
+      INNER JOIN recovery_attempts second_attempt
+        ON second_attempt.id=second_snapshots.attempt_id
+      WHERE first_attempt.public_id=?1 AND second_attempt.public_id=?2`,
+    )
+      .bind(attemptId, secondAttemptId)
+      .first<{ count: number }>()
+    expect(duplicateSignatures?.count).toBe(0)
     expect(
       (
         await app.request(
