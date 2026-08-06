@@ -726,7 +726,7 @@ export class ApiClientError extends Error {
   }
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   schema: z.ZodType<T>,
   init?: RequestInit,
