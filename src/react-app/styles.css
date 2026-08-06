@@ -2945,6 +2945,25 @@ input[aria-invalid="true"] {
     padding: 0.95rem;
   }
 }
+
+.smart-recovery-attempt-page .quiz-question-nav {
+  margin-bottom: 0.75rem;
+}
+
+.smart-recovery-attempt-page .quiz-submit-row button,
+.smart-recovery-attempt-page .quiz-step-row button {
+  min-height: 2.8rem;
+}
+
+@media (max-width: 43.75rem) {
+  .smart-recovery-attempt-page .assessment-meta {
+    gap: 0.2rem 0.5rem;
+  }
+
+  .smart-recovery-attempt-page .quiz-question-nav {
+    margin-bottom: 0.55rem;
+  }
+}
 .recovery-page { width: 100%; }
 .recovery-page > a, .recovery-page-header, .recovery-page > [data-testid="smart-recovery-overview"], .recovery-page > [data-testid="smart-recovery-skill-details"], .recovery-state-card { width: min(100%, 68rem); margin-inline: auto; }
 .recovery-page-header h1 { max-width: 18ch; margin: 0 0 .75rem; color: #102039; font-size: clamp(2.25rem, 6vw, 4rem); line-height: 1.05; }
@@ -3147,3 +3166,4 @@ input[aria-invalid="true"] {
   .recovery-attempt-actions button { flex: 1; }
   .recovery-action-card { align-items: stretch; }
 }
+

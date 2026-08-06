@@ -53,12 +53,26 @@ export function SmartRecoveryAttemptPage() {
       ).length ?? 0,
     [attempt],
   )
+  const unansweredCount = attempt === null ? 0 : attempt.totalCount - answeredCount
+
+  const question = attempt?.questions[currentIndex]
+  const currentPosition = question?.position ?? currentIndex + 1
+
+  const saveStateText =
+    saveState === 'saving'
+      ? 'Saving...'
+      : saveState === 'saved'
+        ? 'Saved'
+        : saveState === 'error'
+          ? 'Save failed'
+          : 'Autosave active'
 
   async function choose(choicePublicId: string): Promise<void> {
     const question = attempt?.questions[currentIndex]
     if (attempt === null || question === undefined || saveState === 'saving') {
       return
     }
+
     const previous = question.selectedChoicePublicId
     setAttempt({
       ...attempt,
@@ -70,6 +84,7 @@ export function SmartRecoveryAttemptPage() {
     })
     setSaveState('saving')
     setError(null)
+
     try {
       await saveSmartRecoveryAnswer(
         attempt.attempt.publicId,
@@ -122,66 +137,183 @@ export function SmartRecoveryAttemptPage() {
   }
 
   if (error !== null && attempt === null) {
-    return <main className="page-shell"><section className="recovery-state-card" role="alert"><h1>Recovery set could not be loaded</h1><p>{error}</p><Link to="/smart-recovery">Back to Smart Recovery</Link></section></main>
+    return (
+      <main className="page-shell">
+        <section className="recovery-state-card" role="alert">
+          <h1>Recovery set could not be loaded</h1>
+          <p>{error}</p>
+          <Link to="/smart-recovery">Back to Smart Recovery</Link>
+        </section>
+      </main>
+    )
   }
   if (attempt === null) {
-    return <main className="page-shell"><section className="recovery-state-card" aria-busy="true" aria-live="polite"><h1>Preparing your recovery set</h1><p>Loading your saved progress.</p></section></main>
+    return (
+      <main className="page-shell">
+        <section className="recovery-state-card" aria-busy="true" aria-live="polite">
+          <h1>Preparing your recovery set</h1>
+          <p>Loading your saved progress.</p>
+        </section>
+      </main>
+    )
+  }
+  if (question === undefined) {
+    return (
+      <main className="page-shell">
+        <section className="recovery-state-card" aria-live="polite">
+          <h1>No questions in this recovery set</h1>
+          <p>Start a new recovery set to continue.</p>
+          <Link to="/smart-recovery">Back to Smart Recovery</Link>
+        </section>
+      </main>
+    )
   }
 
-  const question = attempt.questions[currentIndex]
   return (
-    <main className="page-shell recovery-attempt-page" data-testid="recovery-attempt-page">
-      <header className="recovery-attempt-header">
-        <Link to="/smart-recovery">Smart Recovery</Link>
-        <div>
-          <strong>{answeredCount} of {attempt.totalCount} answered</strong>
-          <span className={`recovery-save-state recovery-save-state--${saveState}`} role="status" aria-live="polite">
-            {saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Save failed' : 'Answers autosave'}
-          </span>
+    <main
+      className="page-shell quiz-page assessment-attempt-page smart-recovery-attempt-page"
+      data-testid="recovery-attempt-page"
+    >
+      <header className="assessment-header">
+        <p className="eyebrow">SMART RECOVERY</p>
+        <h1 className="assessment-title">Recovery Set</h1>
+        <div className="assessment-meta">
+          <p aria-live="polite">
+            Question {currentPosition} of {attempt.totalCount} {'\u00B7'} {answeredCount} answered {'\u00B7'} {saveStateText}
+          </p>
         </div>
       </header>
 
-      <nav className="recovery-question-navigator" aria-label="Recovery questions">
-        {attempt.questions.map((item, index) => (
-          <button
-            type="button"
-            key={item.publicId}
-            className={index === currentIndex ? 'is-current' : item.selectedChoicePublicId === null ? '' : 'is-answered'}
-            aria-current={index === currentIndex ? 'step' : undefined}
-            aria-label={`Question ${item.position}, ${item.selectedChoicePublicId === null ? 'unanswered' : 'answered'}`}
-            onClick={() => { setCurrentIndex(index); setReviewing(false) }}
-          >
-            {item.position}
-          </button>
-        ))}
+      <nav className="quiz-question-nav" aria-label="Recovery questions">
+        {attempt.questions.map((item, index) => {
+          const isAnswered = item.selectedChoicePublicId !== null
+          return (
+            <button
+              type="button"
+              key={item.publicId}
+              className={
+                index === currentIndex
+                  ? 'quiz-question-nav__item quiz-question-nav__item--current'
+                  : isAnswered
+                    ? 'quiz-question-nav__item quiz-question-nav__item--answered'
+                    : 'quiz-question-nav__item'
+              }
+              aria-current={index === currentIndex ? 'step' : undefined}
+              aria-label={`Question ${item.position}, ${isAnswered ? 'answered' : 'unanswered'}`}
+              onClick={() => {
+                setCurrentIndex(index)
+                setReviewing(false)
+              }}
+            >
+              <span>{item.position}</span>
+              <small>{isAnswered ? 'Answered' : 'Unanswered'}</small>
+            </button>
+          )
+        })}
       </nav>
 
       {reviewing ? (
-        <section className="recovery-question-card" aria-labelledby="recovery-review-heading">
+        <section className="quiz-attempt-card">
           <p className="eyebrow">Review</p>
           <h1 id="recovery-review-heading">Review &amp; Submit Recovery Set</h1>
-          <p>{answeredCount} answered and {attempt.totalCount - answeredCount} unanswered. Unanswered questions score zero.</p>
+          <p>
+            {answeredCount} answered and {unansweredCount} unanswered. Unanswered
+            questions score zero.
+          </p>
           <div className="recovery-review-list">
-            {attempt.questions.map((item, index) => <button type="button" key={item.publicId} onClick={() => { setCurrentIndex(index); setReviewing(false) }}>Question {item.position}: {item.selectedChoicePublicId === null ? 'Unanswered' : 'Answered'}</button>)}
-          </div>
-          <button type="button" disabled={submitting || saveState === 'saving'} onClick={() => void submit()}>{submitting ? 'Submitting...' : 'Submit Recovery Set'}</button>
-        </section>
-      ) : question === undefined ? null : (
-        <section className="recovery-question-card" aria-labelledby="recovery-question-heading">
-          <p className="eyebrow">Question {question.position} of {attempt.totalCount} · {question.skill.title}</p>
-          <h1 id="recovery-question-heading">{question.prompt}</h1>
-          <fieldset className="recovery-choice-list" disabled={saveState === 'saving' || submitting}>
-            <legend className="visually-hidden">Choose one answer</legend>
-            {question.choices.map((choice) => (
-              <label key={choice.publicId}>
-                <input type="radio" name={`recovery-${question.publicId}`} value={choice.publicId} checked={question.selectedChoicePublicId === choice.publicId} onChange={() => void choose(choice.publicId)} />
-                <span>{choice.text}</span>
-              </label>
+            {attempt.questions.map((item, index) => (
+              <button
+                type="button"
+                key={item.publicId}
+                onClick={() => {
+                  setCurrentIndex(index)
+                  setReviewing(false)
+                }}
+              >
+                Question {item.position}: {item.selectedChoicePublicId === null ? 'Unanswered' : 'Answered'}
+              </button>
             ))}
+          </div>
+          <div className="quiz-submit-row">
+            <button
+              type="button"
+              disabled={submitting || saveState === 'saving'}
+              onClick={() => void submit()}
+            >
+              {submitting ? 'Submitting...' : 'Submit Recovery Set'}
+            </button>
+            <p className="meta-copy">
+              You can submit now. Any unanswered questions count as zero.
+            </p>
+          </div>
+        </section>
+      ) : (
+        <section className="quiz-attempt-card">
+          <fieldset className="quiz-question" disabled={saveState === 'saving' || submitting}>
+            <legend>
+              <span>Question {question.position} {'\u00B7'} {question.skill.title}</span>
+              {question.prompt}
+            </legend>
+            <div className="quiz-choice-list">
+              {question.choices.map((choice) => (
+                <label className="quiz-choice" key={choice.publicId}>
+                  <input
+                    type="radio"
+                    name={`recovery-${question.publicId}`}
+                    value={choice.publicId}
+                    checked={
+                      question.selectedChoicePublicId === choice.publicId
+                    }
+                    onChange={() => void choose(choice.publicId)}
+                  />
+                  <span>{choice.text}</span>
+                </label>
+              ))}
+            </div>
           </fieldset>
-          <div className="recovery-attempt-actions">
-            <button type="button" className="button-secondary" disabled={currentIndex === 0 || saveState === 'saving'} onClick={() => setCurrentIndex((index) => Math.max(0, index - 1))}>Previous</button>
-            {currentIndex < attempt.questions.length - 1 ? <button type="button" disabled={saveState === 'saving'} onClick={() => setCurrentIndex((index) => Math.min(attempt.questions.length - 1, index + 1))}>Next</button> : <button type="button" disabled={saveState === 'saving'} onClick={() => setReviewing(true)}>Review &amp; Submit</button>}
+
+          <div className="quiz-step-row">
+            <button
+              className="button-secondary"
+              type="button"
+              disabled={currentIndex === 0 || submitting || saveState === 'saving'}
+              onClick={() =>
+                setCurrentIndex((index) => Math.max(0, index - 1))
+              }
+            >
+              Previous
+            </button>
+            {currentIndex < attempt.questions.length - 1 ? (
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={submitting || saveState === 'saving'}
+                onClick={() =>
+                  setCurrentIndex((index) =>
+                    Math.min(attempt.questions.length - 1, index + 1),
+                  )
+                }
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={submitting || saveState === 'saving'}
+                onClick={() => setReviewing(true)}
+              >
+                Review &amp; Submit
+              </button>
+            )}
+          </div>
+          <div className="quiz-submit-row">
+            {saveState === 'saving' && (
+              <p className="meta-copy" aria-live="polite">
+                Saving answer...
+              </p>
+            )}
+
           </div>
         </section>
       )}
@@ -190,3 +322,4 @@ export function SmartRecoveryAttemptPage() {
     </main>
   )
 }
+
