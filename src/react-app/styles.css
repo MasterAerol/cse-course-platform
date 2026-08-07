@@ -578,6 +578,7 @@ input[aria-invalid="true"] {
 .lesson-page {
   min-height: 100vh;
   background: #f4f7fb;
+  overflow-x: hidden;
 }
 
 .lesson-topbar {
@@ -601,6 +602,7 @@ input[aria-invalid="true"] {
   width: min(100%, 90rem);
   margin: 0 auto;
   padding: 2rem;
+  overflow-x: hidden;
 }
 
 .lesson-curriculum-sidebar {
@@ -704,6 +706,7 @@ input[aria-invalid="true"] {
   min-width: 0;
   max-width: 100%;
   padding: 0 0 4rem;
+  overflow-x: hidden;
 }
 
 .lesson-breadcrumb {
@@ -1091,7 +1094,8 @@ input[aria-invalid="true"] {
   box-sizing: border-box;
   margin: 1.25rem 0;
   padding: 1rem;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: visible;
   border: 1px solid #c9d9ee;
   border-radius: 0.9rem;
   background:
