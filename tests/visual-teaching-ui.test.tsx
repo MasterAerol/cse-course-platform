@@ -77,7 +77,8 @@ describe('visual teaching lesson blocks', () => {
     expect(sequenceIndex).toBeGreaterThan(shellIndex)
     expect(memoryIndex).toBeGreaterThan(sequenceIndex)
     expect(markup).toContain('tabindex="0"')
-    expect(markup).toContain('Scroll left or right to see every step')
+    expect(markup).toContain('aria-label="Scroll visual teaching board left"')
+    expect(markup).toContain('aria-label="Scroll visual teaching board right"')
   })
   it('renders an optional visual inside an existing example block', () => {
     const markup = renderToStaticMarkup(

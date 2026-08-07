@@ -29,5 +29,5 @@
     "tests",
     "src/worker"
   ],
-  "exclude": ["tests/registration-policy-ui.test.tsx", "tests/smart-recovery-ui.test.tsx", "tests/smart-recovery-attempt-ui.test.tsx"]
+  "exclude": ["tests/*-ui.test.tsx"]
 }
