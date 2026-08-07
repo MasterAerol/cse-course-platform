@@ -11,49 +11,51 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
       aria-label={visual.ariaLabel}
       data-testid="visual-teaching-board"
     >
-      <div className="visual-teaching-board__sequence">
-        {visual.stages.map((stage, index) => {
-          const transition = visual.transitions[index]
+      <div className="visual-teaching-board__scroll-shell">
+        <div className="visual-teaching-board__sequence">
+          {visual.stages.map((stage, index) => {
+            const transition = visual.transitions[index]
 
-          return (
-            <div className="visual-teaching-board__pair" key={`${stage.label}-${index}`}>
-              <div className="visual-teaching-board__stage">
-                <span className="visual-teaching-board__stage-label">{stage.label}</span>
-                <div
-                  className="visual-teaching-board__expression"
-                  aria-label={stage.expression.map((token) => token.text).join('')}
-                >
-                  {stage.expression.map((token, tokenIndex) => (
-                    <span
-                      className={`visual-teaching-board__token visual-teaching-board__token--${token.emphasis ?? 'normal'}`}
-                      key={`${token.text}-${tokenIndex}`}
-                    >
-                      {token.text}
-                    </span>
-                  ))}
+            return (
+              <div className="visual-teaching-board__pair" key={`${stage.label}-${index}`}>
+                <div className="visual-teaching-board__stage">
+                  <span className="visual-teaching-board__stage-label">{stage.label}</span>
+                  <div
+                    className="visual-teaching-board__expression"
+                    aria-label={stage.expression.map((token) => token.text).join('')}
+                  >
+                    {stage.expression.map((token, tokenIndex) => (
+                      <span
+                        className={`visual-teaching-board__token visual-teaching-board__token--${token.emphasis ?? 'normal'}`}
+                        key={`${token.text}-${tokenIndex}`}
+                      >
+                        {token.text}
+                      </span>
+                    ))}
+                  </div>
+                  {stage.annotation !== undefined && (
+                    <span className="visual-teaching-board__annotation">{stage.annotation}</span>
+                  )}
                 </div>
-                {stage.annotation !== undefined && (
-                  <span className="visual-teaching-board__annotation">{stage.annotation}</span>
+
+                {transition !== undefined && (
+                  <div className={`visual-teaching-board__transition visual-teaching-board__transition--${transition.arrow}`}>
+                    <span className="visual-teaching-board__flow-arrow" aria-hidden="true">→</span>
+                    <strong>{transition.label}</strong>
+                    {transition.movement !== undefined && (
+                      <span className="visual-teaching-board__movement" aria-hidden="true">
+                        {transition.movement === 'left' ? '←' : transition.movement === 'right' ? '→' : '↓'} {transition.label}
+                      </span>
+                    )}
+                    <span><b>What changed:</b> {transition.whatChanged}</span>
+                    <span><b>Why:</b> {transition.why}</span>
+                    {transition.source !== undefined && <span><b>From:</b> {transition.source}</span>}
+                  </div>
                 )}
               </div>
-
-              {transition !== undefined && (
-                <div className={`visual-teaching-board__transition visual-teaching-board__transition--${transition.arrow}`}>
-                  <span className="visual-teaching-board__flow-arrow" aria-hidden="true">→</span>
-                  <strong>{transition.label}</strong>
-                  {transition.movement !== undefined && (
-                    <span className="visual-teaching-board__movement" aria-hidden="true">
-                      {transition.movement === 'left' ? '←' : transition.movement === 'right' ? '→' : '↓'} {transition.label}
-                    </span>
-                  )}
-                  <span><b>What changed:</b> {transition.whatChanged}</span>
-                  <span><b>Why:</b> {transition.why}</span>
-                  {transition.source !== undefined && <span><b>From:</b> {transition.source}</span>}
-                </div>
-              )}
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
 
       {visual.memoryTip !== undefined && (
