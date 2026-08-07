@@ -747,6 +747,8 @@ input[aria-invalid="true"] {
 
 .lesson-blocks {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 1.25rem;
 }
 
@@ -1035,6 +1037,8 @@ input[aria-invalid="true"] {
 .lesson-image-block,
 .lesson-video-block,
 .lesson-summary-block {
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   padding: 1.1rem;
   border: 1px solid #dce5f0;

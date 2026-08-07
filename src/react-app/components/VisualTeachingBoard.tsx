@@ -1,16 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { VisualTeaching } from '../../shared/visual-teaching.schema'
+import {
+  createVisualScrollMeasurement,
+  measureVisualScroll,
+  scrollVisualShell,
+  type VisualScrollState,
+} from './visual-teaching-scroll'
 
 interface VisualTeachingBoardProps {
   visual: VisualTeaching
 }
 
 export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
-  const scrollShellRef = useRef<HTMLDivElement>(null)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(false)
   const hasMultipleStages = visual.stages.length > 1
+  const scrollShellRef = useRef<HTMLDivElement>(null)
+  const sequenceRef = useRef<HTMLDivElement>(null)
+  const [scrollState, setScrollState] = useState<VisualScrollState>({
+    clientWidth: 0,
+    scrollWidth: 0,
+    scrollLeft: 0,
+    canScrollLeft: false,
+    canScrollRight: hasMultipleStages,
+  })
 
   const updateScrollState = useCallback(() => {
     const shell = scrollShellRef.current
@@ -18,26 +30,39 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
       return
     }
 
-    const { scrollLeft, scrollWidth, clientWidth } = shell
-    setCanScrollLeft(scrollLeft > 0)
-    setCanScrollRight(scrollLeft + clientWidth < scrollWidth)
+    setScrollState(measureVisualScroll(shell))
   }, [])
 
   useEffect(() => {
     const shell = scrollShellRef.current
-    if (shell == null) {
+    const sequence = sequenceRef.current
+    if (shell == null || sequence == null) {
       return
     }
 
-    updateScrollState()
+    const measurement = createVisualScrollMeasurement(
+      shell,
+      sequence,
+      updateScrollState,
+      {
+        requestFrame: requestAnimationFrame,
+        cancelFrame: cancelAnimationFrame,
+        createResizeObserver: (callback) =>
+          typeof ResizeObserver === 'undefined'
+            ? null
+            : new ResizeObserver(callback),
+      },
+    )
+
     shell.addEventListener('scroll', updateScrollState, { passive: true })
-    window.addEventListener('resize', updateScrollState)
+    window.addEventListener('resize', measurement.schedule)
 
     return () => {
+      measurement.disconnect()
       shell.removeEventListener('scroll', updateScrollState)
-      window.removeEventListener('resize', updateScrollState)
+      window.removeEventListener('resize', measurement.schedule)
     }
-  }, [updateScrollState])
+  }, [updateScrollState, visual])
 
   function handleScroll(direction: -1 | 1): void {
     const shell = scrollShellRef.current
@@ -45,10 +70,7 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
       return
     }
 
-    shell.scrollBy({
-      left: direction * shell.clientWidth * 0.75,
-      behavior: 'smooth',
-    })
+    scrollVisualShell(shell, direction)
   }
 
   return (
@@ -65,8 +87,9 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
               type="button"
               className="visual-teaching-board__scroll-button"
               aria-label="Scroll visual teaching board left"
+              data-testid="visual-scroll-left"
               onClick={() => handleScroll(-1)}
-              disabled={!canScrollLeft}
+              disabled={!scrollState.canScrollLeft}
             >
               <span aria-hidden="true">&#8592;</span>
             </button>
@@ -74,8 +97,9 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
               type="button"
               className="visual-teaching-board__scroll-button"
               aria-label="Scroll visual teaching board right"
+              data-testid="visual-scroll-right"
               onClick={() => handleScroll(1)}
-              disabled={!canScrollRight}
+              disabled={!scrollState.canScrollRight}
             >
               <span aria-hidden="true">&#8594;</span>
             </button>
@@ -86,11 +110,18 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
       <div
         className="visual-teaching-board__scroll-shell"
         aria-label="Scrollable step-by-step transformation"
-        data-testid="visual-teaching-scroll-shell"
+        data-testid="visual-scroll-shell"
+        data-client-width={import.meta.env.DEV ? scrollState.clientWidth : undefined}
+        data-scroll-width={import.meta.env.DEV ? scrollState.scrollWidth : undefined}
+        data-scroll-left={import.meta.env.DEV ? scrollState.scrollLeft : undefined}
         tabIndex={0}
         ref={scrollShellRef}
       >
-        <div className="visual-teaching-board__sequence" data-testid="visual-teaching-sequence">
+        <div
+          className="visual-teaching-board__sequence"
+          data-testid="visual-teaching-sequence"
+          ref={sequenceRef}
+        >
           {visual.stages.map((stage, index) => {
             const transition = visual.transitions[index]
 
