@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { VisualTeaching } from '../../shared/visual-teaching.schema'
 import {
+  createSafeVisualMeasurementRuntime,
   createVisualScrollMeasurement,
   measureVisualScroll,
   scrollVisualShell,
@@ -44,23 +45,30 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
       shell,
       sequence,
       updateScrollState,
-      {
-        requestFrame: requestAnimationFrame,
-        cancelFrame: cancelAnimationFrame,
-        createResizeObserver: (callback) =>
-          typeof ResizeObserver === 'undefined'
-            ? null
-            : new ResizeObserver(callback),
-      },
+      createSafeVisualMeasurementRuntime({
+        requestAnimationFrame:
+          typeof globalThis.requestAnimationFrame === 'function'
+            ? globalThis.requestAnimationFrame.bind(globalThis)
+            : undefined,
+        cancelAnimationFrame:
+          typeof globalThis.cancelAnimationFrame === 'function'
+            ? globalThis.cancelAnimationFrame.bind(globalThis)
+            : undefined,
+        createResizeObserver:
+          typeof globalThis.ResizeObserver === 'function'
+            ? (callback) => new globalThis.ResizeObserver(() => callback())
+            : undefined,
+      }),
     )
 
+    const browserWindow = typeof window === 'undefined' ? null : window
     shell.addEventListener('scroll', updateScrollState, { passive: true })
-    window.addEventListener('resize', measurement.schedule)
+    browserWindow?.addEventListener('resize', measurement.schedule)
 
     return () => {
       measurement.disconnect()
       shell.removeEventListener('scroll', updateScrollState)
-      window.removeEventListener('resize', measurement.schedule)
+      browserWindow?.removeEventListener('resize', measurement.schedule)
     }
   }, [updateScrollState, visual])
 

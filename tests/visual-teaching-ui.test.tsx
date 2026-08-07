@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { LessonBlockRenderer } from '../src/react-app/components/LessonBlockRenderer'
 import { VisualTeachingBoard } from '../src/react-app/components/VisualTeachingBoard'
 import {
+  createSafeVisualMeasurementRuntime,
   createVisualScrollMeasurement,
   measureVisualScroll,
   scrollVisualShell,
@@ -180,6 +181,41 @@ describe('visual teaching lesson blocks', () => {
     measurement.disconnect()
     expect(cancelFrame).toHaveBeenCalledWith(3)
     expect(disconnectObserver).toHaveBeenCalledOnce()
+  })
+  it('renders and measures without ResizeObserver or animation-frame APIs', () => {
+    const onMeasure = vi.fn()
+    const runtime = createSafeVisualMeasurementRuntime({})
+
+    expect(() =>
+      createVisualScrollMeasurement(
+        { node: 'shell' },
+        { node: 'sequence' },
+        onMeasure,
+        runtime,
+      ),
+    ).not.toThrow()
+    expect(onMeasure).toHaveBeenCalledOnce()
+  })
+
+  it('falls back to scrollLeft when scrollTo is missing or rejects options', () => {
+    const withoutScrollTo = {
+      clientWidth: 600,
+      scrollWidth: 1800,
+      scrollLeft: 0,
+    }
+    scrollVisualShell(withoutScrollTo, 1)
+    expect(withoutScrollTo.scrollLeft).toBe(420)
+
+    const rejectingScrollTo = {
+      clientWidth: 600,
+      scrollWidth: 1800,
+      scrollLeft: 420,
+      scrollTo: vi.fn(() => {
+        throw new TypeError('Scroll options are unsupported.')
+      }),
+    }
+    scrollVisualShell(rejectingScrollTo, -1)
+    expect(rejectingScrollTo.scrollLeft).toBe(0)
   })
   it('starts with only the right control enabled before the first layout measurement', () => {
     const markup = renderToStaticMarkup(

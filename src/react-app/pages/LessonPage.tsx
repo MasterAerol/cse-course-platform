@@ -65,11 +65,20 @@ function getLessonErrorMessage(error: unknown): string {
     : 'The lesson could not be loaded.'
 }
 
-export function LessonPage() {
+interface LessonPageProps {
+  initialData?: {
+    lesson: LessonDetail
+    curriculum: StudentCourseCurriculum
+  }
+}
+
+export function LessonPage({ initialData }: LessonPageProps = {}) {
   const { courseSlug, lessonPublicId } = useParams()
-  const [state, setState] = useState<LessonPageState>({
-    status: 'loading',
-  })
+  const [state, setState] = useState<LessonPageState>(
+    initialData === undefined
+      ? { status: 'loading' }
+      : { status: 'loaded', ...initialData },
+  )
   const [isCurriculumDrawerOpen, setIsCurriculumDrawerOpen] = useState(false)
   const [completionStatus, setCompletionStatus] = useState<
     | { type: 'idle' }
@@ -79,6 +88,10 @@ export function LessonPage() {
   >({ type: 'idle' })
 
   useEffect(() => {
+    if (initialData !== undefined) {
+      return
+    }
+
     const controller = new AbortController()
 
     async function loadLesson(): Promise<void> {
@@ -121,7 +134,7 @@ export function LessonPage() {
     return () => {
       controller.abort()
     }
-  }, [courseSlug, lessonPublicId])
+  }, [courseSlug, initialData, lessonPublicId])
 
   async function handleCompleteLesson(): Promise<void> {
     if (

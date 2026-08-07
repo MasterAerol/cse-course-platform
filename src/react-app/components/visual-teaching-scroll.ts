@@ -2,7 +2,7 @@ interface VisualScrollShell {
   clientWidth: number
   scrollLeft: number
   scrollWidth: number
-  scrollTo(options: ScrollToOptions): void
+  scrollTo?(options: ScrollToOptions): void
 }
 
 export interface VisualScrollState {
@@ -34,10 +34,18 @@ export function scrollVisualShell(
   direction: -1 | 1,
 ): void {
   const amount = Math.round(Math.max(320, shell.clientWidth * 0.7))
-  shell.scrollTo({
-    left: shell.scrollLeft + direction * amount,
-    behavior: 'smooth',
-  })
+  const target = shell.scrollLeft + direction * amount
+
+  if (typeof shell.scrollTo === 'function') {
+    try {
+      shell.scrollTo({ left: target, behavior: 'smooth' })
+      return
+    } catch {
+      // Older browsers may expose scrollTo without supporting options.
+    }
+  }
+
+  shell.scrollLeft = target
 }
 
 interface VisualResizeObserver {
@@ -46,9 +54,36 @@ interface VisualResizeObserver {
 }
 
 interface VisualMeasurementRuntime {
-  requestFrame(callback: () => void): number
+  requestFrame(callback: () => void): number | null
   cancelFrame(frameId: number): void
   createResizeObserver(callback: () => void): VisualResizeObserver | null
+}
+
+interface VisualMeasurementApis {
+  requestAnimationFrame?: (callback: () => void) => number
+  cancelAnimationFrame?: (frameId: number) => void
+  createResizeObserver?: (
+    callback: () => void,
+  ) => VisualResizeObserver
+}
+
+export function createSafeVisualMeasurementRuntime(
+  apis: VisualMeasurementApis,
+): VisualMeasurementRuntime {
+  return {
+    requestFrame: (callback) => {
+      if (apis.requestAnimationFrame === undefined) {
+        callback()
+        return null
+      }
+      return apis.requestAnimationFrame(callback)
+    },
+    cancelFrame: (frameId) => {
+      apis.cancelAnimationFrame?.(frameId)
+    },
+    createResizeObserver: (callback) =>
+      apis.createResizeObserver?.(callback) ?? null,
+  }
 }
 
 export function createVisualScrollMeasurement(
@@ -62,10 +97,11 @@ export function createVisualScrollMeasurement(
     if (measurementFrame !== null) {
       runtime.cancelFrame(measurementFrame)
     }
-    measurementFrame = runtime.requestFrame(() => {
+    const requestedFrame = runtime.requestFrame(() => {
       measurementFrame = null
       onMeasure()
     })
+    measurementFrame = requestedFrame
   }
   const resizeObserver = runtime.createResizeObserver(schedule)
   resizeObserver?.observe(shell)
