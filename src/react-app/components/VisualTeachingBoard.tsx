@@ -1,3 +1,5 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+
 import type { VisualTeaching } from '../../shared/visual-teaching.schema'
 
 interface VisualTeachingBoardProps {
@@ -5,6 +7,49 @@ interface VisualTeachingBoardProps {
 }
 
 export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
+  const scrollShellRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const updateScrollState = useCallback(() => {
+    const shell = scrollShellRef.current
+    if (shell == null) {
+      return
+    }
+
+    const { scrollLeft, scrollWidth, clientWidth } = shell
+    setCanScrollLeft(scrollLeft > 0)
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth)
+  }, [])
+
+  useEffect(() => {
+    const shell = scrollShellRef.current
+    if (shell == null) {
+      return
+    }
+
+    updateScrollState()
+    shell.addEventListener('scroll', updateScrollState, { passive: true })
+    window.addEventListener('resize', updateScrollState)
+
+    return () => {
+      shell.removeEventListener('scroll', updateScrollState)
+      window.removeEventListener('resize', updateScrollState)
+    }
+  }, [updateScrollState])
+
+  function handleScroll(direction: -1 | 1): void {
+    const shell = scrollShellRef.current
+    if (shell == null) {
+      return
+    }
+
+    shell.scrollBy({
+      left: direction * shell.clientWidth * 0.75,
+      behavior: 'smooth',
+    })
+  }
+
   return (
     <figure
       className={`visual-teaching-board visual-teaching-board--${visual.kind}`}
@@ -13,7 +58,26 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
     >
       <div className="visual-teaching-board__toolbar" data-testid="visual-teaching-toolbar">
         <strong>Follow the transformation</strong>
-        <span>Scroll left or right to see every step</span>
+        <div className="visual-teaching-board__scroll-controls">
+          <button
+            type="button"
+            className="visual-teaching-board__scroll-button"
+            aria-label="Scroll visual teaching board left"
+            onClick={() => handleScroll(-1)}
+            disabled={!canScrollLeft}
+          >
+            <span aria-hidden="true">&#8592;</span>
+          </button>
+          <button
+            type="button"
+            className="visual-teaching-board__scroll-button"
+            aria-label="Scroll visual teaching board right"
+            onClick={() => handleScroll(1)}
+            disabled={!canScrollRight}
+          >
+            <span aria-hidden="true">&#8594;</span>
+          </button>
+        </div>
       </div>
 
       <div
@@ -21,6 +85,7 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
         aria-label="Scrollable step-by-step transformation"
         data-testid="visual-teaching-scroll-shell"
         tabIndex={0}
+        ref={scrollShellRef}
       >
         <div className="visual-teaching-board__sequence" data-testid="visual-teaching-sequence">
           {visual.stages.map((stage, index) => {
@@ -81,3 +146,4 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
     </figure>
   )
 }
+

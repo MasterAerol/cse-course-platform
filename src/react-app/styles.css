@@ -1114,11 +1114,37 @@ input[aria-invalid="true"] {
   color: #38516f;
 }
 
-.visual-teaching-board__toolbar span {
-  color: #64758b;
-  font-size: 0.82rem;
+.visual-teaching-board__scroll-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.15rem;
 }
 
+.visual-teaching-board__scroll-button {
+  width: 2.1rem;
+  min-width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 1px solid #c4d5eb;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #2e4c74;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.visual-teaching-board__scroll-button:hover:not(:disabled) {
+  background: #f1f6ff;
+}
+
+.visual-teaching-board__scroll-button:disabled {
+  border-color: #d7e2ef;
+  background: #f5f8fc;
+  color: #90a2b8;
+  cursor: not-allowed;
+}
 .visual-teaching-board__scroll-shell {
   width: 100%;
   max-width: 100%;
@@ -3522,4 +3548,5 @@ input[aria-invalid="true"] {
   .recovery-attempt-actions button { flex: 1; }
   .recovery-action-card { align-items: stretch; }
 }
+
 
