@@ -11,8 +11,18 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
       aria-label={visual.ariaLabel}
       data-testid="visual-teaching-board"
     >
-      <div className="visual-teaching-board__scroll-shell">
-        <div className="visual-teaching-board__sequence">
+      <div className="visual-teaching-board__toolbar" data-testid="visual-teaching-toolbar">
+        <strong>Follow the transformation</strong>
+        <span>Scroll left or right to see every step</span>
+      </div>
+
+      <div
+        className="visual-teaching-board__scroll-shell"
+        aria-label="Scrollable step-by-step transformation"
+        data-testid="visual-teaching-scroll-shell"
+        tabIndex={0}
+      >
+        <div className="visual-teaching-board__sequence" data-testid="visual-teaching-sequence">
           {visual.stages.map((stage, index) => {
             const transition = visual.transitions[index]
 
@@ -59,7 +69,7 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
       </div>
 
       {visual.memoryTip !== undefined && (
-        <figcaption className="visual-teaching-board__memory">
+        <figcaption className="visual-teaching-board__memory" data-testid="visual-teaching-memory">
           <strong>{visual.memoryTip.title}</strong>
           <p>{visual.memoryTip.rule}</p>
           <ul>

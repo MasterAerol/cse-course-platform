@@ -63,6 +63,22 @@ describe('visual teaching lesson blocks', () => {
     expect(markup).toContain('Move 2')
   })
 
+  it('renders the toolbar, horizontal sequence shell, and fixed memory card as siblings', () => {
+    const markup = renderToStaticMarkup(
+      <VisualTeachingBoard visual={compactVisual} />,
+    )
+    const toolbarIndex = markup.indexOf('data-testid="visual-teaching-toolbar"')
+    const shellIndex = markup.indexOf('data-testid="visual-teaching-scroll-shell"')
+    const sequenceIndex = markup.indexOf('data-testid="visual-teaching-sequence"')
+    const memoryIndex = markup.indexOf('data-testid="visual-teaching-memory"')
+
+    expect(toolbarIndex).toBeGreaterThan(-1)
+    expect(shellIndex).toBeGreaterThan(toolbarIndex)
+    expect(sequenceIndex).toBeGreaterThan(shellIndex)
+    expect(memoryIndex).toBeGreaterThan(sequenceIndex)
+    expect(markup).toContain('tabindex="0"')
+    expect(markup).toContain('Scroll left or right to see every step')
+  })
   it('renders an optional visual inside an existing example block', () => {
     const markup = renderToStaticMarkup(
       <LessonBlockRenderer
