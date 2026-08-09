@@ -12,6 +12,7 @@ import {
   type MockQuestion,
 } from '../lib/mock-exam-api'
 import { mockExamDistributionNotice } from '../../shared/mock-exam-copy'
+import { LearnerTopbar } from '../components/LearnerTopbar'
 import { QuestionRangeNavigator } from '../components/QuestionRangeNavigator'
 
 const QUESTIONS_PER_RANGE = 25
@@ -180,6 +181,20 @@ export function MockExamAttemptPage() {
   const [isNavigatorMounted, setIsNavigatorMounted] = useState(false)
   const [manualExpandedRangeIndex, setManualExpandedRangeIndex] = useState<number | null>(
     null,
+  )
+
+  const topbar = (
+    <LearnerTopbar showSignOut>
+      <Link className="button-link button-link--secondary" to="/dashboard">
+        Dashboard
+      </Link>
+      <Link className="button-link button-link--secondary" to="/catalog">
+        Catalog
+      </Link>
+      <Link className="button-link button-link--secondary" to="/smart-recovery">
+        Smart Recovery
+      </Link>
+    </LearnerTopbar>
   )
 
   const submitting = useRef(false)
@@ -502,9 +517,11 @@ export function MockExamAttemptPage() {
       closeQuestionNavigator()
     }
   }
+
   if (error !== null && data === null) {
     return (
       <main className="page-shell">
+        {topbar}
         <p className="form-error">{error}</p>
       </main>
     )
@@ -513,6 +530,7 @@ export function MockExamAttemptPage() {
   if (data === null) {
     return (
       <main className="page-shell">
+        {topbar}
         <p>Preparing your immutable 150-question snapshot...</p>
       </main>
     )
@@ -521,7 +539,7 @@ export function MockExamAttemptPage() {
   if (data.attempt.status === 'instructions') {
     return (
       <main className="page-shell">
-        <Link to="/dashboard">Dashboard</Link>
+        {topbar}
         <section className="dashboard-card">
           <p className="eyebrow">
             {getModeLabel(data.attempt.mode)}
@@ -553,6 +571,7 @@ export function MockExamAttemptPage() {
   if (q === undefined) {
     return (
       <main className="page-shell">
+        {topbar}
         <p className="form-error">The stored attempt is incomplete.</p>
       </main>
     )
@@ -561,6 +580,7 @@ export function MockExamAttemptPage() {
   if (reviewing && summary !== null) {
     return (
       <main className="page-shell">
+        {topbar}
         <section className="dashboard-card">
           <h1>Review before submission</h1>
           {QuestionStatusChips({
@@ -608,7 +628,8 @@ export function MockExamAttemptPage() {
   return (
     <main className="page-shell quiz-page mock-attempt-page">
       <div className="mock-exam-page">
-        <header className="topbar mock-attempt-topbar mock-exam-header">
+        {topbar}
+        <header className="mock-exam-header">
           <div>
             <h1 className="mock-attempt-title">Full CSE Professional Mock Examination</h1>
             <div className="mock-attempt-badges">

@@ -5,6 +5,8 @@ import { useAuth } from '../auth/use-auth'
 import { CurriculumSubject } from '../components/CurriculumSubject'
 import { EnrollmentBadge } from '../components/EnrollmentBadge'
 import { SubjectAssessmentCard } from '../components/SubjectAssessmentCard'
+
+import { LearnerTopbar } from '../components/LearnerTopbar'
 import { MockExamCard } from '../components/MockExamCard'
 import { fetchCourseDetail, type CourseDetail } from '../lib/api'
 
@@ -52,25 +54,20 @@ export function CourseDetailPage() {
 
   return (
     <main className="page-shell">
-      <nav className="topbar" aria-label="Primary">
-        <Link className="brand-link" to="/">
-          CSE Course Platform
+      <LearnerTopbar>
+        <Link className="button-link button-link--secondary" to="/courses">
+          Catalog
         </Link>
-        <div className="topbar-actions">
-          <Link className="button-link button-link--secondary" to="/courses">
-            Catalog
+        {user === null ? (
+          <Link className="button-link" to="/login">
+            Sign in
           </Link>
-          {user === null ? (
-            <Link className="button-link" to="/login">
-              Sign in
-            </Link>
-          ) : (
-            <Link className="button-link" to="/dashboard">
-              Dashboard
-            </Link>
-          )}
-        </div>
-      </nav>
+        ) : (
+          <Link className="button-link" to="/dashboard">
+            Dashboard
+          </Link>
+        )}
+      </LearnerTopbar>
 
       {state.status === 'loading' && <p>Loading course...</p>}
 

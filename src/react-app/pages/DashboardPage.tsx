@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
 import { ContinueLearningCard } from '../components/ContinueLearningCard'
@@ -8,6 +8,8 @@ import { ProgressBar } from '../components/ProgressBar'
 import { SubjectAssessmentCard } from '../components/SubjectAssessmentCard'
 import { SmartRecoveryCard } from '../components/SmartRecoveryCard'
 import { MockExamCard } from '../components/MockExamCard'
+
+import { LearnerTopbar } from '../components/LearnerTopbar'
 import {
   fetchStudentDashboard,
   type StudentDashboard,
@@ -31,10 +33,7 @@ function formatDate(value: string): string {
 }
 
 export function DashboardPage() {
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
   const [dashboardState, setDashboardState] = useState<DashboardState>({
     status: 'loading',
   })
@@ -63,48 +62,17 @@ export function DashboardPage() {
     }
   }, [])
 
-  async function handleLogout(): Promise<void> {
-    setSubmitting(true)
-    setError(null)
-
-    try {
-      await logout()
-      await navigate('/login', { replace: true })
-    } catch (logoutError: unknown) {
-      setError(
-        logoutError instanceof Error
-          ? logoutError.message
-          : 'Logout could not be completed.',
-      )
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   if (user === null) {
     return null
   }
 
   return (
     <main className="dashboard-page">
-      <nav className="topbar" aria-label="Primary">
-        <Link className="brand-link" to="/">
-          CSE Course Platform
+      <LearnerTopbar showSignOut ariaLabel="Main navigation">
+        <Link className="button-link button-link--secondary" to="/courses">
+          Catalog
         </Link>
-        <div className="topbar-actions">
-          <Link className="button-link button-link--secondary" to="/courses">
-            Catalog
-          </Link>
-          <button
-            className="button-secondary"
-            type="button"
-            disabled={submitting}
-            onClick={() => void handleLogout()}
-          >
-            {submitting ? 'Signing out...' : 'Sign out'}
-          </button>
-        </div>
-      </nav>
+      </LearnerTopbar>
 
       <section className="dashboard-header">
         <p className="eyebrow">Student dashboard</p>
@@ -121,12 +89,6 @@ export function DashboardPage() {
           <Link className="button-link" to="/admin">
             Open administration
           </Link>
-        )}
-
-        {error !== null && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
         )}
       </section>
 
@@ -169,22 +131,21 @@ export function DashboardPage() {
                 <h2>{course.course.title}</h2>
                 <ProgressBar value={course.progressPercentage} />
                 <p className="meta-copy">
-                  {course.progressPercentage}% complete.{' '}
-                  {course.completedRequiredLessons} of{' '}
-                  {course.totalRequiredLessons} required lessons complete.
+                  {course.progressPercentage}% complete. {course.completedRequiredLessons}{' '}
+                  of {course.totalRequiredLessons} required lessons complete.
                 </p>
                 <p className="meta-copy">
                   Enrollment status: {course.enrollment.status}
                   {course.enrollment.accessExpiresAt !== null
-                    ? `. Access expires ${formatDate(
-                        course.enrollment.accessExpiresAt,
-                      )}.`
+                    ? `. Access expires ${formatDate(course.enrollment.accessExpiresAt)}.`
                     : '. No access expiration is set.'}
                 </p>
                 {course.enrollment.hasAccess ? (
                   <>
                     <ContinueLearningCard progress={course} />
-                    {course.subjectAssessments.map((assessment) => <SubjectAssessmentCard key={assessment.assessment.publicId} summary={assessment} />)}
+                    {course.subjectAssessments.map((assessment) => (
+                      <SubjectAssessmentCard key={assessment.assessment.publicId} summary={assessment} />
+                    ))}
                     {course.course.slug === 'cse-professional' && <MockExamCard />}
                     {user.role === 'student' && course.course.slug === 'cse-professional' && <SmartRecoveryCard />}
                   </>

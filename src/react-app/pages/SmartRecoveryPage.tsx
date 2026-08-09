@@ -1,17 +1,18 @@
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
+import { LearnerTopbar } from '../components/LearnerTopbar'
 import { SmartRecoveryOverview } from '../components/SmartRecoveryUi'
-import {
-  useSmartRecoveryHistory,
-  useSmartRecoverySummary,
-} from '../hooks/use-smart-recovery'
-import type { SmartRecoveryViewState } from '../hooks/use-smart-recovery'
 import {
   createSmartRecoveryAttempt,
   type RecoveryHistory,
   type SmartRecoveryDashboard,
 } from '../lib/smart-recovery-api'
+import {
+  useSmartRecoveryHistory,
+  useSmartRecoverySummary,
+} from '../hooks/use-smart-recovery'
+import type { SmartRecoveryViewState } from '../hooks/use-smart-recovery'
 
 export function SmartRecoveryPageView({
   state,
@@ -28,15 +29,47 @@ export function SmartRecoveryPageView({
 }) {
   return (
     <main className="page-shell recovery-page">
-      <Link to="/dashboard">← Dashboard</Link>
+      <LearnerTopbar as="header" showSignOut>
+        <Link className="button-link button-link--secondary" to="/dashboard">
+          Dashboard
+        </Link>
+        <Link className="button-link button-link--secondary" to="/courses">
+          Catalog
+        </Link>
+      </LearnerTopbar>
+
       <header className="recovery-page-header">
         <p className="eyebrow">Smart Recovery</p>
         <h1>Your skill signals</h1>
-        <p>Review skill patterns, start a targeted recovery set, or continue saved work.</p>
+        <p>
+          Review skill patterns, start a targeted recovery set, or continue saved
+          work.
+        </p>
       </header>
-      {state.status === 'loading' && <section className="recovery-state-card" aria-busy="true" aria-live="polite"><h2>Loading your skill signals</h2><p>This may take a moment.</p></section>}
-      {state.status === 'error' && <section className="recovery-state-card" role="alert"><h2>Smart Recovery could not be loaded</h2><p>{state.error}</p><button type="button" onClick={state.reload}>Try again</button></section>}
-      {state.status === 'loaded' && <SmartRecoveryOverview summary={state.data} historyState={historyState} onStartRecovery={onStartRecovery} starting={starting} startError={startError} />}
+      {state.status === 'loading' && (
+        <section className="recovery-state-card" aria-busy="true" aria-live="polite">
+          <h2>Loading your skill signals</h2>
+          <p>This may take a moment.</p>
+        </section>
+      )}
+      {state.status === 'error' && (
+        <section className="recovery-state-card" role="alert">
+          <h2>Smart Recovery could not be loaded</h2>
+          <p>{state.error}</p>
+          <button type="button" onClick={state.reload}>
+            Try again
+          </button>
+        </section>
+      )}
+      {state.status === 'loaded' && (
+        <SmartRecoveryOverview
+          summary={state.data}
+          historyState={historyState}
+          onStartRecovery={onStartRecovery}
+          starting={starting}
+          startError={startError}
+        />
+      )}
     </main>
   )
 }
@@ -55,12 +88,17 @@ export function SmartRecoveryPage() {
     setStartError(null)
     try {
       const response = await createSmartRecoveryAttempt(idempotencyKey.current)
-      const destination = 'resultAvailable' in response
-        ? '/smart-recovery/attempts/' + response.attempt.publicId + '/results'
-        : '/smart-recovery/attempts/' + response.attempt.publicId
+      const destination =
+        'resultAvailable' in response
+          ? '/smart-recovery/attempts/' + response.attempt.publicId + '/results'
+          : '/smart-recovery/attempts/' + response.attempt.publicId
       await navigate(destination)
     } catch (error: unknown) {
-      setStartError(error instanceof Error ? error.message : 'The recovery set could not be prepared.')
+      setStartError(
+        error instanceof Error
+          ? error.message
+          : 'The recovery set could not be prepared.',
+      )
       setStarting(false)
     }
   }

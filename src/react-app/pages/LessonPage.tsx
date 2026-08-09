@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
+import { LearnerTopbar } from '../components/LearnerTopbar'
 import { CourseCurriculumSidebar } from '../components/CourseCurriculumSidebar'
 import { MobileCurriculumDrawer } from '../components/MobileCurriculumDrawer'
 import { LessonBlockRenderer } from '../components/LessonBlockRenderer'
@@ -176,19 +177,14 @@ export function LessonPage({ initialData }: LessonPageProps = {}) {
 
   return (
     <main className="lesson-page">
-      <header className="lesson-topbar">
-        <Link className="brand-link" to="/">
-          CSE Course Platform
+      <LearnerTopbar as="header" showSignOut>
+        <Link className="button-link button-link--secondary" to="/dashboard">
+          Dashboard
         </Link>
-        <div className="topbar-actions">
-          <Link className="button-link button-link--secondary" to="/dashboard">
-            Dashboard
-          </Link>
-          <Link className="button-link button-link--secondary" to="/courses">
-            Catalog
-          </Link>
-        </div>
-      </header>
+        <Link className="button-link button-link--secondary" to="/courses">
+          Catalog
+        </Link>
+      </LearnerTopbar>
 
       {state.status === 'loading' && (
         <section className="lesson-loading" aria-live="polite">

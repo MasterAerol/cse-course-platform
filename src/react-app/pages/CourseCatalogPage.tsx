@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
 import { CourseCard } from '../components/CourseCard'
+
+import { LearnerTopbar } from '../components/LearnerTopbar'
 import { fetchCourses, type CourseSummary } from '../lib/api'
 
 type CatalogState =
@@ -43,20 +45,13 @@ export function CourseCatalogPage() {
 
   return (
     <main className="page-shell">
-      <nav className="topbar" aria-label="Primary">
-        <Link className="brand-link" to="/">
-          CSE Course Platform
-        </Link>
-        {user === null ? (
-          <Link className="button-link button-link--secondary" to="/login">
-            Sign in
-          </Link>
-        ) : (
+      <LearnerTopbar showSignOut>
+        {user !== null ? (
           <Link className="button-link button-link--secondary" to="/dashboard">
             Dashboard
           </Link>
-        )}
-      </nav>
+        ) : null}
+      </LearnerTopbar>
 
       <section className="page-header">
         <p className="eyebrow">Course Catalog</p>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { LearnerTopbar } from '../components/LearnerTopbar'
 import { Link, useNavigate, useParams } from 'react-router'
 
 import {
@@ -113,16 +114,11 @@ export function SubjectAssessmentAttemptPage() {
 
   return (
     <main className="page-shell quiz-page assessment-attempt-page">
-      <header className="topbar">
-        <Link className="brand-link" to="/">
-          CSE Course Platform
+      <LearnerTopbar as="header">
+        <Link className="button-link button-link--secondary" to="/dashboard">
+          Dashboard
         </Link>
-        <div className="topbar-actions">
-          <Link className="button-link button-link--secondary" to="/dashboard">
-            Dashboard
-          </Link>
-        </div>
-      </header>
+      </LearnerTopbar>
 
       {error !== null && data === null && (
         <section className="message-card" role="alert">

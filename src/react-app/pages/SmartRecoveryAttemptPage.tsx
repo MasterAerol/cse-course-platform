@@ -7,6 +7,7 @@ import {
   submitSmartRecoveryAttempt,
   type RecoveryAttempt,
 } from '../lib/smart-recovery-api'
+import { LearnerTopbar } from '../components/LearnerTopbar'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -136,13 +137,27 @@ export function SmartRecoveryAttemptPage() {
     }
   }
 
+  const topbar = (
+    <LearnerTopbar showSignOut>
+      <Link className="button-link button-link--secondary" to="/dashboard">
+        Dashboard
+      </Link>
+      <Link className="button-link button-link--secondary" to="/catalog">
+        Catalog
+      </Link>
+    </LearnerTopbar>
+  )
+
   if (error !== null && attempt === null) {
     return (
       <main className="page-shell">
+        {topbar}
         <section className="recovery-state-card" role="alert">
           <h1>Recovery set could not be loaded</h1>
           <p>{error}</p>
-          <Link to="/smart-recovery">Back to Smart Recovery</Link>
+          <Link className="button-link" to="/smart-recovery">
+            Back to Smart Recovery
+          </Link>
         </section>
       </main>
     )
@@ -150,7 +165,12 @@ export function SmartRecoveryAttemptPage() {
   if (attempt === null) {
     return (
       <main className="page-shell">
-        <section className="recovery-state-card" aria-busy="true" aria-live="polite">
+        {topbar}
+        <section
+          className="recovery-state-card"
+          aria-busy="true"
+          aria-live="polite"
+        >
           <h1>Preparing your recovery set</h1>
           <p>Loading your saved progress.</p>
         </section>
@@ -160,10 +180,13 @@ export function SmartRecoveryAttemptPage() {
   if (question === undefined) {
     return (
       <main className="page-shell">
+        {topbar}
         <section className="recovery-state-card" aria-live="polite">
           <h1>No questions in this recovery set</h1>
           <p>Start a new recovery set to continue.</p>
-          <Link to="/smart-recovery">Back to Smart Recovery</Link>
+          <Link className="button-link" to="/smart-recovery">
+            Back to Smart Recovery
+          </Link>
         </section>
       </main>
     )
@@ -174,12 +197,13 @@ export function SmartRecoveryAttemptPage() {
       className="page-shell quiz-page assessment-attempt-page smart-recovery-attempt-page"
       data-testid="recovery-attempt-page"
     >
+      {topbar}
       <header className="assessment-header">
         <p className="eyebrow">SMART RECOVERY</p>
         <h1 className="assessment-title">Recovery Set</h1>
         <div className="assessment-meta">
           <p aria-live="polite">
-            Question {currentPosition} of {attempt.totalCount} {'\u00B7'} {answeredCount} answered {'\u00B7'} {saveStateText}
+            Question {currentPosition} of {attempt.totalCount} {'·'} {answeredCount} answered {'·'} {saveStateText}
           </p>
         </div>
       </header>
@@ -231,8 +255,12 @@ export function SmartRecoveryAttemptPage() {
               <button
                 type="button"
                 key={item.publicId}
-                className={`recovery-review-question ${item.selectedChoicePublicId === null ? 'is-unanswered' : 'is-answered'}`}
-                aria-label={`Question ${item.position}, ${item.selectedChoicePublicId === null ? 'unanswered' : 'answered'}`}
+                className={`recovery-review-question ${
+                  item.selectedChoicePublicId === null ? 'is-unanswered' : 'is-answered'
+                }`}
+                aria-label={`Question ${item.position}, ${
+                  item.selectedChoicePublicId === null ? 'unanswered' : 'answered'
+                }`}
                 onClick={() => {
                   setCurrentIndex(index)
                   setReviewing(false)
@@ -263,7 +291,7 @@ export function SmartRecoveryAttemptPage() {
         <section className="quiz-attempt-card">
           <fieldset className="quiz-question" disabled={saveState === 'saving' || submitting}>
             <legend>
-              <span>Question {question.position} {'\u00B7'} {question.skill.title}</span>
+              <span>Question {question.position} {'·'} {question.skill.title}</span>
               {question.prompt}
             </legend>
             <div className="quiz-choice-list">
@@ -334,4 +362,3 @@ export function SmartRecoveryAttemptPage() {
     </main>
   )
 }
-

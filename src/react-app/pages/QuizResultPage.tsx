@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { LearnerTopbar } from '../components/LearnerTopbar'
 
 import {
   ApiClientError,
@@ -99,16 +100,11 @@ export function QuizResultPage() {
 
   return (
     <main className="page-shell quiz-page">
-      <header className="topbar">
-        <Link className="brand-link" to="/">
-          CSE Course Platform
+      <LearnerTopbar as="header">
+        <Link className="button-link button-link--secondary" to="/dashboard">
+          Dashboard
         </Link>
-        <div className="topbar-actions">
-          <Link className="button-link button-link--secondary" to="/dashboard">
-            Dashboard
-          </Link>
-        </div>
-      </header>
+      </LearnerTopbar>
 
       {state.status === 'loading' && (
         <section className="message-card" aria-live="polite">
