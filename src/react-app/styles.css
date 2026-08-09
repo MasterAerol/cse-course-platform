@@ -1212,6 +1212,65 @@ input[aria-invalid="true"] {
   .lesson-item__status {
     font-size: 0.72rem;
   }
+
+  .course-detail-page,
+  .course-roadmap,
+  .curriculum-subject,
+  .curriculum-topic,
+  .curriculum-topic-row {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .curriculum-subject__header,
+  .curriculum-toggle {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.5rem 1rem;
+  }
+
+  .curriculum-subject__completion,
+  .curriculum-subject__summary,
+  .curriculum-subject__progress-meta,
+  .curriculum-subject__progress .course-detail-progress,
+  .curriculum-toggle__action,
+  .lesson-item__status,
+  .lesson-item__body,
+  .lesson-item__title,
+  .course-detail-next-action,
+  .subject-assessment-card,
+  .mock-exam-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .curriculum-subject__summary,
+  .curriculum-subject__completion,
+  .curriculum-subject__progress-meta,
+  .curriculum-toggle__action,
+  .lesson-item__status,
+  .course-detail-next-action p,
+  .course-detail-next-action h2 {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .lesson-item__body {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    row-gap: 0.2rem;
+    align-items: flex-start;
+  }
+
+  .lesson-item__body > span:first-child {
+    min-width: 0;
+  }
 }
 .quiz-panel {
   display: grid;
