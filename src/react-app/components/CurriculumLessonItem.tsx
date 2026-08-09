@@ -1,4 +1,4 @@
-import { Link } from 'react-router'
+﻿import { Link } from 'react-router'
 
 import type { CurriculumLesson } from '../lib/curriculum.types'
 
@@ -23,33 +23,46 @@ export function CurriculumLessonItem({
       ? 'Completed'
       : lesson.progressStatus === 'in_progress'
         ? 'In progress'
-        : null
-  const content = (
-    <>
-      <span className="lesson-item__title">{lesson.title}</span>
-      <span className="lesson-item__meta">
-        {lesson.lessonType}
-        {lesson.estimatedMinutes !== null
-          ? ` - ${lesson.estimatedMinutes} min`
-          : ''}
-        {lesson.isPreview ? ' - Preview' : ''}
-        {!lesson.isRequired ? ' - Optional' : ''}
-      </span>
-    </>
-  )
+        : 'Not started'
+  const itemStateClass =
+    lesson.progressStatus === 'completed'
+      ? 'lesson-item__status--completed'
+      : lesson.progressStatus === 'in_progress'
+        ? 'lesson-item__status--in-progress'
+        : 'lesson-item__status--pending'
+  const metaParts = [lesson.lessonType]
+
+  if (lesson.estimatedMinutes !== null) {
+    metaParts.push(`${lesson.estimatedMinutes} min`)
+  }
+
+  if (lesson.isPreview) {
+    metaParts.push('Preview')
+  }
+
+  if (!lesson.isRequired) {
+    metaParts.push('Optional')
+  }
+
+  const metadata = metaParts.join(' · ')
 
   if (lesson.isLocked) {
+    const lockLabel =
+      lesson.lockReason === null
+        ? 'Locked'
+        : `Locked - ${lesson.lockReason}`
+
     return (
       <li
         className={`lesson-item lesson-item--locked ${
           compact ? 'lesson-item--compact' : ''
         }`}
       >
-        {content}
-        <span className="lesson-item__state">
-          Locked
-          {lesson.lockReason === null ? '' : ` - ${lesson.lockReason}`}
+        <span className="lesson-item__body">
+          <span className="lesson-item__title">{lesson.title}</span>
+          <span className="lesson-item__meta">{metadata}</span>
         </span>
+        <span className="lesson-item__status lesson-item__status--locked">{lockLabel}</span>
       </li>
     )
   }
@@ -61,17 +74,25 @@ export function CurriculumLessonItem({
       }`}
     >
       <Link
+        className="lesson-item__body"
         to={`/courses/${courseSlug}/lessons/${lesson.publicId}`}
         aria-current={isCurrent ? 'page' : undefined}
         onClick={() => {
           onNavigate?.()
         }}
       >
-        {content}
+        <span>
+          <span className="lesson-item__title">{lesson.title}</span>
+          <span className="lesson-item__meta">{metadata}</span>
+        </span>
+        <span
+          className={`lesson-item__status ${itemStateClass}${
+            isCurrent ? ' lesson-item__status--current' : ''
+          }`}
+        >
+          {isCurrent ? 'Current' : progressLabel}
+        </span>
       </Link>
-      {progressLabel !== null && (
-        <span className="lesson-item__state">{progressLabel}</span>
-      )}
     </li>
   )
 }

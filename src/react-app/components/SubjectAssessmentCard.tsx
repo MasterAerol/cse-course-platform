@@ -1,4 +1,4 @@
-import { Link } from 'react-router'
+﻿import { Link } from 'react-router'
 
 import type { SubjectAssessmentCardSummary } from './subject-assessment-card.types'
 
@@ -12,6 +12,13 @@ function getSubjectAssessmentAction(
   return 'Start Assessment'
 }
 
+function getSubjectAssessmentStatus(summary: SubjectAssessmentCardSummary): string {
+  if (summary.state === 'not_started') return 'Not Started'
+  if (summary.state === 'in_progress') return 'In Progress'
+  if (summary.state === 'passed') return 'Passed'
+  return 'Needs Improvement'
+}
+
 export function SubjectAssessmentCard({ summary }: { summary: SubjectAssessmentCardSummary }) {
   const action = getSubjectAssessmentAction(summary)
   const latestSubmitted = summary.history.find((attempt) => attempt.status === 'submitted')
@@ -23,24 +30,41 @@ export function SubjectAssessmentCard({ summary }: { summary: SubjectAssessmentC
       : `/assessments/${summary.assessment.slug}`
 
   return (
-    <section className={`continue-card assessment-card${summary.availability.available ? '' : ' continue-card--muted'}`}>
-      <p className="eyebrow">Subject assessment</p>
+    <section
+      className={`continue-card course-detail-assessment-card${
+        summary.availability.available ? '' : ' continue-card--muted'
+      }`}
+    >
+      <p className="eyebrow">Subject milestone</p>
       <h3>{summary.assessment.title}</h3>
       {summary.assessment.description !== null && <p>{summary.assessment.description}</p>}
-      <p>{summary.assessment.questionCount} questions · {summary.assessment.passingScore}% passing score · {summary.assessment.timeLimitMinutes === null ? 'No time limit' : `${summary.assessment.timeLimitMinutes} minutes`}</p>
       <p className="meta-copy">
-        Status: {summary.state === 'not_started' ? 'Not Started' : summary.state === 'in_progress' ? 'In Progress' : summary.state === 'passed' ? 'Passed' : 'Needs Improvement'}
+        {summary.assessment.questionCount} questions ·
+        {summary.assessment.passingScore}% passing score ·
+        {summary.assessment.timeLimitMinutes === null
+          ? ' No time limit'
+          : ` ${summary.assessment.timeLimitMinutes} minutes`}
+      </p>
+      <p className="meta-copy">
+        Status: {getSubjectAssessmentStatus(summary)}
         {summary.bestScore === null ? '' : ` · Best ${summary.bestScore}%`}
       </p>
       {summary.availability.available ? (
         <div className="topbar-actions">
           <Link className="button-link" to={href}>{action}</Link>
           {latestSubmitted !== undefined && summary.state !== 'passed' && (
-            <Link className="button-link button-link--secondary" to={`/assessment-attempts/${latestSubmitted.attemptPublicId}/review`}>Review</Link>
+            <Link
+              className="button-link button-link--secondary"
+              to={`/assessment-attempts/${latestSubmitted.attemptPublicId}/review`}
+            >
+              Review
+            </Link>
           )}
         </div>
       ) : (
-        <p className="meta-copy">Locked: {summary.availability.reason ?? 'This assessment is unavailable.'}</p>
+        <p className="meta-copy">
+          Locked: {summary.availability.reason ?? 'This assessment is unavailable.'}
+        </p>
       )}
     </section>
   )

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 
 import type { StudentCourseCurriculum } from '../lib/curriculum.types'
 import { CurriculumLessonItem } from './CurriculumLessonItem'
@@ -20,18 +20,27 @@ export function CurriculumTopic({
 }: CurriculumTopicProps) {
   const [expanded, setExpanded] = useState(true)
   const panelId = `topic-${topic.slug}`
+  const lessonCount = topic.lessons.length
+  const lessonCountLabel = `${lessonCount} ${lessonCount === 1 ? 'lesson' : 'lessons'}`
 
   return (
     <section className="curriculum-topic">
       <button
         className="curriculum-toggle"
         type="button"
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} ${topic.title} lessons`}
         aria-expanded={expanded}
         aria-controls={panelId}
         onClick={() => setExpanded((value) => !value)}
       >
-        <span>{topic.title}</span>
-        <span>{expanded ? 'Hide' : 'Show'}</span>
+        <span className="curriculum-toggle__title">
+          <span>{topic.title}</span>
+          <span className="curriculum-toggle__meta">{lessonCountLabel}</span>
+        </span>
+        <span className="curriculum-toggle__action" aria-hidden="true">
+          <span>{expanded ? '▾' : '▸'}</span>
+          <span>{expanded ? 'Hide lessons' : 'Show lessons'}</span>
+        </span>
       </button>
       {expanded && (
         <ol id={panelId} className="lesson-list">
