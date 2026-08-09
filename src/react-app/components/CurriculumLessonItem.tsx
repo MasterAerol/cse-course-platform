@@ -45,13 +45,9 @@ export function CurriculumLessonItem({
   }
 
   const metadata = metaParts.join(' · ')
+  const lockMessage = 'Complete the previous lesson first.'
 
   if (lesson.isLocked) {
-    const lockLabel =
-      lesson.lockReason === null
-        ? 'Locked'
-        : `Locked - ${lesson.lockReason}`
-
     return (
       <li
         className={`lesson-item lesson-item--locked ${
@@ -59,10 +55,18 @@ export function CurriculumLessonItem({
         }`}
       >
         <span className="lesson-item__body">
-          <span className="lesson-item__title">{lesson.title}</span>
-          <span className="lesson-item__meta">{metadata}</span>
+          <span>
+            <span className="lesson-item__title">{lesson.title}</span>
+            <span className="lesson-item__meta">{metadata}</span>
+          </span>
+          <span className="curriculum-lock-state" aria-label={lesson.lockReason ?? 'Locked'}>
+            <span className="curriculum-lock-badge">Locked</span>
+            <span className="curriculum-lock-message">{lockMessage}</span>
+            {lesson.lockReason ? (
+              <span className="visually-hidden">{`Reason: ${lesson.lockReason}`}</span>
+            ) : null}
+          </span>
         </span>
-        <span className="lesson-item__status lesson-item__status--locked">{lockLabel}</span>
       </li>
     )
   }

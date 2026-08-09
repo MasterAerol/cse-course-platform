@@ -1168,6 +1168,33 @@ input[aria-invalid="true"] {
   color: #2046a8;
 }
 
+
+
+.curriculum-lock-state {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.curriculum-lock-badge {
+  width: fit-content;
+  min-height: 1.6rem;
+  padding: 0.16rem 0.58rem;
+  border-radius: var(--radius-pill);
+  background: #ffecee;
+  color: #a63521;
+  font-size: 0.74rem;
+  font-weight: 820;
+}
+
+.curriculum-lock-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  color: var(--color-text-label);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
 .lesson-item--current .lesson-item__body {
   background: #f2f7ff;
 }

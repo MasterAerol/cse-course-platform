@@ -131,7 +131,8 @@ describe('lesson course-content navigator', () => {
     expect(markup).toContain('href="/courses/cse-professional/lessons/lesson-reading"')
     expect(markup).toContain('aria-current="page"')
     expect(markup).toContain('Context clues practice')
-    expect(markup).toContain('Locked - Complete the previous lesson.')
+    expect(markup).toContain('Complete the previous lesson first.')
+    expect(markup).toContain('Locked')
     expect(markup).not.toContain('href="/courses/cse-professional/lessons/lesson-practice"')
   })
 
