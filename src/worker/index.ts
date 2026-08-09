@@ -10,6 +10,7 @@ import { configRoutes } from './routes/config.routes'
 import { courseRoutes } from './routes/course.routes'
 import { devRoutes } from './routes/dev.routes'
 import { healthRoutes } from './routes/health.routes'
+import { mistakeNotebookRoutes } from './routes/mistake-notebook.routes'
 import { practiceRoutes } from './routes/practice.routes'
 import { quizRoutes } from './routes/quiz.routes'
 import { smartRecoveryRoutes } from './routes/smart-recovery.routes'
@@ -41,6 +42,7 @@ app.route('/api/student', studentRoutes)
 app.route('/api/student', practiceRoutes)
 app.route('/api/student', quizRoutes)
 app.route('/api/student', smartRecoveryRoutes)
+app.route('/api/student', mistakeNotebookRoutes)
 app.route('/api/student', subjectAssessmentRoutes)
 app.route('/api/student', mockExamRoutes)
 app.route('/api/dev', devRoutes)

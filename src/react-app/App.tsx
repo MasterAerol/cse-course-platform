@@ -15,6 +15,8 @@ import { DashboardPage } from './pages/DashboardPage'
 import { HomePage } from './pages/HomePage'
 import { LessonPage } from './pages/LessonPage'
 import { LoginPage } from './pages/LoginPage'
+import { MistakeNotebookDetailPage } from './pages/MistakeNotebookDetailPage'
+import { MistakeNotebookPage } from './pages/MistakeNotebookPage'
 import { PracticeAttemptPage } from './pages/PracticeAttemptPage'
 import { PracticeResultPage } from './pages/PracticeResultPage'
 import { QuizAttemptPage } from './pages/QuizAttemptPage'
@@ -47,6 +49,8 @@ export function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="mistake-notebook" element={<MistakeNotebookPage />} />
+        <Route path="mistake-notebook/:entryId" element={<MistakeNotebookDetailPage />} />
         <Route path="smart-recovery" element={<SmartRecoveryPage />} />
         <Route
           path="smart-recovery/skills/:skillSlug"

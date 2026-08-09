@@ -8,6 +8,7 @@ import { ProgressBar } from '../components/ProgressBar'
 import { SubjectAssessmentCard } from '../components/SubjectAssessmentCard'
 import { SmartRecoveryCard } from '../components/SmartRecoveryCard'
 import { MockExamCard } from '../components/MockExamCard'
+import { MistakeNotebookCard } from '../components/MistakeNotebookCard'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
 import {
@@ -148,6 +149,7 @@ export function DashboardPage() {
                     ))}
                     {course.course.slug === 'cse-professional' && <MockExamCard />}
                     {user.role === 'student' && course.course.slug === 'cse-professional' && <SmartRecoveryCard />}
+                    {user.role === 'student' && course.course.slug === 'cse-professional' && <MistakeNotebookCard />}
                   </>
                 ) : (
                   <section className="continue-card continue-card--muted">
