@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
@@ -177,7 +177,11 @@ export function LessonPage({ initialData }: LessonPageProps = {}) {
 
   return (
     <main className="lesson-page">
-      <LearnerTopbar as="header" showSignOut>
+      <LearnerTopbar
+        as="header"
+        className="lesson-page__header"
+        showSignOut
+      >
         <Link className="button-link button-link--secondary" to="/dashboard">
           Dashboard
         </Link>

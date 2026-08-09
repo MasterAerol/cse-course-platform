@@ -793,6 +793,10 @@ input[aria-invalid="true"] {
   overflow-y: visible;
 }
 
+.lesson-page__header {
+  flex: none;
+}
+
 .lesson-workspace {
   display: grid;
   grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
@@ -804,7 +808,6 @@ input[aria-invalid="true"] {
   overflow: visible;
   align-items: start;
 }
-
 .lesson-curriculum-sidebar {
   display: block;
   min-width: 0;
@@ -853,6 +856,62 @@ input[aria-invalid="true"] {
   }
 }
 
+
+@media (min-width: 64rem) {
+  .lesson-page {
+    height: 100dvh;
+    max-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .lesson-page__header {
+    flex: none;
+  }
+
+  .lesson-workspace {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    gap: 2rem;
+    overflow: hidden;
+    align-items: stretch;
+    width: min(100%, 90rem);
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .lesson-curriculum-sidebar {
+    min-width: 0;
+    min-height: 0;
+    position: sticky;
+    top: var(--lesson-sidebar-top, 1rem);
+    align-self: start;
+    max-height: calc(100vh - 2rem);
+  }
+
+  .curriculum-sidebar {
+    height: 100%;
+    max-height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+  }
+
+  .lesson-content {
+    width: min(100%, 48rem);
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
+    padding: 0 0 4rem;
+  }
+}
 .curriculum-sidebar__header h2 {
   margin: 0 0 1rem;
   color: var(--color-text-primary);
