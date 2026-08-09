@@ -802,22 +802,24 @@ input[aria-invalid="true"] {
   margin: 0 auto;
   padding: 2rem;
   overflow: visible;
+  align-items: start;
 }
 
 .lesson-curriculum-sidebar {
   display: block;
   min-width: 0;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: visible;
-  max-height: none;
+  position: sticky;
+  top: var(--lesson-sidebar-top, 1rem);
+  align-self: start;
+  max-height: calc(100vh - 2rem);
 }
 
 .curriculum-sidebar {
   height: auto;
-  max-height: none;
+  max-height: 100%;
   overflow-x: hidden;
-  overflow-y: visible;
+  overflow-y: auto;
   padding: 1rem;
   border: 1px solid rgb(25 52 91 / 10%);
   border-radius: 0.8rem;
@@ -825,6 +827,7 @@ input[aria-invalid="true"] {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-emphasis) transparent;
 }
+
 
 .curriculum-sidebar::-webkit-scrollbar {
   width: 7px;
