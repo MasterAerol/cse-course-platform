@@ -5,6 +5,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { CourseCurriculumSidebar } from '../src/react-app/components/CourseCurriculumSidebar'
 import { MobileCurriculumDrawer } from '../src/react-app/components/MobileCurriculumDrawer'
 import { LessonPage } from '../src/react-app/pages/LessonPage'
+import {
+  activateLessonDocumentViewport,
+  LESSON_DOCUMENT_VIEWPORT_CLASS,
+} from '../src/react-app/lib/lesson-document-viewport'
 import { percentageExampleContent } from '../scripts/lib/visual-teaching-content.mjs'
 import type { StudentCourseCurriculum } from '../src/react-app/lib/curriculum.types'
 import type { LessonDetail } from '../src/react-app/lib/api'
@@ -120,6 +124,20 @@ const percentageCurriculum = {
   ],
 } satisfies StudentCourseCurriculum
 describe('lesson course-content navigator', () => {
+  it('locks and restores the document viewport without replacing other root classes', () => {
+    const tokens = new Set(['existing-root-class'])
+    const deactivate = activateLessonDocumentViewport({
+      add: (token) => tokens.add(token),
+      remove: (token) => tokens.delete(token),
+    })
+
+    expect(tokens).toEqual(
+      new Set(['existing-root-class', LESSON_DOCUMENT_VIEWPORT_CLASS]),
+    )
+
+    deactivate()
+    expect(tokens).toEqual(new Set(['existing-root-class']))
+  })
   it('renders the curriculum list and preserves routes and lock state', () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter>

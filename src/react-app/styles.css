@@ -915,9 +915,17 @@ input[aria-invalid="true"] {
 }
 
 @media (min-width: 64rem) {
+  html.lesson-document-viewport,
+  html.lesson-document-viewport body,
+  html.lesson-document-viewport body #root {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .lesson-page {
     display: flex;
-    height: 100dvh;
+    height: 100%;
     min-height: 0;
     flex-direction: column;
     overflow: hidden;

@@ -16,6 +16,7 @@ import {
   type LessonDetail,
   type StudentCourseCurriculum,
 } from '../lib/api'
+import { activateLessonDocumentViewport } from '../lib/lesson-document-viewport'
 
 type LessonPageState =
   | { status: 'loading' }
@@ -87,6 +88,10 @@ export function LessonPage({ initialData }: LessonPageProps = {}) {
     | { type: 'success'; message: string }
     | { type: 'error'; message: string }
   >({ type: 'idle' })
+
+  useEffect(() => {
+    return activateLessonDocumentViewport(document.documentElement.classList)
+  }, [])
 
   useEffect(() => {
     if (initialData !== undefined) {
