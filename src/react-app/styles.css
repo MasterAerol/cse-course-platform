@@ -821,6 +821,25 @@ input[aria-invalid="true"] {
   border: 1px solid rgb(25 52 91 / 10%);
   border-radius: 0.8rem;
   background: #fff;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-emphasis) transparent;
+}
+
+.curriculum-sidebar::-webkit-scrollbar {
+  width: 7px;
+}
+
+.curriculum-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.curriculum-sidebar::-webkit-scrollbar-thumb {
+  background: var(--color-border-emphasis);
+  border-radius: 999px;
+}
+
+.curriculum-sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
 }
 
 .curriculum-sidebar__header h2 {
