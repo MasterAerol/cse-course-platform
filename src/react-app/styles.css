@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   color: var(--color-text-primary);
   background: var(--surface-app);
   font-family: var(--font-family-system);
@@ -259,6 +259,7 @@ button.ds-button-primary,
 }
 
 body {
+  margin: 0;
   min-width: 320px;
   min-height: 100vh;
 }
@@ -812,106 +813,19 @@ input[aria-invalid="true"] {
   display: block;
   min-width: 0;
   min-height: 0;
-  position: sticky;
-  top: var(--lesson-sidebar-top, 1rem);
-  align-self: start;
-  max-height: calc(100vh - 2rem);
 }
 
 .curriculum-sidebar {
-  height: auto;
-  max-height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
   padding: 1rem;
   border: 1px solid rgb(25 52 91 / 10%);
   border-radius: 0.8rem;
   background: #fff;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-border-emphasis) transparent;
 }
 
 
-.curriculum-sidebar::-webkit-scrollbar {
-  width: 7px;
-}
-
-.curriculum-sidebar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.curriculum-sidebar::-webkit-scrollbar-thumb {
-  background: var(--color-border-emphasis);
-  border-radius: 999px;
-}
-
-.curriculum-sidebar::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
-}
-
-@media (max-width: 64rem) {
-  .mobile-curriculum-drawer .curriculum-sidebar {
-    max-height: calc(100vh - 2rem);
-    overflow-y: auto;
-  }
-}
 
 
-@media (min-width: 64rem) {
-  .lesson-page {
-    height: 100dvh;
-    max-height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
 
-  .lesson-page__header {
-    flex: none;
-  }
-
-  .lesson-workspace {
-    flex: 1;
-    min-height: 0;
-    display: grid;
-    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
-    gap: 2rem;
-    overflow: hidden;
-    align-items: stretch;
-    width: min(100%, 90rem);
-    max-width: 100%;
-    margin: 0 auto;
-  }
-
-  .lesson-curriculum-sidebar {
-    min-width: 0;
-    min-height: 0;
-    position: sticky;
-    top: var(--lesson-sidebar-top, 1rem);
-    align-self: start;
-    max-height: calc(100vh - 2rem);
-  }
-
-  .curriculum-sidebar {
-    height: 100%;
-    max-height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    min-height: 0;
-  }
-
-  .lesson-content {
-    width: min(100%, 48rem);
-    max-width: 100%;
-    min-width: 0;
-    min-height: 0;
-    max-height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    overflow-wrap: anywhere;
-    padding: 0 0 4rem;
-  }
-}
 .curriculum-sidebar__header h2 {
   margin: 0 0 1rem;
   color: var(--color-text-primary);
@@ -998,6 +912,74 @@ input[aria-invalid="true"] {
   padding: 0 0 4rem;
   overflow: visible;
   overflow-wrap: anywhere;
+}
+
+@media (min-width: 64rem) {
+  .lesson-page {
+    display: flex;
+    height: 100dvh;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .lesson-workspace {
+    display: grid;
+    width: min(100%, 90rem);
+    min-height: 0;
+    flex: 1 1 auto;
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    align-items: stretch;
+    gap: 2rem;
+    margin: 0 auto;
+    overflow: hidden;
+  }
+
+  .lesson-curriculum-sidebar,
+  .lesson-content {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+  }
+
+  .lesson-curriculum-sidebar {
+    position: static;
+    align-self: stretch;
+    scrollbar-color: var(--color-border-emphasis) transparent;
+    scrollbar-width: thin;
+  }
+
+  .lesson-curriculum-sidebar::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  .lesson-curriculum-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .lesson-curriculum-sidebar::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--color-border-emphasis);
+  }
+
+  .lesson-curriculum-sidebar::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-muted);
+  }
+
+  .lesson-curriculum-sidebar .curriculum-sidebar {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .lesson-content {
+    width: min(100%, 48rem);
+    max-width: 100%;
+    padding: 0 0 2rem;
+    overflow-wrap: anywhere;
+  }
 }
 
 .lesson-breadcrumb {

@@ -166,6 +166,18 @@ describe('lesson course-content navigator', () => {
       </MemoryRouter>,
     )
 
+    const appShellIndex = markup.indexOf('data-testid="lesson-app-shell"')
+    const headerIndex = markup.indexOf('class="topbar lesson-page__header"')
+    const workspaceIndex = markup.indexOf('class="lesson-workspace"')
+    const curriculumPaneIndex = markup.indexOf('data-scroll-pane="curriculum"')
+    const lessonPaneIndex = markup.indexOf('data-testid="lesson-scroll-pane"')
+
+    expect(appShellIndex).toBeGreaterThan(-1)
+    expect(headerIndex).toBeGreaterThan(appShellIndex)
+    expect(workspaceIndex).toBeGreaterThan(headerIndex)
+    expect(curriculumPaneIndex).toBeGreaterThan(workspaceIndex)
+    expect(lessonPaneIndex).toBeGreaterThan(curriculumPaneIndex)
+    expect(markup).toContain('data-scroll-pane="lesson"')
     expect(markup).toContain('Finding the Percentage')
     expect(markup).toContain('data-testid="visual-teaching-board"')
     expect(markup).toContain('data-testid="visual-scroll-shell"')

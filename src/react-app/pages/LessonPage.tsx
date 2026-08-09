@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
@@ -176,7 +176,7 @@ export function LessonPage({ initialData }: LessonPageProps = {}) {
   }
 
   return (
-    <main className="lesson-page">
+    <main className="lesson-page" data-testid="lesson-app-shell">
       <LearnerTopbar
         as="header"
         className="lesson-page__header"
@@ -222,6 +222,7 @@ export function LessonPage({ initialData }: LessonPageProps = {}) {
             <aside
               className="lesson-curriculum-sidebar"
               data-testid="course-content-sidebar"
+              data-scroll-pane="curriculum"
             >
               <CourseCurriculumSidebar
                 curriculum={state.curriculum}
@@ -229,7 +230,11 @@ export function LessonPage({ initialData }: LessonPageProps = {}) {
               />
             </aside>
 
-            <article className="lesson-content">
+            <article
+              className="lesson-content"
+              data-testid="lesson-scroll-pane"
+              data-scroll-pane="lesson"
+            >
               <nav className="lesson-breadcrumb" aria-label="Breadcrumb">
                 <Link to={`/courses/${state.lesson.course.slug}`}>
                   {state.lesson.course.title}
