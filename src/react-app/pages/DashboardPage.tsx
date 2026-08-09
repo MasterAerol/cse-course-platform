@@ -9,6 +9,7 @@ import { SubjectAssessmentCard } from '../components/SubjectAssessmentCard'
 import { SmartRecoveryCard } from '../components/SmartRecoveryCard'
 import { MockExamCard } from '../components/MockExamCard'
 import { MistakeNotebookCard } from '../components/MistakeNotebookCard'
+import { ReadinessCard } from '../components/ReadinessCard'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
 import {
@@ -148,6 +149,7 @@ export function DashboardPage() {
                       <SubjectAssessmentCard key={assessment.assessment.publicId} summary={assessment} />
                     ))}
                     {course.course.slug === 'cse-professional' && <MockExamCard />}
+                    {user.role === 'student' && course.course.slug === 'cse-professional' && <ReadinessCard />}
                     {user.role === 'student' && course.course.slug === 'cse-professional' && <SmartRecoveryCard />}
                     {user.role === 'student' && course.course.slug === 'cse-professional' && <MistakeNotebookCard />}
                   </>

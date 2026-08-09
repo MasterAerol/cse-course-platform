@@ -1,4 +1,4 @@
-{
+﻿{
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -17,6 +17,7 @@
     "noUnusedParameters": true
   },
   "include": [
+    "tests/cse-readiness-ui.test.tsx",
     "tests/lesson-curriculum-ui.test.tsx",
     "tests/mistake-notebook-ui.test.tsx",
     "tests/registration-policy-ui.test.tsx",
