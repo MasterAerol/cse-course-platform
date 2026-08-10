@@ -1,6 +1,6 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 
-import { percentageExampleContent } from './lib/visual-teaching-content.mjs'
+import { percentageGuidedTeachingContent } from './lib/visual-teaching-content.mjs'
 
 const confirmation = 'publish-percentage-visual-teaching'
 const csrfHeaderValue = 'same-origin-admin-mutation'
@@ -29,7 +29,7 @@ function parseArgs() {
 }
 
 function desiredContent() {
-  return structuredClone(percentageExampleContent)
+  return structuredClone(percentageGuidedTeachingContent)
 }
 
 async function main() {
@@ -86,8 +86,8 @@ async function main() {
 
   const response = await request(`/api/admin/lessons/${lesson.id}/blocks`)
   const block = response.blocks.find((item) => item.position === target.blockPosition)
-  if (block === undefined || block.type !== 'example') {
-    throw new Error('Expected the target Percentages example at lesson block position 5.')
+  if (block === undefined || block.type !== 'illustrated-guided-teaching') {
+    throw new Error('Expected the target guided Percentages block at lesson block position 5.')
   }
 
   const desired = desiredContent()
@@ -106,8 +106,7 @@ async function main() {
       currentTitle: block.content.title,
       currentHasVisual: block.content.visual !== undefined,
       desiredTitle: desired.title,
-      desiredAnswer: desired.answer,
-      visualKind: desired.visual.kind,
+          visualKind: desired.visual.kind,
       stages: desired.visual.stages.length,
       transitions: desired.visual.transitions.length,
       memoryExamples: desired.visual.memoryTip.examples.length,
@@ -120,7 +119,7 @@ async function main() {
     await request(`/api/admin/lesson-blocks/${block.id}`, {
       method: 'PATCH',
       body: JSON.stringify({
-        blockType: 'example',
+        blockType: 'illustrated-guided-teaching',
         content: desired,
         position: target.blockPosition,
       }),
@@ -130,7 +129,7 @@ async function main() {
   const verified = await request(`/api/admin/lessons/${lesson.id}/blocks`)
   const stored = verified.blocks.find((item) => item.position === target.blockPosition)
   if (
-    stored?.type !== 'example' ||
+    stored?.type !== 'illustrated-guided-teaching' ||
     JSON.stringify(stored.content) !== JSON.stringify(desired) ||
     topic.status !== 'published' ||
     lesson.status !== 'published'
@@ -161,3 +160,5 @@ main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error))
   process.exitCode = 1
 })
+
+

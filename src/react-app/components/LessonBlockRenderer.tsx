@@ -1,5 +1,6 @@
 import type { LessonBlock } from '../lib/api'
 import { VisualTeachingBoard } from './VisualTeachingBoard'
+import { IllustratedGuidedTeaching } from './IllustratedGuidedTeaching'
 
 interface LessonBlockRendererProps {
   block: LessonBlock
@@ -17,6 +18,8 @@ export function LessonBlockRenderer({ block }: LessonBlockRendererProps) {
       return <FormulaBlock block={block} />
     case 'example':
       return <ExampleBlock block={block} />
+    case 'illustrated-guided-teaching':
+      return <GuidedTeachingBlock block={block} />
     case 'image':
       return <ImageBlock block={block} />
     case 'video':
@@ -25,6 +28,10 @@ export function LessonBlockRenderer({ block }: LessonBlockRendererProps) {
       return <DividerBlock />
     case 'summary':
       return <SummaryBlock block={block} />
+    default:
+      return (
+        <p className="lesson-block-unsupported">Unsupported lesson block type.</p>
+      )
   }
 }
 
@@ -99,6 +106,14 @@ function ExampleBlock({
       </p>
     </section>
   )
+}
+
+function GuidedTeachingBlock({
+  block,
+}: {
+  block: Extract<LessonBlock, { type: 'illustrated-guided-teaching' }>
+}) {
+  return <IllustratedGuidedTeaching content={block.content} />
 }
 
 function ImageBlock({

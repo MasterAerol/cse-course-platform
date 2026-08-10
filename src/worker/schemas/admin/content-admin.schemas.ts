@@ -15,6 +15,7 @@ export const lessonBlockTypeSchema = z.enum([
   'callout',
   'formula',
   'example',
+  'illustrated-guided-teaching',
   'image',
   'video',
   'divider',
@@ -184,3 +185,5 @@ export type FixedQuestionInput = z.infer<typeof fixedQuestionInputSchema>
 export type QuizInput = z.infer<typeof quizInputSchema>
 export type QuizQuestionInput = z.infer<typeof quizQuestionInputSchema>
 export type AuditLogFilterInput = z.infer<typeof auditLogFilterSchema>
+
+

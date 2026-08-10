@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server'
+﻿import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -9,7 +9,7 @@ import {
   activateLessonDocumentViewport,
   LESSON_DOCUMENT_VIEWPORT_CLASS,
 } from '../src/react-app/lib/lesson-document-viewport'
-import { percentageExampleContent } from '../scripts/lib/visual-teaching-content.mjs'
+import { percentageGuidedTeachingContent } from '../scripts/lib/visual-teaching-content.mjs'
 import type { StudentCourseCurriculum } from '../src/react-app/lib/curriculum.types'
 import type { LessonDetail } from '../src/react-app/lib/api'
 
@@ -52,8 +52,8 @@ const percentageLesson = {
     {
       id: 59,
       position: 5,
-      type: 'example',
-      content: percentageExampleContent,
+      type: 'illustrated-guided-teaching',
+      content: percentageGuidedTeachingContent,
     },
   ],
   malformedBlockCount: 0,
@@ -123,6 +123,7 @@ const percentageCurriculum = {
     },
   ],
 } satisfies StudentCourseCurriculum
+
 describe('lesson course-content navigator', () => {
   it('locks and restores the document viewport without replacing other root classes', () => {
     const tokens = new Set(['existing-root-class'])
@@ -138,6 +139,7 @@ describe('lesson course-content navigator', () => {
     deactivate()
     expect(tokens).toEqual(new Set(['existing-root-class']))
   })
+
   it('renders the curriculum list and preserves routes and lock state', () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter>
@@ -172,7 +174,8 @@ describe('lesson course-content navigator', () => {
     expect(openMarkup).toContain('class="curriculum-drawer-backdrop"')
     expect(openMarkup).not.toContain('class="drawer-backdrop"')
   })
-  it('renders the exact Percentage visual through the loaded LessonPage path', () => {
+
+  it('renders the exact Percentage guided teaching through the loaded LessonPage path', () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/courses/cse-professional/lessons/lesson-finding-the-percentage']}>
         <LessonPage
@@ -197,14 +200,15 @@ describe('lesson course-content navigator', () => {
     expect(lessonPaneIndex).toBeGreaterThan(curriculumPaneIndex)
     expect(markup).toContain('data-scroll-pane="lesson"')
     expect(markup).toContain('Finding the Percentage')
-    expect(markup).toContain('data-testid="visual-teaching-board"')
-    expect(markup).toContain('data-testid="visual-scroll-shell"')
-    expect(markup).toContain('data-testid="visual-scroll-left"')
+    expect(markup).toContain('class="lesson-guided-teaching"')
+    expect(markup).toContain('Step 1 of 6')
     expect(markup).toContain('data-testid="visual-scroll-right"')
     expect(markup).toContain('data-testid="visual-teaching-memory"')
-    expect(markup).toContain('Decimal starts here')
-    expect(markup).toContain('Final decimal')
+    expect(markup).toContain('Move 2')
+    expect(markup).toContain('Mark complete')
   })
-
-
 })
+
+
+
+

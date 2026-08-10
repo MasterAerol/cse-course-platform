@@ -60,6 +60,50 @@ const exampleContentSchema = z
   })
   .strict()
 
+const guidedTeachingStepSchema = z
+  .object({
+    id: z.string().min(1).max(80),
+    stepNumber: z.number().int().min(1),
+    title: z.string().min(1).max(140),
+    boardExpression: z.string().min(1).max(300),
+    guideMessage: z.string().min(1).max(500).optional(),
+    explanation: z.string().min(1).max(1_000),
+    focusLabel: z.string().min(1).max(80).optional(),
+    emphasis: z.enum(['normal', 'important', 'final']).optional(),
+  })
+  .strict()
+
+const guidedTeachingContentSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    subtitle: z.string().min(1).max(240).optional(),
+    prompt: z.string().min(1).max(400).optional(),
+    guide: z
+      .object({
+        name: z.string().min(1).max(80).optional(),
+        message: z.string().min(1).max(240).optional(),
+      })
+      .strict()
+      .optional(),
+    steps: z.array(guidedTeachingStepSchema).min(1).max(20),
+    visual: visualTeachingSchema.optional(),
+    memoryTip: z
+      .object({
+        title: z.string().min(1).max(160),
+        text: z.string().min(1).max(800),
+      })
+      .strict()
+      .optional(),
+    commonMistake: z
+      .object({
+        title: z.string().min(1).max(160),
+        text: z.string().min(1).max(800),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+
 const imageContentSchema = z
   .object({
     src: z
@@ -114,6 +158,10 @@ export type LessonBlock =
       content: z.infer<typeof exampleContentSchema>
     })
   | (BaseLessonBlock & {
+      type: 'illustrated-guided-teaching'
+      content: z.infer<typeof guidedTeachingContentSchema>
+    })
+  | (BaseLessonBlock & {
       type: 'image'
       content: z.infer<typeof imageContentSchema>
     })
@@ -138,6 +186,7 @@ const schemasByBlockType = {
   callout: calloutContentSchema,
   formula: formulaContentSchema,
   example: exampleContentSchema,
+  'illustrated-guided-teaching': guidedTeachingContentSchema,
   image: imageContentSchema,
   video: videoContentSchema,
   divider: dividerContentSchema,

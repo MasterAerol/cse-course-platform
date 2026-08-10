@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import { parseLessonBlock } from '../src/worker/schemas/lesson-block.schemas'
-import { percentageOfVisual } from '../scripts/lib/visual-teaching-content.mjs'
+import {
+  percentageOfVisual,
+  percentageGuidedTeachingContent,
+  percentageExampleContent,
+} from '../scripts/lib/visual-teaching-content.mjs'
 
 describe('visual lesson block parsing', () => {
   it('accepts a valid board-style visual on an example block', () => {
@@ -28,9 +32,27 @@ describe('visual lesson block parsing', () => {
     expect(result.block.content.visual?.transitions).toHaveLength(6)
   })
 
-  it('rejects visuals that omit an explained transformation', () => {
+  it('accepts a valid illustrated-guided-teaching block', () => {
     const result = parseLessonBlock({
       id: 21,
+      position: 5,
+      blockType: 'illustrated-guided-teaching',
+      contentJson: JSON.stringify(percentageGuidedTeachingContent),
+    })
+
+    expect(result.malformed).toBe(false)
+    expect(result.block?.type).toBe('illustrated-guided-teaching')
+    if (result.block?.type !== 'illustrated-guided-teaching') {
+      throw new Error('Expected an illustrated guided teaching block.')
+    }
+    expect(result.block.content.steps).toHaveLength(6)
+    expect(result.block.content.steps.at(0)?.emphasis).toBe('important')
+    expect(result.block.content.visual?.kind).toBe('decimal-movement')
+  })
+
+  it('rejects visuals that omit an explained transformation', () => {
+    const result = parseLessonBlock({
+      id: 22,
       position: 5,
       blockType: 'example',
       contentJson: JSON.stringify({
@@ -43,6 +65,36 @@ describe('visual lesson block parsing', () => {
           transitions: [],
         },
       }),
+    })
+
+    expect(result).toEqual({ block: null, malformed: true })
+  })
+
+  it('rejects guided teaching blocks missing required step definitions', () => {
+    const result = parseLessonBlock({
+      id: 23,
+      position: 5,
+      blockType: 'illustrated-guided-teaching',
+      contentJson: JSON.stringify({
+        ...percentageGuidedTeachingContent,
+        steps: [],
+      }),
+    })
+
+    expect(result).toEqual({ block: null, malformed: true })
+  })
+
+  it('rejects malformed guided steps', () => {
+    const malformed = {
+      ...percentageExampleContent,
+      steps: ['Only strings, no guided schema fields.'],
+    }
+
+    const result = parseLessonBlock({
+      id: 24,
+      position: 5,
+      blockType: 'illustrated-guided-teaching',
+      contentJson: JSON.stringify(malformed),
     })
 
     expect(result).toEqual({ block: null, malformed: true })

@@ -258,6 +258,48 @@ const lessonBlockSchema = z.union([
     }),
   }),
   baseLessonBlockSchema.extend({
+    type: z.literal('illustrated-guided-teaching'),
+    content: z.object({
+      title: z.string(),
+      subtitle: z.string().optional(),
+      prompt: z.string().optional(),
+      guide: z
+        .object({
+          name: z.string().optional(),
+          message: z.string().optional(),
+        })
+        .strict()
+        .optional(),
+      steps: z.array(
+        z.object({
+          id: z.string(),
+          stepNumber: z.number(),
+          title: z.string(),
+          boardExpression: z.string(),
+          guideMessage: z.string().optional(),
+          explanation: z.string(),
+          focusLabel: z.string().optional(),
+          emphasis: z.enum(['normal', 'important', 'final']).optional(),
+        }),
+      ).min(1),
+      visual: visualTeachingSchema.optional(),
+      memoryTip: z
+        .object({
+          title: z.string(),
+          text: z.string(),
+        })
+        .strict()
+        .optional(),
+      commonMistake: z
+        .object({
+          title: z.string(),
+          text: z.string(),
+        })
+        .strict()
+        .optional(),
+    }),
+  }),
+  baseLessonBlockSchema.extend({
     type: z.literal('image'),
     content: z.object({
       src: z.string(),
@@ -1326,6 +1368,7 @@ const adminLessonBlockSchema = z.object({
     'callout',
     'formula',
     'example',
+    'illustrated-guided-teaching',
     'image',
     'video',
     'divider',
@@ -2110,3 +2153,6 @@ export function fetchSubjectAssessmentResult(id: string, signal?: AbortSignal): 
 export function fetchSubjectAssessmentReview(id: string, signal?: AbortSignal): Promise<SubjectAssessmentReview> {
   return request(`/api/student/subject-assessment-attempts/${encodeURIComponent(id)}/review`, success(assessmentReviewSchema), { signal }).then((response) => response.data)
 }
+
+
+
