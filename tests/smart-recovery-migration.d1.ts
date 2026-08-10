@@ -54,7 +54,7 @@ async function addSnapshot(db: D1Database, key: string, attemptId: number, skill
 }
 
 beforeAll(async () => {
-  expect(testEnv.TEST_MIGRATIONS).toHaveLength(15)
+  expect(testEnv.TEST_MIGRATIONS).toHaveLength(16)
   await applyD1Migrations(fresh, testEnv.TEST_MIGRATIONS, 'fresh_migrations')
   await applyD1Migrations(upgrade, testEnv.TEST_MIGRATIONS.slice(0, 14), 'upgrade_migrations')
   subjectId = await id(fresh, "SELECT id FROM subjects WHERE slug='numerical-ability'")

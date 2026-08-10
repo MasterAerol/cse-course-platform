@@ -7662,6 +7662,269 @@ describe('Admin Content Builder Lite API', () => {
     })
   })
 
+  it('creates and updates illustrated guided teaching while rejecting malformed content', async () => {
+    const { cookie } = await registerAdmin('admin-guided-block@example.com')
+    const shell = await createCurriculumShell(cookie)
+    const content = {
+      title: 'Guided transformation',
+      steps: [{
+        id: 'guided-step-1',
+        stepNumber: 1,
+        title: 'Start here',
+        boardExpression: '20%',
+        explanation: 'This value comes directly from the question.',
+      }],
+    }
+    const createResponse = await app.request(
+      `/api/admin/lessons/${shell.lessonId}/blocks`,
+      adminJsonRequest({
+        blockType: 'illustrated-guided-teaching',
+        content,
+        position: 1,
+      }, cookie),
+      createBindings('production'),
+    )
+    const created = await createResponse.json<{
+      success: true
+      data: { block: { id: number; type: string; content: unknown; position: number } }
+    }>()
+    expect(createResponse.status).toBe(201)
+    expect(created.data.block).toMatchObject({
+      type: 'illustrated-guided-teaching',
+      content,
+      position: 1,
+    })
+
+    const updatedContent = { ...content, title: 'Updated guided transformation' }
+    const updateResponse = await app.request(
+      `/api/admin/lesson-blocks/${created.data.block.id}`,
+      adminJsonRequest({
+        blockType: 'illustrated-guided-teaching',
+        content: updatedContent,
+      }, cookie, 'PATCH'),
+      createBindings('production'),
+    )
+    expect(updateResponse.status).toBe(200)
+    await expect(updateResponse.json()).resolves.toMatchObject({
+      success: true,
+      data: { block: { type: 'illustrated-guided-teaching', content: updatedContent } },
+    })
+
+    const malformedResponse = await app.request(
+      `/api/admin/lessons/${shell.lessonId}/blocks`,
+      adminJsonRequest({
+        blockType: 'illustrated-guided-teaching',
+        content: { title: 'Missing required steps' },
+        position: 2,
+      }, cookie),
+      createBindings('production'),
+    )
+    expect(malformedResponse.status).toBe(400)
+    await expect(malformedResponse.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: 'INVALID_LESSON_BLOCK_CONTENT' },
+    })
+  })
+
+  it('rolls back occupied-position shifts and block creation when create audit fails', async () => {
+    const { cookie } = await registerAdmin('admin-block-create-rollback@example.com')
+    const shell = await createCurriculumShell(cookie)
+    const originalResponse = await app.request(
+      `/api/admin/lessons/${shell.lessonId}/blocks`,
+      adminJsonRequest({
+        blockType: 'paragraph',
+        content: { text: 'Original block.' },
+        position: 1,
+      }, cookie),
+      createBindings('production'),
+    )
+    expect(originalResponse.status).toBe(201)
+    const before = (await env.DB.prepare(
+      'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY id',
+    ).bind(shell.lessonId).all()).results
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_test_lesson_block_create_audit
+       BEFORE INSERT ON audit_logs
+       WHEN NEW.entity_type='lesson_block'
+       BEGIN SELECT RAISE(ABORT,'forced create audit failure'); END`,
+    ).run()
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const response = await app.request(
+        `/api/admin/lessons/${shell.lessonId}/blocks`,
+        adminJsonRequest({
+          blockType: 'paragraph',
+          content: { text: 'This create must roll back.' },
+          position: 1,
+        }, cookie),
+        createBindings('production'),
+      )
+      expect(response.status).toBe(500)
+      const after = (await env.DB.prepare(
+        'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY id',
+      ).bind(shell.lessonId).all()).results
+      expect(after).toEqual(before)
+    } finally {
+      errorLog.mockRestore()
+      await env.DB.prepare('DROP TRIGGER fail_test_lesson_block_create_audit').run()
+    }
+  })
+  it('repairs the known Percentage partial shift atomically and is idempotent', async () => {
+    const { cookie } = await registerAdmin('admin-percentage-repair@example.com')
+    const lesson = await env.DB.prepare(
+      `SELECT lessons.id
+       FROM lessons
+       JOIN topics ON topics.id=lessons.topic_id
+       JOIN subjects ON subjects.id=topics.subject_id
+       JOIN courses ON courses.id=subjects.course_id
+       WHERE courses.slug='cse-professional'
+         AND subjects.slug='numerical-ability'
+         AND topics.slug='percentages'
+         AND lessons.slug='finding-the-percentage'`,
+    ).first<{ id: number }>()
+    if (lesson === null) throw new Error('Seeded Percentage lesson is missing.')
+    const originalRows = (await env.DB.prepare(
+      'SELECT * FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position,id',
+    ).bind(lesson.id).all<{
+      id: number
+      lesson_id: number
+      block_type: string
+      content_json: string
+      position: number
+      created_at: string
+      updated_at: string
+    }>()).results
+    const guidedContent = {
+      title: 'Find 20% of 80',
+      steps: [{
+        id: 'percent-step-1',
+        stepNumber: 1,
+        title: 'Start from the percent form',
+        boardExpression: '20%',
+        explanation: 'The value comes directly from the question.',
+      }],
+    }
+    const fixtureBlocks = [
+      ['heading', { level: 1, text: 'Finding the Percentage' }, 1],
+      ['paragraph', { text: 'Pilot paragraph.' }, 2],
+      ['formula', { expression: 'Percentage = Rate x Base', description: 'Pilot formula.' }, 3],
+      ['summary', { items: ['Pilot summary.'] }, 4],
+      ['example', percentageExampleContent, 7],
+      ['example', { title: 'Second example', problem: 'Problem?', steps: ['Step.'], answer: 'Answer.' }, 8],
+      ['example', { title: 'Third example', problem: 'Problem?', steps: ['Step.'], answer: 'Answer.' }, 9],
+      ['callout', { variant: 'warning', title: 'Warning', text: 'Check the decimal.' }, 10],
+      ['summary', { items: ['Final summary.'] }, 11],
+    ] as const
+    const insertedFixtureIds: number[] = []
+
+    try {
+      await env.DB.prepare('DELETE FROM lesson_blocks WHERE lesson_id=?1').bind(lesson.id).run()
+      for (const [blockType, content, position] of fixtureBlocks) {
+        const inserted = await env.DB.prepare(
+          `INSERT INTO lesson_blocks(lesson_id,block_type,content_json,position)
+           VALUES(?1,?2,?3,?4)`,
+        ).bind(lesson.id, blockType, JSON.stringify(content), position).run()
+        insertedFixtureIds.push(Number(inserted.meta.last_row_id))
+      }
+
+      const beforeFailure = (await env.DB.prepare(
+        'SELECT id,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY id',
+      ).bind(lesson.id).all()).results
+      await env.DB.prepare(
+        `CREATE TRIGGER fail_test_percentage_repair_audit
+         BEFORE INSERT ON audit_logs
+         WHEN NEW.entity_type='lesson_block'
+         BEGIN SELECT RAISE(ABORT,'forced Percentage repair audit failure'); END`,
+      ).run()
+      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      try {
+        const failedResponse = await app.request(
+          `/api/admin/lessons/${lesson.id}/percentage-guided-teaching`,
+          adminJsonRequest({ content: guidedContent }, cookie),
+          createBindings('production'),
+        )
+        expect(failedResponse.status).toBe(500)
+        const afterFailure = (await env.DB.prepare(
+          'SELECT id,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY id',
+        ).bind(lesson.id).all()).results
+        expect(afterFailure).toEqual(beforeFailure)
+        expect(await env.DB.prepare(
+          "SELECT COUNT(*) AS count FROM lesson_blocks WHERE lesson_id=?1 AND block_type='illustrated-guided-teaching'",
+        ).bind(lesson.id).first<{ count: number }>()).toEqual({ count: 0 })
+      } finally {
+        errorLog.mockRestore()
+        await env.DB.prepare('DROP TRIGGER fail_test_percentage_repair_audit').run()
+      }
+
+      const firstResponse = await app.request(
+        `/api/admin/lessons/${lesson.id}/percentage-guided-teaching`,
+        adminJsonRequest({ content: guidedContent }, cookie),
+        createBindings('production'),
+      )
+      expect(firstResponse.status).toBe(200)
+      const first = await firstResponse.json<{
+        success: true
+        data: { block: { id: number }; writeRequired: boolean; repairedPositionCount: number }
+      }>()
+      insertedFixtureIds.push(first.data.block.id)
+      expect(first.data).toMatchObject({ writeRequired: true, repairedPositionCount: 5 })
+
+      const afterFirst = (await env.DB.prepare(
+        'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position',
+      ).bind(lesson.id).all<{
+        id: number
+        block_type: string
+        content_json: string
+        position: number
+      }>()).results
+      expect(afterFirst.map((block) => block.position)).toEqual([1,2,3,4,5,6,7,8,9,10])
+      expect(afterFirst.filter((block) => block.block_type === 'illustrated-guided-teaching')).toHaveLength(1)
+      expect(afterFirst[5]?.id).toBe(insertedFixtureIds[4])
+      expect(JSON.parse(afterFirst[5]?.content_json ?? '{}')).toEqual(percentageExampleContent)
+
+      const secondResponse = await app.request(
+        `/api/admin/lessons/${lesson.id}/percentage-guided-teaching`,
+        adminJsonRequest({ content: guidedContent }, cookie),
+        createBindings('production'),
+      )
+      const second = await secondResponse.json<{
+        success: true
+        data: { block: { id: number }; writeRequired: boolean; repairedPositionCount: number }
+      }>()
+      expect(secondResponse.status).toBe(200)
+      expect(second.data.block.id).toBe(first.data.block.id)
+      expect(second.data.block).toMatchObject({ position: 5 })
+      expect(second.data.writeRequired).toBe(false)
+      expect(second.data.repairedPositionCount).toBe(0)
+      const afterSecond = (await env.DB.prepare(
+        'SELECT id,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position',
+      ).bind(lesson.id).all<{ id: number; position: number }>()).results
+      expect(afterSecond).toEqual(afterFirst.map(({ id, position }) => ({ id, position })))
+    } finally {
+      await env.DB.prepare('DELETE FROM lesson_blocks WHERE lesson_id=?1').bind(lesson.id).run()
+      for (const block of originalRows) {
+        await env.DB.prepare(
+          `INSERT INTO lesson_blocks(
+            id,lesson_id,block_type,content_json,position,created_at,updated_at
+          ) VALUES(?1,?2,?3,?4,?5,?6,?7)`,
+        ).bind(
+          block.id,
+          block.lesson_id,
+          block.block_type,
+          block.content_json,
+          block.position,
+          block.created_at,
+          block.updated_at,
+        ).run()
+      }
+      for (const id of insertedFixtureIds) {
+        await env.DB.prepare(
+          "DELETE FROM audit_logs WHERE entity_type='lesson_block' AND entity_id=?1",
+        ).bind(String(id)).run()
+      }
+    }
+  })
   it('accepts the exact Percentage visual payload and updates only the target block plus audit log', async () => {
     const { cookie } = await registerAdmin('admin-percentage-visual@example.com')
     const shell = await createCurriculumShell(cookie)

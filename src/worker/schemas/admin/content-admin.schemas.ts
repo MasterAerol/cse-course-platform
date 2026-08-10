@@ -41,6 +41,9 @@ export const lessonBlockUpdateSchema = z
     position: positivePositionSchema.optional(),
   })
   .strict()
+export const percentageGuidedTeachingRepairSchema = z
+  .object({ content: z.unknown() })
+  .strict()
 
 export const generatedDifficultyConfigSchema = z
   .object({

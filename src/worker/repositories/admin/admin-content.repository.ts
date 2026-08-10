@@ -569,6 +569,152 @@ export async function createLessonBlockRow(
     .first<AdminLessonBlockRow>()
 }
 
+export async function findLessonBlockAtPosition(
+  database: D1Database,
+  lessonId: number,
+  position: number,
+): Promise<{ id: number } | null> {
+  return database
+    .prepare(
+      'SELECT id FROM lesson_blocks WHERE lesson_id = ?1 AND position = ?2 LIMIT 1',
+    )
+    .bind(lessonId, position)
+    .first<{ id: number }>()
+}
+
+export async function createLessonBlockWithAudit(
+  database: D1Database,
+  input: {
+    block: Omit<AdminLessonBlockRow, 'id' | 'created_at' | 'updated_at'>
+    actorUserId: number
+    metadataJson: string
+    shiftOccupiedPosition: boolean
+  },
+): Promise<AdminLessonBlockRow | null> {
+  const statements: D1PreparedStatement[] = []
+
+  if (input.shiftOccupiedPosition) {
+    statements.push(
+      database.prepare(
+        `UPDATE lesson_blocks
+         SET position = position + 100000
+         WHERE lesson_id = ?1 AND position >= ?2`,
+      ).bind(input.block.lesson_id, input.block.position),
+      database.prepare(
+        `UPDATE lesson_blocks
+         SET position = position - 99999
+         WHERE lesson_id = ?1 AND position >= 100000`,
+      ).bind(input.block.lesson_id),
+    )
+  }
+
+  const insertIndex = statements.length
+  statements.push(
+    database.prepare(
+      `INSERT INTO lesson_blocks(lesson_id,block_type,content_json,position)
+       VALUES(?1,?2,?3,?4)
+       RETURNING *`,
+    ).bind(
+      input.block.lesson_id,
+      input.block.block_type,
+      input.block.content_json,
+      input.block.position,
+    ),
+    database.prepare(
+      `INSERT INTO audit_logs(actor_user_id,action,entity_type,entity_id,metadata_json)
+       SELECT ?1,'create','lesson_block',CAST(id AS TEXT),?4
+       FROM lesson_blocks
+       WHERE lesson_id=?2 AND position=?3
+       LIMIT 1`,
+    ).bind(
+      input.actorUserId,
+      input.block.lesson_id,
+      input.block.position,
+      input.metadataJson,
+    ),
+  )
+
+  const results = await database.batch<AdminLessonBlockRow>(statements)
+  return results[insertIndex]?.results[0] ?? null
+}
+
+export async function repairPercentageGuidedTeachingWithAudit(
+  database: D1Database,
+  input: {
+    lessonId: number
+    actorUserId: number
+    guidedBlockId: number | null
+    guidedContentJson: string
+    orderedExistingBlockIds: number[]
+    metadataJson: string
+  },
+): Promise<AdminLessonBlockRow | null> {
+  const guidedPosition = 5
+  const statements: D1PreparedStatement[] = [
+    database.prepare(
+      `UPDATE lesson_blocks
+       SET position = position + 100000
+       WHERE lesson_id = ?1`,
+    ).bind(input.lessonId),
+  ]
+
+  for (const [index, blockId] of input.orderedExistingBlockIds.entries()) {
+    const position = index < guidedPosition - 1 ? index + 1 : index + 2
+    statements.push(
+      database.prepare(
+        `UPDATE lesson_blocks
+         SET position=?2
+         WHERE id=?1 AND lesson_id=?3`,
+      ).bind(blockId, position, input.lessonId),
+    )
+  }
+
+  const blockStatementIndex = statements.length
+  if (input.guidedBlockId === null) {
+    statements.push(
+      database.prepare(
+        `INSERT INTO lesson_blocks(lesson_id,block_type,content_json,position)
+         VALUES(?1,'illustrated-guided-teaching',?2,?3)
+         RETURNING *`,
+      ).bind(input.lessonId, input.guidedContentJson, guidedPosition),
+    )
+  } else {
+    statements.push(
+      database.prepare(
+        `UPDATE lesson_blocks
+         SET block_type='illustrated-guided-teaching',content_json=?2,position=?3,
+             updated_at=CURRENT_TIMESTAMP
+         WHERE id=?1 AND lesson_id=?4
+         RETURNING *`,
+      ).bind(
+        input.guidedBlockId,
+        input.guidedContentJson,
+        guidedPosition,
+        input.lessonId,
+      ),
+    )
+  }
+
+  statements.push(
+    database.prepare(
+      `INSERT INTO audit_logs(actor_user_id,action,entity_type,entity_id,metadata_json)
+       SELECT ?1,?2,'lesson_block',CAST(id AS TEXT),?5
+       FROM lesson_blocks
+       WHERE lesson_id=?3 AND block_type='illustrated-guided-teaching' AND position=?4
+       LIMIT 1`,
+    ).bind(
+      input.actorUserId,
+      input.guidedBlockId === null ? 'create' : 'repair',
+      input.lessonId,
+      guidedPosition,
+      input.metadataJson,
+    ),
+  )
+
+  const results = await database.batch<AdminLessonBlockRow>(statements)
+  return results[blockStatementIndex]?.results[0] ?? null
+}
+
 export async function updateLessonBlockRow(
   database: D1Database,
   input: AdminLessonBlockRow,

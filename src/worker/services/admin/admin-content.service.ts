@@ -7,7 +7,7 @@ import {
 import type { GeneratorSlug } from '../../generators/generator.types'
 import {
   createCourseRow,
-  createLessonBlockRow,
+  createLessonBlockWithAudit,
   createLessonRow,
   createSubjectRow,
   createTopicRow,
@@ -17,6 +17,7 @@ import {
   findAdminQuizById,
   findCourseById,
   findCourseBySlug,
+  findLessonBlockAtPosition,
   findLessonBlockById,
   findLessonById,
   findPracticeQuestionById,
@@ -37,6 +38,7 @@ import {
   listQuizQuestions,
   listSubjectsForCourse,
   listTopicsForSubject,
+  repairPercentageGuidedTeachingWithAudit,
   shiftPositionsForInsert,
   swapAdjacentPositions,
   updateCourseRow,
@@ -1359,33 +1361,146 @@ export async function createAdminLessonBlock(
   }
 
   assertNoRawHtmlContent(input.content)
-  const content = validateLessonBlockContent(input.blockType, input.content)
-  const position = await nextPosition(
-    database,
-    'lesson_blocks',
-    'lesson_id',
-    lessonId,
-    input.position,
-  )
-  const row = await createLessonBlockRow(database, {
-    lesson_id: lessonId,
-    block_type: input.blockType,
-    content_json: JSON.stringify(content),
-    position,
+  const content = validateAdminLessonBlockContent(input.blockType, input.content)
+  const position = input.position ?? (
+    await getMaxPosition(database, 'lesson_blocks', 'lesson_id', lessonId)
+  ) + 1
+  const occupied = input.position === undefined
+    ? null
+    : await findLessonBlockAtPosition(database, lessonId, position)
+  const row = await createLessonBlockWithAudit(database, {
+    block: {
+      lesson_id: lessonId,
+      block_type: input.blockType,
+      content_json: JSON.stringify(content),
+      position,
+    },
+    actorUserId: actor.internalUserId,
+    metadataJson: JSON.stringify({ lessonId, blockType: input.blockType }),
+    shiftOccupiedPosition: occupied !== null,
   })
 
   if (row === null) {
     throw new Error('Lesson block could not be created.')
   }
 
-  await recordAdminAuditLog(database, actor, {
-    action: 'create',
-    entityType: 'lesson_block',
-    entityId: row.id,
-    metadata: { lessonId, blockType: row.block_type },
-  })
-
   return { block: mapBlock(row) }
+}
+
+export async function repairPercentageGuidedTeaching(
+  database: D1Database,
+  actor: AuthenticatedPrincipal,
+  lessonId: number,
+  rawContent: unknown,
+): Promise<{
+  block: AdminLessonBlock
+  writeRequired: boolean
+  repairedPositionCount: number
+}> {
+  const lesson = await findLessonById(database, lessonId)
+  if (lesson === null) throw notFound('Lesson')
+  const topic = await findTopicById(database, lesson.topic_id)
+  const subject = topic === null
+    ? null
+    : await findSubjectById(database, topic.subject_id)
+  const course = subject === null
+    ? null
+    : await findCourseById(database, subject.course_id)
+  if (
+    lesson.slug !== 'finding-the-percentage' ||
+    topic?.slug !== 'percentages' ||
+    subject?.slug !== 'numerical-ability' ||
+    course?.slug !== 'cse-professional'
+  ) {
+    throw new AppError(
+      409,
+      'PERCENTAGE_REPAIR_TARGET_MISMATCH',
+      'The guided-teaching repair is restricted to the CSE Percentage pilot lesson.',
+    )
+  }
+
+  assertNoRawHtmlContent(rawContent)
+  const content = validateAdminLessonBlockContent(
+    'illustrated-guided-teaching',
+    rawContent,
+  )
+  const contentJson = JSON.stringify(content)
+  const blocks = await listLessonBlocksForLesson(database, lessonId)
+  const guidedBlocks = blocks.filter(
+    (block) => block.block_type === 'illustrated-guided-teaching',
+  )
+  if (guidedBlocks.length > 1) {
+    throw new AppError(
+      409,
+      'PERCENTAGE_REPAIR_STATE_UNRECOGNIZED',
+      'The Percentage lesson contains more than one guided-teaching block.',
+    )
+  }
+
+  const existingBlocks = blocks.filter(
+    (block) => block.block_type !== 'illustrated-guided-teaching',
+  )
+  const visualIndexes = existingBlocks.flatMap((block, index) => {
+    if (block.block_type !== 'example') return []
+    try {
+      const value = JSON.parse(block.content_json) as {
+        title?: unknown
+        visual?: { kind?: unknown }
+      }
+      return value.title === 'Find 20% of 80' &&
+        value.visual?.kind === 'decimal-movement'
+        ? [index]
+        : []
+    } catch {
+      return []
+    }
+  })
+  if (
+    existingBlocks.length !== 9 ||
+    visualIndexes.length !== 1 ||
+    visualIndexes[0] !== 4
+  ) {
+    throw new AppError(
+      409,
+      'PERCENTAGE_REPAIR_STATE_UNRECOGNIZED',
+      'The Percentage lesson does not match the approved nine-block pilot structure.',
+    )
+  }
+
+  const guided = guidedBlocks[0] ?? null
+  const repairedPositionCount = existingBlocks.reduce((count, block, index) => {
+    const expected = index < 4 ? index + 1 : index + 2
+    return count + (block.position === expected ? 0 : 1)
+  }, 0)
+  const writeRequired =
+    guided === null ||
+    guided.position !== 5 ||
+    guided.content_json !== contentJson ||
+    repairedPositionCount > 0
+
+  if (!writeRequired && guided !== null) {
+    return {
+      block: mapBlock(guided),
+      writeRequired: false,
+      repairedPositionCount: 0,
+    }
+  }
+
+  const row = await repairPercentageGuidedTeachingWithAudit(database, {
+    lessonId,
+    actorUserId: actor.internalUserId,
+    guidedBlockId: guided?.id ?? null,
+    guidedContentJson: contentJson,
+    orderedExistingBlockIds: existingBlocks.map((block) => block.id),
+    metadataJson: JSON.stringify({
+      lessonId,
+      operation: 'percentage-guided-teaching-repair',
+      repairedPositionCount,
+    }),
+  })
+  if (row === null) throw new Error('Percentage guided teaching repair failed.')
+
+  return { block: mapBlock(row), writeRequired: true, repairedPositionCount }
 }
 
 export async function updateAdminLessonBlock(

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 
 import { percentageGuidedTeachingContent } from './lib/visual-teaching-content.mjs'
 
@@ -7,7 +7,8 @@ const csrfHeaderValue = 'same-origin-admin-mutation'
 const target = {
   topicSlug: 'percentages',
   lessonSlug: 'finding-the-percentage',
-  blockPosition: 5,
+  guidedBlockPosition: 5,
+  guidedBlockType: 'illustrated-guided-teaching',
 }
 
 function parseArgs() {
@@ -31,6 +32,22 @@ function parseArgs() {
 function desiredContent() {
   return structuredClone(percentageGuidedTeachingContent)
 }
+
+function summarizeContent(content) {
+  const visual = content.visual
+  return {
+    hasVisual: visual !== undefined,
+    visualKind: visual?.kind ?? null,
+    stages: visual?.stages.length ?? 0,
+    transitions: visual?.transitions.length ?? 0,
+    memoryExamples: visual?.memoryTip?.examples?.length ?? 0,
+  }
+}
+
+function findGuidedBlock(blocks) {
+  return blocks.find((item) => item.type === target.guidedBlockType) ?? null
+}
+
 
 async function main() {
   const args = parseArgs()
@@ -84,81 +101,153 @@ async function main() {
     throw new Error('The published Percentages lesson target was not found.')
   }
 
-  const response = await request(`/api/admin/lessons/${lesson.id}/blocks`)
-  const block = response.blocks.find((item) => item.position === target.blockPosition)
-  if (block === undefined || block.type !== 'illustrated-guided-teaching') {
-    throw new Error('Expected the target guided Percentages block at lesson block position 5.')
+  const initial = await request(`/api/admin/lessons/${lesson.id}/blocks`)
+  const guided = findGuidedBlock(initial.blocks)
+  const guidedBlocks = initial.blocks.filter(
+    (item) => item.type === target.guidedBlockType,
+  )
+
+  if (guidedBlocks.length > 1) {
+    throw new Error('Production already contains multiple guided blocks.')
   }
 
   const desired = desiredContent()
-  const alreadyCurrent = JSON.stringify(block.content) === JSON.stringify(desired)
+  const existingBlocks = initial.blocks.filter(
+    (item) => item.type !== target.guidedBlockType,
+  )
+  const visualIndexes = existingBlocks.flatMap((item, index) =>
+    item.type === 'example' &&
+    item.content?.title === 'Find 20% of 80' &&
+    item.content?.visual?.kind === 'decimal-movement'
+      ? [index]
+      : [],
+  )
+  if (
+    existingBlocks.length !== 9 ||
+    visualIndexes.length !== 1 ||
+    visualIndexes[0] !== 4
+  ) {
+    throw new Error('The lesson does not match the approved nine-block Percentage pilot structure.')
+  }
+  const expectedPositions = new Map(
+    existingBlocks.map((item, index) => [item.id, index < 4 ? index + 1 : index + 2]),
+  )
+  const repairedPositionCount = existingBlocks.filter(
+    (item) => item.position !== expectedPositions.get(item.id),
+  ).length
+  const visualBlock = existingBlocks[visualIndexes[0]]
+  const atExpectedPosition =
+    guided?.position !== undefined &&
+    guided.position === target.guidedBlockPosition
+  const alreadyCurrent =
+    guided !== null && JSON.stringify(guided.content) === JSON.stringify(desired)
+  const needsUpdate =
+    guided === null || !atExpectedPosition || !alreadyCurrent || repairedPositionCount > 0
+
   if (validateOnly) {
-    console.log(JSON.stringify({
+    const status = {
       valid: true,
-      writeRequired: !alreadyCurrent,
       recordType: 'lesson_blocks',
-      lessonBlockId: block.id,
+      writesRequired: needsUpdate,
       topicSlug: target.topicSlug,
       topicStatus: topic.status,
       lessonSlug: target.lessonSlug,
       lessonStatus: lesson.status,
-      blockPosition: target.blockPosition,
-      currentTitle: block.content.title,
-      currentHasVisual: block.content.visual !== undefined,
-      desiredTitle: desired.title,
-          visualKind: desired.visual.kind,
-      stages: desired.visual.stages.length,
-      transitions: desired.visual.transitions.length,
-      memoryExamples: desired.visual.memoryTip.examples.length,
-      unrelatedRecordsUpdated: 0,
-    }, null, 2))
+      targetPosition: target.guidedBlockPosition,
+      guidedBlockType: target.guidedBlockType,
+      guidedCount: guidedBlocks.length,
+      guidedBlockPosition: guided?.position ?? null,
+      blocks: initial.blocks.map((item) => ({
+        id: item.id,
+        position: item.position,
+        type: item.type,
+        hasVisual: item.content?.visual !== undefined,
+        expectedPosition: item.type === target.guidedBlockType
+          ? target.guidedBlockPosition
+          : expectedPositions.get(item.id) ?? null,
+      })),
+      repairedPositionCount,
+      desired: summarizeContent(desired),
+      existing:
+        guided === null
+          ? { hasGuided: false }
+          : {
+              id: guided.id,
+              position: guided.position,
+              ...summarizeContent(guided.content),
+              title: guided.content.title,
+            },
+    }
+
+    console.log(JSON.stringify(status, null, 2))
     return
   }
 
-  if (!alreadyCurrent) {
-    await request(`/api/admin/lesson-blocks/${block.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        blockType: 'illustrated-guided-teaching',
-        content: desired,
-        position: target.blockPosition,
-      }),
-    })
-  }
+  const repair = await request(
+    `/api/admin/lessons/${lesson.id}/percentage-guided-teaching`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ content: desired }),
+    },
+  )
 
   const verified = await request(`/api/admin/lessons/${lesson.id}/blocks`)
-  const stored = verified.blocks.find((item) => item.position === target.blockPosition)
+  const verifiedGuidedBlocks = verified.blocks.filter(
+    (item) => item.type === target.guidedBlockType,
+  )
+  const stored = verified.blocks.find(
+    (item) => item.type === target.guidedBlockType,
+  )
+
   if (
-    stored?.type !== 'illustrated-guided-teaching' ||
+    verifiedGuidedBlocks.length !== 1 ||
+    stored?.type !== target.guidedBlockType ||
     JSON.stringify(stored.content) !== JSON.stringify(desired) ||
+    stored.position !== target.guidedBlockPosition ||
+    verified.blocks.length !== 10 ||
+    verified.blocks.some((item, index) => item.position !== index + 1) ||
+    verified.blocks.find((item) => item.id === visualBlock.id)?.position !== 6 ||
+    JSON.stringify(verified.blocks.find((item) => item.id === visualBlock.id)?.content) !==
+      JSON.stringify(visualBlock.content) ||
     topic.status !== 'published' ||
     lesson.status !== 'published'
   ) {
     throw new Error('Post-publish validation failed.')
   }
 
-  console.log(JSON.stringify({
-    published: true,
-    updated: !alreadyCurrent,
-    recordType: 'lesson_blocks',
-    lessonBlockId: stored.id,
-    topicSlug: target.topicSlug,
-    topicStatus: topic.status,
-    lessonSlug: target.lessonSlug,
-    lessonStatus: lesson.status,
-    blockPosition: target.blockPosition,
-    title: stored.content.title,
-    visualKind: stored.content.visual.kind,
-    stages: stored.content.visual.stages.length,
-    transitions: stored.content.visual.transitions.length,
-    memoryExamples: stored.content.visual.memoryTip.examples.length,
-    unrelatedRecordsUpdated: 0,
-  }, null, 2))
+  console.log(
+    JSON.stringify(
+      {
+        published: true,
+        updated: repair.writeRequired,
+        recordType: 'lesson_blocks',
+        lessonBlockId: stored.id,
+        topicSlug: target.topicSlug,
+        topicStatus: topic.status,
+        lessonSlug: target.lessonSlug,
+        lessonStatus: lesson.status,
+        blockPosition: target.guidedBlockPosition,
+        ...summarizeContent(stored.content),
+        title: stored.content.title,
+        blocks: verified.blocks.map((item) => ({
+          id: item.id,
+          position: item.position,
+          type: item.type,
+          hasVisual: item.content?.visual !== undefined,
+          expectedPosition: item.type === target.guidedBlockType
+            ? target.guidedBlockPosition
+            : expectedPositions.get(item.id) ?? null,
+        })),
+        repairedPositionCount: repair.repairedPositionCount,
+        unrelatedRecordsUpdated: 0,
+      },
+      null,
+      2,
+    ),
+  )
 }
 
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error))
   process.exitCode = 1
 })
-
-

@@ -5,12 +5,14 @@ import {
   lessonBlockCreateSchema,
   lessonBlockIdParamsSchema,
   lessonBlockUpdateSchema,
+  percentageGuidedTeachingRepairSchema,
 } from '../../schemas/admin/content-admin.schemas'
 import {
   createAdminLessonBlock,
   deleteAdminLessonBlock,
   getAdminLessonBlocks,
   moveLessonBlock,
+  repairPercentageGuidedTeaching,
   updateAdminLessonBlock,
 } from '../../services/admin/admin-content.service'
 import type { AppEnv } from '../../types/app'
@@ -52,6 +54,30 @@ adminLessonBlockRoutes.post('/lessons/:lessonId/blocks', async (context) => {
   )
 })
 
+adminLessonBlockRoutes.post(
+  '/lessons/:lessonId/percentage-guided-teaching',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({
+        lessonId: context.req.param('lessonId'),
+      }),
+    )
+    const input = await parseJsonBody(
+      context,
+      percentageGuidedTeachingRepairSchema,
+    )
+
+    return successResponse(
+      context,
+      await repairPercentageGuidedTeaching(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input.content,
+      ),
+    )
+  },
+)
 adminLessonBlockRoutes.patch('/lesson-blocks/:blockId', async (context) => {
   const params = parseValidatedInput(
     lessonBlockIdParamsSchema.safeParse({
