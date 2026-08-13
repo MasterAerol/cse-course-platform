@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { percentageLessonSpecs } from './lib/percentage-teaching-system-content.mjs'
+import { jsonFingerprint, sameJson } from './lib/canonical-json.mjs'
 
 const confirmation = 'publish-percentage-teaching-system-v1'
 const csrfHeaderValue = 'same-origin-admin-mutation'
@@ -20,7 +21,19 @@ function parseArgs() {
 }
 const ordered = (blocks) => blocks.slice().sort((left, right) => left.position - right.position || left.id - right.id)
 const desiredPayload = (block, position) => ({ ...block, position })
-const sameBlock = (existing, desired, position) => existing.position === position && existing.type === desired.blockType && JSON.stringify(existing.content) === JSON.stringify(desired.content)
+const sameBlock = (existing, desired, position) => existing.position === position && existing.type === desired.blockType && sameJson(existing.content, desired.content)
+
+function lessonMismatch(blocks, spec) {
+  if (blocks.length !== spec.blocks.length) return `block count mismatch (expected ${spec.blocks.length}, actual ${blocks.length})`
+  for (const [index, block] of blocks.entries()) {
+    const desired = spec.blocks[index]
+    const position = index + 1
+    if (block.position !== position) return `block ${position} position mismatch (expected ${position}, actual ${block.position})`
+    if (block.type !== desired.blockType) return `block ${position} type mismatch (expected ${desired.blockType}, actual ${block.type})`
+    if (!sameJson(block.content, desired.content)) return `block ${position} content fingerprint mismatch (expected ${jsonFingerprint(desired.content)}, actual ${jsonFingerprint(block.content)})`
+  }
+  return null
+}
 
 function buildPlan(existingBlocks, desiredBlocks) {
   const all = ordered(existingBlocks)
@@ -91,22 +104,17 @@ async function main() {
   }
   for (const state of states) {
     if (!state.plan.writesRequired) continue
-    for (const block of state.plan.deletes) await request(`/api/admin/lesson-blocks/${block.id}`, { method: 'DELETE' })
-    const refreshed = await request(`/api/admin/lessons/${state.lesson.id}/blocks`)
-    const retained = ordered(refreshed.blocks)
-    for (const [index, block] of retained.entries()) {
-      const position = index + 1
-      const desired = state.spec.blocks[index]
-      if (desired === undefined) throw new Error(`Unexpected excess block in ${state.spec.title}.`)
-      if (!sameBlock(block, desired, position)) await request(`/api/admin/lesson-blocks/${block.id}`, { method: 'PATCH', body: JSON.stringify(desiredPayload(desired, position)) })
-    }
-    for (let index = retained.length; index < state.spec.blocks.length; index += 1) await request(`/api/admin/lessons/${state.lesson.id}/blocks`, { method: 'POST', body: JSON.stringify(desiredPayload(state.spec.blocks[index], index + 1)) })
+    await request(`/api/admin/lessons/${state.lesson.id}/percentage-teaching-system-v1`, {
+      method: 'PUT',
+      body: JSON.stringify({ blocks: state.spec.blocks.map((block, index) => desiredPayload(block, index + 1)) }),
+    })
   }
   const verifiedLessons = []
   for (const state of states) {
     const response = await request(`/api/admin/lessons/${state.lesson.id}/blocks`)
     const blocks = ordered(response.blocks)
-    if (blocks.length !== state.spec.blocks.length || blocks.some((block) => block.type === guidedBlockType) || blocks.some((block, index) => !sameBlock(block, state.spec.blocks[index], index + 1))) throw new Error(`Post-publish validation failed for ${state.spec.title}.`)
+    const mismatch = lessonMismatch(blocks, state.spec)
+    if (mismatch !== null) throw new Error(`Post-publish validation failed for ${state.spec.title}: ${mismatch}.`)
     verifiedLessons.push({ lessonSlug: state.spec.slug, blockCount: blocks.length, visualBlockCount: blocks.filter((block) => block.content?.visual !== undefined).length, guidedBlockCount: 0 })
   }
   console.log(JSON.stringify({ published: true, updated: totals.lessonsChanged > 0, operation: 'percentage-teaching-system-v1', topicSlug: 'percentages', lessonCount: percentageLessonSpecs.length, totals, lessons: verifiedLessons, unrelatedTopicsModified: 0 }, null, 2))

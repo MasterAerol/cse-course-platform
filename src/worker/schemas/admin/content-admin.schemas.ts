@@ -45,6 +45,20 @@ export const percentageGuidedTeachingRepairSchema = z
   .object({ content: z.unknown() })
   .strict()
 
+export const percentageTeachingSystemReconcileSchema = z
+  .object({
+    blocks: z.array(z.object({
+      blockType: lessonBlockTypeSchema,
+      content: z.unknown(),
+      position: positivePositionSchema,
+    }).strict()).min(1).max(100),
+  })
+  .strict()
+  .refine(
+    (value) => value.blocks.every((block, index) => block.position === index + 1),
+    { path: ['blocks'], message: 'Block positions must be consecutive and start at 1.' },
+  )
+
 export const generatedDifficultyConfigSchema = z
   .object({
     easy: z.coerce.number().int().min(0).max(20).default(0),
@@ -183,6 +197,7 @@ export const auditLogFilterSchema = z.object({
 
 export type LessonBlockCreateInput = z.infer<typeof lessonBlockCreateSchema>
 export type LessonBlockUpdateInput = z.infer<typeof lessonBlockUpdateSchema>
+export type PercentageTeachingSystemReconcileInput = z.infer<typeof percentageTeachingSystemReconcileSchema>
 export type PracticeSetInput = z.infer<typeof practiceSetInputSchema>
 export type FixedQuestionInput = z.infer<typeof fixedQuestionInputSchema>
 export type QuizInput = z.infer<typeof quizInputSchema>

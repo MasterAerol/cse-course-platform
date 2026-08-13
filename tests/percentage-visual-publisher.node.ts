@@ -54,6 +54,12 @@ function readBody(request: IncomingMessage): Promise<Record<string, unknown>> {
     request.on('error', reject)
   })
 }
+function normalizeApiContent(type: string, content: unknown): unknown {
+  if (type !== 'callout' || content === null || typeof content !== 'object') return structuredClone(content)
+  const value = content as { variant: unknown; title: unknown; text: unknown }
+  return { variant: value.variant, title: value.title, text: value.text }
+}
+
 function findBlock(blockId: number): { blocks: StoredBlock[]; index: number } | null {
   for (const blocks of blocksByLesson.values()) {
     const index = blocks.findIndex((block) => block.id === blockId)
@@ -67,6 +73,32 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (url === '/api/admin/dashboard') { send(response, { cseProfessional: { id: 1 } }); return }
   if (url === '/api/admin/courses/1') {
     send(response, { subjects: [{ slug: 'numerical-ability', topics: [{ slug: 'percentages', lessons: lessons.map(({ id, slug, title, lessonType, estimatedMinutes, status }) => ({ id, slug, title, lessonType, estimatedMinutes, status })) }] }] })
+    return
+  }
+
+  const reconcileMatch = url.match(/^\/api\/admin\/lessons\/(\d+)\/percentage-teaching-system-v1$/u)
+  if (reconcileMatch?.[1] !== undefined && request.method === 'PUT') {
+    mutationCalls += 1
+    const lessonId = Number(reconcileMatch[1])
+    const existing = blocksByLesson.get(lessonId)
+    if (existing === undefined) { send(response, { message: 'Missing lesson.' }, 404); return }
+    const input = await readBody(request)
+    const desired = input.blocks as Array<{ blockType: string; content: unknown; position: number }>
+    const allowed = existing.filter((block) => block.type !== 'illustrated-guided-teaching')
+    const next = desired.map((block, index): StoredBlock => ({
+      id: allowed[index]?.id ?? nextBlockId++,
+      type: block.blockType,
+      content: normalizeApiContent(block.blockType, block.content),
+      position: block.position,
+    }))
+    blocksByLesson.set(lessonId, next)
+    send(response, {
+      blocks: next,
+      writeRequired: true,
+      createdCount: Math.max(0, desired.length - allowed.length),
+      updatedCount: Math.min(desired.length, allowed.length),
+      deletedCount: existing.length - allowed.length + Math.max(0, allowed.length - desired.length),
+    })
     return
   }
   const listMatch = url.match(/^\/api\/admin\/lessons\/(\d+)\/blocks$/u)
@@ -142,6 +174,8 @@ describe('Percentage Teaching System v1 publisher', () => {
     expect(first).toMatchObject({ status: 0, stderr: '' })
     expect(JSON.parse(first.stdout)).toMatchObject({ published: true, updated: true, lessonCount: 11, totals: { lessonsChanged: 11, guidedBlocksRemoved: 1 }, unrelatedTopicsModified: 0 })
     expect(findBlock(preservedVisualBlockId)).not.toBeNull()
+    const introduction = blocksByLesson.get(lessons[0].id) ?? []
+    expect(JSON.stringify(introduction[2]?.content)).not.toBe(JSON.stringify(lessons[0].blocks[2]?.content))
     for (const lesson of lessons) {
       const blocks = blocksByLesson.get(lesson.id) ?? []
       expect(blocks).toHaveLength(lesson.blocks.length)

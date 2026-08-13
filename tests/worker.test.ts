@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import migration0008Sql from '../migrations/0008_upgrade_percentages_course_content.sql?raw'
 import percentageGridSvg from '../public/images/percentage-grid-25.svg?raw'
 import { percentageExampleContent } from '../scripts/lib/visual-teaching-content.mjs'
+import { percentageLessonSpecs } from '../scripts/lib/percentage-teaching-system-content.mjs'
 import { app } from '../src/worker'
 import {
   hashPassword,
@@ -7925,6 +7926,171 @@ describe('Admin Content Builder Lite API', () => {
       }
     }
   })
+
+  it('reconciles a partial Percentage lesson atomically, preserves valid IDs, and is idempotent', async () => {
+    const { cookie } = await registerAdmin('admin-percentage-v1-reconcile@example.com')
+    const spec = percentageLessonSpecs[0]
+    const lesson = await env.DB.prepare(
+      `SELECT lessons.id
+       FROM lessons
+       JOIN topics ON topics.id=lessons.topic_id
+       JOIN subjects ON subjects.id=topics.subject_id
+       JOIN courses ON courses.id=subjects.course_id
+       WHERE courses.slug='cse-professional'
+         AND subjects.slug='numerical-ability'
+         AND topics.slug='percentages'
+         AND lessons.slug=?1`,
+    ).bind(spec.slug).first<{ id: number }>()
+    if (lesson === null) throw new Error('Seeded Percentage lesson is missing.')
+    const originalRows = (await env.DB.prepare(
+      'SELECT * FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position,id',
+    ).bind(lesson.id).all<{
+      id: number
+      lesson_id: number
+      block_type: string
+      content_json: string
+      position: number
+      created_at: string
+      updated_at: string
+    }>()).results
+    const fixtureIds: number[] = []
+
+    try {
+      await env.DB.prepare('DELETE FROM lesson_blocks WHERE lesson_id=?1').bind(lesson.id).run()
+      for (const [index, block] of spec.blocks.entries()) {
+        const content = index === 1
+          ? { text: 'Stale Percentage explanation.' }
+          : block.content
+        const inserted = await env.DB.prepare(
+          `INSERT INTO lesson_blocks(lesson_id,block_type,content_json,position)
+           VALUES(?1,?2,?3,?4)`,
+        ).bind(
+          lesson.id,
+          block.blockType,
+          JSON.stringify(content),
+          index + 1,
+        ).run()
+        fixtureIds.push(Number(inserted.meta.last_row_id))
+      }
+      const firstId = fixtureIds[0]
+      const desired = {
+        blocks: spec.blocks.map((block, index) => ({
+          ...block,
+          position: index + 1,
+        })),
+      }
+
+
+      const beforeFailure = (await env.DB.prepare(
+        'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position,id',
+      ).bind(lesson.id).all()).results
+      await env.DB.prepare(
+        `CREATE TRIGGER fail_test_percentage_v1_reconcile_audit
+         BEFORE INSERT ON audit_logs
+         WHEN NEW.entity_type='lesson' AND NEW.action='reconcile'
+         BEGIN SELECT RAISE(ABORT,'forced Percentage v1 reconcile audit failure'); END`,
+      ).run()
+      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      try {
+        const failedResponse = await app.request(
+          `/api/admin/lessons/${lesson.id}/percentage-teaching-system-v1`,
+          adminJsonRequest(desired, cookie, 'PUT'),
+          createBindings('production'),
+        )
+        expect(failedResponse.status).toBe(500)
+        expect((await env.DB.prepare(
+          'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position,id',
+        ).bind(lesson.id).all()).results).toEqual(beforeFailure)
+      } finally {
+        errorLog.mockRestore()
+        await env.DB.prepare('DROP TRIGGER fail_test_percentage_v1_reconcile_audit').run()
+      }
+
+      const firstResponse = await app.request(
+        `/api/admin/lessons/${lesson.id}/percentage-teaching-system-v1`,
+        adminJsonRequest(desired, cookie, 'PUT'),
+        createBindings('production'),
+      )
+      expect(firstResponse.status).toBe(200)
+      const first = await firstResponse.json<{
+        success: true
+        data: {
+          blocks: Array<{ id: number; type: string; content: unknown; position: number }>
+          writeRequired: boolean
+          createdCount: number
+          updatedCount: number
+          deletedCount: number
+        }
+      }>()
+      expect(first.data).toMatchObject({
+        writeRequired: true,
+        createdCount: 0,
+        updatedCount: 1,
+        deletedCount: 0,
+      })
+      expect(first.data.blocks[0]?.id).toBe(firstId)
+      expect(first.data.blocks.map((block) => block.position)).toEqual(
+        spec.blocks.map((_, index) => index + 1),
+      )
+      expect(first.data.blocks.map((block) => block.type)).toEqual(
+        spec.blocks.map((block) => block.blockType),
+      )
+
+      const rowsAfterFirst = (await env.DB.prepare(
+        'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position,id',
+      ).bind(lesson.id).all()).results
+      const secondResponse = await app.request(
+        `/api/admin/lessons/${lesson.id}/percentage-teaching-system-v1`,
+        adminJsonRequest(desired, cookie, 'PUT'),
+        createBindings('production'),
+      )
+      const second = await secondResponse.json<{
+        success: true
+        data: {
+          writeRequired: boolean
+          createdCount: number
+          updatedCount: number
+          deletedCount: number
+        }
+      }>()
+      expect(secondResponse.status).toBe(200)
+      expect(second.data).toMatchObject({
+        writeRequired: false,
+        createdCount: 0,
+        updatedCount: 0,
+        deletedCount: 0,
+      })
+      expect((await env.DB.prepare(
+        'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position,id',
+      ).bind(lesson.id).all()).results).toEqual(rowsAfterFirst)
+    } finally {
+      await env.DB.prepare('DELETE FROM lesson_blocks WHERE lesson_id=?1').bind(lesson.id).run()
+      for (const block of originalRows) {
+        await env.DB.prepare(
+          `INSERT INTO lesson_blocks(
+            id,lesson_id,block_type,content_json,position,created_at,updated_at
+          ) VALUES(?1,?2,?3,?4,?5,?6,?7)`,
+        ).bind(
+          block.id,
+          block.lesson_id,
+          block.block_type,
+          block.content_json,
+          block.position,
+          block.created_at,
+          block.updated_at,
+        ).run()
+      }
+      for (const id of fixtureIds) {
+        await env.DB.prepare(
+          "DELETE FROM audit_logs WHERE entity_type IN ('lesson','lesson_block') AND entity_id=?1",
+        ).bind(String(id)).run()
+      }
+      await env.DB.prepare(
+        "DELETE FROM audit_logs WHERE entity_type='lesson' AND entity_id=?1 AND action='reconcile'",
+      ).bind(String(lesson.id)).run()
+    }
+  })
+
   it('accepts the exact Percentage visual payload and updates only the target block plus audit log', async () => {
     const { cookie } = await registerAdmin('admin-percentage-visual@example.com')
     const shell = await createCurriculumShell(cookie)

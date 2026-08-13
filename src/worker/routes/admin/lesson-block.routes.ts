@@ -6,6 +6,7 @@ import {
   lessonBlockIdParamsSchema,
   lessonBlockUpdateSchema,
   percentageGuidedTeachingRepairSchema,
+  percentageTeachingSystemReconcileSchema,
 } from '../../schemas/admin/content-admin.schemas'
 import {
   createAdminLessonBlock,
@@ -13,6 +14,7 @@ import {
   getAdminLessonBlocks,
   moveLessonBlock,
   repairPercentageGuidedTeaching,
+  reconcilePercentageTeachingSystemLesson,
   updateAdminLessonBlock,
 } from '../../services/admin/admin-content.service'
 import type { AppEnv } from '../../types/app'
@@ -74,6 +76,30 @@ adminLessonBlockRoutes.post(
         context.get('authUser'),
         params.lessonId,
         input.content,
+      ),
+    )
+  },
+)
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/percentage-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({
+        lessonId: context.req.param('lessonId'),
+      }),
+    )
+    const input = await parseJsonBody(
+      context,
+      percentageTeachingSystemReconcileSchema,
+    )
+
+    return successResponse(
+      context,
+      await reconcilePercentageTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
       ),
     )
   },

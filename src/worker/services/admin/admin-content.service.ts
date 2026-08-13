@@ -39,6 +39,7 @@ import {
   listSubjectsForCourse,
   listTopicsForSubject,
   repairPercentageGuidedTeachingWithAudit,
+  reconcilePercentageLessonBlocksWithAudit,
   shiftPositionsForInsert,
   swapAdjacentPositions,
   updateCourseRow,
@@ -70,6 +71,7 @@ import type {
   FixedQuestionInput,
   LessonBlockCreateInput,
   LessonBlockUpdateInput,
+  PercentageTeachingSystemReconcileInput,
   PracticeSetInput,
   QuizInput,
   QuizQuestionInput,
@@ -510,6 +512,23 @@ function mapSubject(row: AdminSubjectRow, topics: AdminTopic[]): AdminSubject {
     updatedAt: row.updated_at,
     topics,
   }
+}
+
+
+function canonicalJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJsonValue)
+  if (value === null || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.keys(value).sort().map((key) => [
+      key,
+      canonicalJsonValue((value as Record<string, unknown>)[key]),
+    ]),
+  )
+}
+
+function lessonBlockContentJsonEquals(left: string, right: string): boolean {
+  return JSON.stringify(canonicalJsonValue(JSON.parse(left) as unknown)) ===
+    JSON.stringify(canonicalJsonValue(JSON.parse(right) as unknown))
 }
 
 function mapBlock(row: AdminLessonBlockRow): AdminLessonBlock {
@@ -1501,6 +1520,112 @@ export async function repairPercentageGuidedTeaching(
   if (row === null) throw new Error('Percentage guided teaching repair failed.')
 
   return { block: mapBlock(row), writeRequired: true, repairedPositionCount }
+}
+
+
+export async function reconcilePercentageTeachingSystemLesson(
+  database: D1Database,
+  actor: AuthenticatedPrincipal,
+  lessonId: number,
+  input: PercentageTeachingSystemReconcileInput,
+): Promise<{
+  blocks: AdminLessonBlock[]
+  writeRequired: boolean
+  createdCount: number
+  updatedCount: number
+  deletedCount: number
+}> {
+  const lesson = await findLessonById(database, lessonId)
+  if (lesson === null) throw notFound('Lesson')
+  const topic = await findTopicById(database, lesson.topic_id)
+  const subject = topic === null ? null : await findSubjectById(database, topic.subject_id)
+  const course = subject === null ? null : await findCourseById(database, subject.course_id)
+  if (
+    topic?.slug !== 'percentages' ||
+    subject?.slug !== 'numerical-ability' ||
+    course?.slug !== 'cse-professional'
+  ) {
+    throw new AppError(
+      409,
+      'PERCENTAGE_TEACHING_SYSTEM_TARGET_MISMATCH',
+      'Percentage Teaching System reconciliation is restricted to the CSE Percentages topic.',
+    )
+  }
+
+  const desired = input.blocks.map((block) => {
+    assertNoRawHtmlContent(block.content)
+    const content = validateAdminLessonBlockContent(block.blockType, block.content)
+    return {
+      blockType: block.blockType,
+      contentJson: JSON.stringify(content),
+      position: block.position,
+    }
+  })
+  if (desired.some((block) => block.blockType === 'illustrated-guided-teaching')) {
+    throw new AppError(
+      409,
+      'PERCENTAGE_GUIDED_TEACHING_NOT_ALLOWED',
+      'Percentage Teaching System v1 does not include illustrated guided teaching.',
+    )
+  }
+
+  const existing = await listLessonBlocksForLesson(database, lessonId)
+  const guided = existing.filter(
+    (block) => block.block_type === 'illustrated-guided-teaching',
+  )
+  const allowed = existing.filter(
+    (block) => block.block_type !== 'illustrated-guided-teaching',
+  )
+  const retainedCount = Math.min(allowed.length, desired.length)
+  const retained = allowed.slice(0, retainedCount).map((block, index) => {
+    const target = desired[index]
+    if (target === undefined) throw new Error('Percentage reconciliation target is missing.')
+    return {
+      id: block.id,
+      blockType: target.blockType,
+      contentJson: target.contentJson,
+      position: target.position,
+      contentChanged:
+        block.block_type !== target.blockType ||
+        !lessonBlockContentJsonEquals(block.content_json, target.contentJson),
+      positionChanged: block.position !== target.position,
+    }
+  })
+  const deleteIds = [
+    ...guided.map((block) => block.id),
+    ...allowed.slice(desired.length).map((block) => block.id),
+  ]
+  const creates = desired.slice(allowed.length)
+  const updatedCount = retained.filter(
+    (block) => block.contentChanged || block.positionChanged,
+  ).length
+  const writeRequired =
+    updatedCount > 0 || deleteIds.length > 0 || creates.length > 0
+
+  if (writeRequired) {
+    await reconcilePercentageLessonBlocksWithAudit(database, {
+      lessonId,
+      actorUserId: actor.internalUserId,
+      retained,
+      deleteIds,
+      creates,
+      metadataJson: JSON.stringify({
+        lessonId,
+        operation: 'percentage-teaching-system-v1-reconcile',
+        createdCount: creates.length,
+        updatedCount,
+        deletedCount: deleteIds.length,
+      }),
+    })
+  }
+
+  return {
+    blocks: (await listLessonBlocksForLesson(database, lessonId)).map(mapBlock),
+    writeRequired,
+    createdCount: creates.length,
+    updatedCount,
+    deletedCount: deleteIds.length,
+  }
 }
 
 export async function updateAdminLessonBlock(

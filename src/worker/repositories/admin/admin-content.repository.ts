@@ -715,6 +715,107 @@ export async function repairPercentageGuidedTeachingWithAudit(
   return results[blockStatementIndex]?.results[0] ?? null
 }
 
+
+export async function reconcilePercentageLessonBlocksWithAudit(
+  database: D1Database,
+  input: {
+    lessonId: number
+    actorUserId: number
+    retained: Array<{
+      id: number
+      blockType: AdminLessonBlockRow['block_type']
+      contentJson: string
+      position: number
+      contentChanged: boolean
+      positionChanged: boolean
+    }>
+    deleteIds: number[]
+    creates: Array<{
+      blockType: AdminLessonBlockRow['block_type']
+      contentJson: string
+      position: number
+    }>
+    metadataJson: string
+  },
+): Promise<void> {
+  const structuralChange =
+    input.deleteIds.length > 0 ||
+    input.creates.length > 0 ||
+    input.retained.some((block) => block.positionChanged)
+  const statements: D1PreparedStatement[] = []
+
+  if (structuralChange) {
+    statements.push(
+      database.prepare(
+        `UPDATE lesson_blocks
+         SET position = position + 100000
+         WHERE lesson_id = ?1`,
+      ).bind(input.lessonId),
+    )
+  }
+
+  for (const blockId of input.deleteIds) {
+    statements.push(
+      database.prepare(
+        'DELETE FROM lesson_blocks WHERE id = ?1 AND lesson_id = ?2',
+      ).bind(blockId, input.lessonId),
+    )
+  }
+
+  for (const block of input.retained) {
+    if (block.contentChanged) {
+      statements.push(
+        database.prepare(
+          `UPDATE lesson_blocks
+           SET block_type = ?2,
+               content_json = ?3,
+               position = ?4,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?1 AND lesson_id = ?5`,
+        ).bind(
+          block.id,
+          block.blockType,
+          block.contentJson,
+          block.position,
+          input.lessonId,
+        ),
+      )
+    } else if (structuralChange) {
+      statements.push(
+        database.prepare(
+          `UPDATE lesson_blocks
+           SET position = ?2
+           WHERE id = ?1 AND lesson_id = ?3`,
+        ).bind(block.id, block.position, input.lessonId),
+      )
+    }
+  }
+
+  for (const block of input.creates) {
+    statements.push(
+      database.prepare(
+        `INSERT INTO lesson_blocks(lesson_id,block_type,content_json,position)
+         VALUES(?1,?2,?3,?4)`,
+      ).bind(
+        input.lessonId,
+        block.blockType,
+        block.contentJson,
+        block.position,
+      ),
+    )
+  }
+
+  statements.push(
+    database.prepare(
+      `INSERT INTO audit_logs(
+         actor_user_id,action,entity_type,entity_id,metadata_json
+       ) VALUES(?1,'reconcile','lesson',?2,?3)`,
+    ).bind(input.actorUserId, String(input.lessonId), input.metadataJson),
+  )
+
+  await database.batch(statements)
+}
+
 export async function updateLessonBlockRow(
   database: D1Database,
   input: AdminLessonBlockRow,
