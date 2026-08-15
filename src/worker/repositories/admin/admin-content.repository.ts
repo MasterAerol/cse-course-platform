@@ -716,7 +716,7 @@ export async function repairPercentageGuidedTeachingWithAudit(
 }
 
 
-export async function reconcilePercentageLessonBlocksWithAudit(
+export async function reconcileTeachingSystemLessonBlocksWithAudit(
   database: D1Database,
   input: {
     lessonId: number

@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { lessonIdParamsSchema } from '../../schemas/admin/course-admin.schemas'
 import {
   lessonBlockCreateSchema,
+  fractionsTeachingSystemReconcileSchema,
   lessonBlockIdParamsSchema,
   lessonBlockUpdateSchema,
   percentageGuidedTeachingRepairSchema,
@@ -14,6 +15,7 @@ import {
   getAdminLessonBlocks,
   moveLessonBlock,
   repairPercentageGuidedTeaching,
+  reconcileFractionsTeachingSystemLesson,
   reconcilePercentageTeachingSystemLesson,
   updateAdminLessonBlock,
 } from '../../services/admin/admin-content.service'
@@ -80,6 +82,32 @@ adminLessonBlockRoutes.post(
     )
   },
 )
+
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/fractions-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({
+        lessonId: context.req.param('lessonId'),
+      }),
+    )
+    const input = await parseJsonBody(
+      context,
+      fractionsTeachingSystemReconcileSchema,
+    )
+
+    return successResponse(
+      context,
+      await reconcileFractionsTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+
 adminLessonBlockRoutes.put(
   '/lessons/:lessonId/percentage-teaching-system-v1',
   async (context) => {
