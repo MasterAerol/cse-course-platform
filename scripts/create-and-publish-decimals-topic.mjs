@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { decimalsLessonSpecs } from './lib/decimals-teaching-system-content.mjs'
+
 const csrfHeaderValue = 'same-origin-admin-mutation'
 const confirmation = 'create-validate-publish-decimals'
 
@@ -15,171 +17,17 @@ const generatedPracticeByLessonSlug = {
 
 const expectedGeneratorSlugs = Object.values(generatedPracticeByLessonSlug)
 
-const lessonSpecs = [
-  {
-    title: 'Introduction to Decimals',
-    slug: 'introduction-to-decimals',
-    lessonType: 'reading',
-    minutes: 8,
-  },
-  {
-    title: 'Decimal Place Value',
-    slug: 'decimal-place-value',
-    lessonType: 'reading',
-    minutes: 9,
-  },
-  {
-    title: 'Reading and Writing Decimals',
-    slug: 'reading-and-writing-decimals',
-    lessonType: 'reading',
-    minutes: 9,
-  },
-  {
-    title: 'Comparing and Ordering Decimals',
-    slug: 'comparing-and-ordering-decimals',
-    lessonType: 'practice',
-    minutes: 10,
-  },
-  {
-    title: 'Rounding Decimals',
-    slug: 'rounding-decimals',
-    lessonType: 'practice',
-    minutes: 10,
-  },
-  {
-    title: 'Adding Decimals',
-    slug: 'adding-decimals',
-    lessonType: 'practice',
-    minutes: 10,
-  },
-  {
-    title: 'Subtracting Decimals',
-    slug: 'subtracting-decimals',
-    lessonType: 'practice',
-    minutes: 10,
-  },
-  {
-    title: 'Multiplying Decimals',
-    slug: 'multiplying-decimals',
-    lessonType: 'practice',
-    minutes: 11,
-  },
-  {
-    title: 'Dividing Decimals',
-    slug: 'dividing-decimals',
-    lessonType: 'practice',
-    minutes: 11,
-  },
-  {
-    title: 'Fractions, Decimals, and Percentages',
-    slug: 'fractions-decimals-and-percentages-decimals',
-    lessonType: 'practice',
-    minutes: 12,
-  },
-  {
-    title: 'Decimal Applications',
-    slug: 'decimal-applications',
-    lessonType: 'practice',
-    minutes: 12,
-  },
-  {
-    title: 'Decimals Topic Quiz',
-    slug: 'decimals-topic-quiz',
-    lessonType: 'quiz',
-    minutes: 15,
-  },
-]
-
-function parseArgs() {
-  const args = new Map()
-
-  for (let index = 2; index < process.argv.length; index += 1) {
-    const key = process.argv[index]
-    const value = process.argv[index + 1]
-
-    if (key?.startsWith('--') !== true || value === undefined) {
-      throw new Error(`Invalid argument near ${key ?? '(end)'}.`)
-    }
-
-    args.set(key.slice(2), value)
-    index += 1
-  }
-
-  return args
-}
-
-function heading(text, level = 2) {
-  return { blockType: 'heading', content: { level, text } }
-}
-
-function paragraph(text) {
-  return { blockType: 'paragraph', content: { text } }
-}
-
-function formula(expression, description) {
-  return { blockType: 'formula', content: { expression, description } }
-}
-
-function callout(title, text, variant = 'info') {
-  return { blockType: 'callout', content: { title, text, variant } }
-}
-
-function example(title, problem, steps, answer) {
-  return { blockType: 'example', content: { title, problem, steps, answer } }
-}
-
-function summary(items) {
-  return { blockType: 'summary', content: { items } }
-}
+const lessonSpecs = decimalsLessonSpecs.map(({ title, slug, lessonType, estimatedMinutes }) => ({
+  title,
+  slug,
+  lessonType,
+  minutes: estimatedMinutes,
+}))
 
 function lessonBlocks(spec) {
-  const topicName = spec.title
-  const commonPracticeSummary = [
-    heading(topicName),
-    paragraph(`${topicName} is practiced with generated questions so each attempt can vary while keeping the same skill target.`),
-    formula('place value first, operation second, estimate last', 'Use place value to keep the decimal point under control.'),
-    example('Check the size of the answer', 'Before choosing, ask whether the answer should be larger, smaller, or about the same size.', ['Estimate using nearby whole numbers.', 'Compute carefully.', 'Compare the result with the estimate.'], 'A reasonable estimate helps catch decimal-place mistakes.'),
-    callout('Common decimal trap', 'Most wrong choices come from moving the decimal point, ignoring zeros, or using the wrong operation.', 'warning'),
-    summary(['Use place value.', 'Keep decimal points aligned when adding or subtracting.', 'Check the size of the final answer.']),
-  ]
-
-  const blocksBySlug = {
-    'introduction-to-decimals': [
-      heading('What decimals mean'),
-      paragraph('Decimals are another way to write parts of a whole. They are based on tenths, hundredths, thousandths, and smaller equal parts.'),
-      formula('0.1 = one tenth; 0.01 = one hundredth', 'Each place to the right of the decimal point is ten times smaller.'),
-      example('One tenth', 'A meter is divided into 10 equal parts. One part is 0.1 meter.', ['The whole is 1 meter.', 'One of ten equal parts is one tenth.'], 'One tenth is written as 0.1.'),
-      example('Twenty-five hundredths', 'Write 25 parts out of 100 as a decimal.', ['Hundredths use two decimal places.', '25 hundredths is 0.25.'], '25/100 = 0.25.'),
-      callout('Decimals are numbers', 'Decimals can be compared, rounded, added, subtracted, multiplied, and divided just like other numbers.'),
-      summary(['Decimals name parts of a whole.', 'The first decimal place is tenths.', 'The second decimal place is hundredths.', 'Place value controls the meaning of each digit.']),
-    ],
-    'decimal-place-value': [
-      heading('Decimal place value'),
-      paragraph('The value of a decimal digit depends on its position. In 4.382, the 3 is tenths, the 8 is hundredths, and the 2 is thousandths.'),
-      formula('ones . tenths hundredths thousandths', 'Read each decimal digit according to its place.'),
-      example('Read 6.47', 'What is the value of 4 in 6.47?', ['The 4 is one place to the right of the decimal point.', 'That place is tenths.'], 'The 4 means 4 tenths, or 0.4.'),
-      example('Read 12.305', 'What is the value of 5 in 12.305?', ['The 5 is three places to the right.', 'The third decimal place is thousandths.'], 'The 5 means 5 thousandths, or 0.005.'),
-      callout('Zeros can hold places', 'In 3.08, the zero shows there are no tenths. It cannot simply be ignored.'),
-      summary(['Tenths are the first decimal place.', 'Hundredths are the second decimal place.', 'Thousandths are the third decimal place.', 'Zeros may be important placeholders.']),
-    ],
-    'reading-and-writing-decimals': [
-      heading('Reading and writing decimals'),
-      paragraph('Decimals can be read using place value words. The final decimal place tells the unit name.'),
-      formula('0.37 = thirty-seven hundredths', 'Because the last digit is in the hundredths place.'),
-      example('Write four and six tenths', 'Write the decimal form.', ['The whole-number part is 4.', 'Six tenths is 0.6.'], 'The number is 4.6.'),
-      example('Write 9 hundredths', 'Write the decimal form.', ['Hundredths need two decimal places.', 'Use 0 in the tenths place.'], '9 hundredths is 0.09.'),
-      callout('Read the last place', 'Do not read 0.45 as forty-five tenths. Since 5 is in the hundredths place, it is forty-five hundredths.', 'warning'),
-      summary(['Use the final decimal place to name the decimal.', 'Tenths use one decimal place.', 'Hundredths use two decimal places.', 'Thousandths use three decimal places.']),
-    ],
-    'decimals-topic-quiz': [
-      heading('Decimals Topic Quiz'),
-      paragraph('This quiz checks place value, reading and writing decimals, comparison, rounding, operations, conversions, and applications.'),
-      callout('Before starting', 'Estimate first, then compute. Watch the decimal point and units.'),
-      summary(['Use place value.', 'Avoid decimal-place shifts.', 'Read all choices before submitting.']),
-    ],
-  }
-
-  return blocksBySlug[spec.slug] ?? commonPracticeSummary
+  const canonical = decimalsLessonSpecs.find((lesson) => lesson.slug === spec.slug)
+  if (canonical === undefined) throw new Error(`No canonical Decimals content for ${spec.slug}.`)
+  return canonical.blocks
 }
 
 function fixedQuestion(prompt, correct, distractors, explanation, position) {

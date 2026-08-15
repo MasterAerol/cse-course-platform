@@ -577,6 +577,47 @@ node scripts/create-and-publish-numerical-ability-assessment.mjs --base-url http
 
 The idempotent publisher requires all ten Numerical Ability topics to be published, validates referenced generators, runs the 200-attempt/10,000-question quality gate, and publishes only after all gates pass. Never store the admin password in source control.
 
+## Decimals Teaching System v1
+
+Decimals Teaching System v1 upgrades only the twelve existing Decimals lesson
+block sequences. It preserves activity order, lesson types, durations, generated
+practices, the eight fixed application questions, the fifteen-question quiz,
+scoring, and all learner progression logic. Nine lessons use the reusable
+`VisualTeachingBoard` for place value, reading and writing, comparison and
+ordering, rounding, aligned addition, regrouped subtraction, multiplication,
+division scaling, and notation conversion. The content uses structured writing,
+worked examples, reasoned memory rules, concise mistake cards, and summaries; it
+does not use the guided-teaching pilot.
+
+The canonical source is
+`scripts/lib/decimals-teaching-system-content.mjs`. The original Decimals topic
+creator imports that source, so there is no duplicate authored lesson content.
+The dedicated publisher reconciles lesson blocks only through one atomic,
+audited request per changed lesson. No database migration is required.
+
+Run inspect-only validation before any publication:
+
+```powershell
+$env:CSE_DECIMALS_ADMIN_PASSWORD='<admin-password>'
+node scripts/create-and-publish-decimals-teaching-system.mjs --base-url https://<worker-origin> --email '<admin-email>' --validate-only
+```
+
+Validation reports every create, update, and deletion by lesson, position, type,
+and safe identifier. If deletions exist, a human must review them and pass the
+exact reported fingerprint; the confirmation phrase alone cannot bypass this
+review:
+
+```powershell
+node scripts/create-and-publish-decimals-teaching-system.mjs --base-url https://<worker-origin> --email '<admin-email>' --confirm publish-decimals-teaching-system-v1 --approve-deletions <validated-deletion-plan-fingerprint>
+Remove-Item Env:CSE_DECIMALS_ADMIN_PASSWORD
+```
+
+Run validate-only again after publishing. A canonical installation reports zero
+creates, updates, and deletes with `writesRequired: false`. Publishing is never
+part of deployment. Known limitation: the script can report an exact production
+plan only when the deployed admin endpoint and valid administrator credentials
+are available. The recommended next teaching-system topic is Ratio and
+Proportion, followed by Average, Work and Rate, and Distance-Speed-Time.
 ## D1 setup and migrations
 
 Authenticate and create the production database:

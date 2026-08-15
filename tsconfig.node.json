@@ -29,6 +29,7 @@
     "vitest.lesson-block-wrangler.config.ts",
     "vitest.percentage-publisher.config.ts",
     "vitest.fractions-publisher.config.ts",
+    "vitest.decimals-publisher.config.ts",
     "eslint.config.js",
     "tests",
     "src/worker"

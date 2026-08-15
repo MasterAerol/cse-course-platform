@@ -1,4 +1,4 @@
-﻿import { renderToStaticMarkup } from 'react-dom/server'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { LessonBlockRenderer } from '../src/react-app/components/LessonBlockRenderer'
 import { VisualTeachingBoard } from '../src/react-app/components/VisualTeachingBoard'
@@ -16,6 +16,7 @@ import {
 } from '../src/react-app/components/illustrated-guided-teaching.utils'
 import { visualTeachingSchema } from '../src/shared/visual-teaching.schema'
 import * as authoredVisuals from '../scripts/lib/visual-teaching-content.mjs'
+import { decimalsLessonSpecs } from '../scripts/lib/decimals-teaching-system-content.mjs'
 
 type GuidedTeachingContent = Parameters<typeof IllustratedGuidedTeaching>[0]['content']
 
@@ -421,6 +422,22 @@ describe('visual teaching lesson blocks', () => {
       '45% → 0.45',
       '125% → 1.25',
     ])
+  })
+  it('renders every Decimals visual through the production lesson-block renderer', () => {
+    const visualBlocks = decimalsLessonSpecs.flatMap((lesson) =>
+      lesson.blocks.filter((block) => block.blockType === 'example' && block.content.visual !== undefined),
+    )
+    expect(visualBlocks).toHaveLength(9)
+
+    for (const [index, block] of visualBlocks.entries()) {
+      const markup = renderToStaticMarkup(
+        <LessonBlockRenderer block={{ id: 10_000 + index, position: index + 1, type: 'example', content: block.content } as Parameters<typeof LessonBlockRenderer>[0]['block']} />,
+      )
+      expect(markup).toContain('data-testid="visual-teaching-board"')
+      expect(markup).toContain('What changed:')
+      expect(markup).toContain('Why it works:')
+      expect(markup).toContain('data-testid="visual-teaching-memory"')
+    }
   })
 })
 

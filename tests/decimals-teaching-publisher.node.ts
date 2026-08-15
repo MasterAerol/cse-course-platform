@@ -4,12 +4,12 @@ import path from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { fractionsLessonSpecs } from '../scripts/lib/fractions-teaching-system-content.mjs'
+import { decimalsLessonSpecs } from '../scripts/lib/decimals-teaching-system-content.mjs'
 
 interface StoredBlock { id: number; type: string; content: unknown; position: number }
 const root = path.resolve(import.meta.dirname, '..')
-const script = path.join(root, 'scripts', 'create-and-publish-fractions-teaching-system.mjs')
-const lessons = fractionsLessonSpecs.map((spec, index) => ({ ...spec, id: 101 + index, position: index + 1, status: 'published' as const }))
+const script = path.join(root, 'scripts', 'create-and-publish-decimals-teaching-system.mjs')
+const lessons = decimalsLessonSpecs.map((spec, index) => ({ ...spec, id: 101 + index, position: index + 1, status: 'published' as const }))
 const blocksByLesson = new Map<number, StoredBlock[]>()
 let nextBlockId = 1_000
 let mutationCalls = 0
@@ -18,27 +18,26 @@ let server: ReturnType<typeof createServer>
 let preservedRetainedBlockId = 0
 
 const productionLikeBlockTypes: Record<string, string[]> = {
-  'introduction-to-fractions': ['heading', 'paragraph', 'paragraph', 'callout', 'image', 'example', 'example', 'example', 'paragraph', 'summary'],
-  'parts-of-a-fraction': ['heading', 'paragraph', 'formula', 'example', 'example', 'callout', 'paragraph', 'summary'],
-  'proper-improper-and-mixed-fractions': ['heading', 'paragraph', 'paragraph', 'paragraph', 'formula', 'example', 'formula', 'example', 'callout', 'summary'],
-  'equivalent-fractions': ['heading', 'paragraph', 'formula', 'example', 'example', 'callout', 'paragraph', 'summary'],
-  'simplifying-fractions': ['heading', 'paragraph', 'formula', 'example', 'example', 'callout', 'paragraph', 'summary'],
-  'comparing-and-ordering-fractions': ['heading', 'paragraph', 'formula', 'example', 'example', 'callout', 'paragraph', 'summary'],
-  'adding-fractions': ['heading', 'paragraph', 'formula', 'example', 'example', 'callout', 'paragraph', 'summary'],
-  'subtracting-fractions': ['heading', 'paragraph', 'formula', 'example', 'example', 'callout', 'paragraph', 'summary'],
-  'multiplying-fractions': ['heading', 'paragraph', 'formula', 'example', 'example', 'callout', 'paragraph', 'summary'],
-  'dividing-fractions': ['heading', 'paragraph', 'formula', 'example', 'example', 'callout', 'paragraph', 'summary'],
-  'mixed-fraction-applications': ['heading', 'paragraph', 'paragraph', 'example', 'example', 'callout', 'summary'],
-  'fractions-topic-quiz': ['heading', 'paragraph', 'callout', 'summary'],
+  'introduction-to-decimals': ['heading','paragraph','formula','example','example','callout','summary'],
+  'decimal-place-value': ['heading','paragraph','formula','example','example','callout','summary'],
+  'reading-and-writing-decimals': ['heading','paragraph','formula','example','example','callout','summary'],
+  'comparing-and-ordering-decimals': ['heading','paragraph','formula','example','callout','summary'],
+  'rounding-decimals': ['heading','paragraph','formula','example','callout','summary'],
+  'adding-decimals': ['heading','paragraph','formula','example','callout','summary'],
+  'subtracting-decimals': ['heading','paragraph','formula','example','callout','summary'],
+  'multiplying-decimals': ['heading','paragraph','formula','example','callout','summary'],
+  'dividing-decimals': ['heading','paragraph','formula','example','callout','summary'],
+  'fractions-decimals-and-percentages-decimals': ['heading','paragraph','formula','example','callout','summary'],
+  'decimal-applications': ['heading','paragraph','formula','example','callout','summary'],
+  'decimals-topic-quiz': ['heading','paragraph','callout','summary'],
 }
-
 function productionLikeContent(type: string, lessonSlug: string, position: number): unknown {
   const identifier = `Current production ${lessonSlug} block ${position}`
   if (type === 'heading') return { level: 2, text: identifier }
   if (type === 'paragraph') return { text: identifier }
   if (type === 'formula') return { expression: identifier, description: 'Current production formula.' }
   if (type === 'callout') return { variant: 'info', title: identifier, text: 'Current production callout.' }
-  if (type === 'image') return { src: '/images/fraction-three-fourths.svg', alt: identifier, caption: identifier }
+  if (type === 'image') return { src: '/images/percentage-grid-25.svg', alt: identifier, caption: identifier }
   if (type === 'summary') return { items: [identifier] }
   return {
     title: identifier,
@@ -58,7 +57,7 @@ for (const lesson of lessons) {
     content: productionLikeContent(type, lesson.slug, index + 1),
     position: index + 1,
   }))
-  if (lesson.slug === 'adding-fractions') {
+  if (lesson.slug === 'adding-decimals') {
     preservedRetainedBlockId = blocks.find((block) => block.position === 5)?.id ?? 0
   }
   blocksByLesson.set(lesson.id, blocks)
@@ -101,11 +100,11 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   const url = request.url ?? ''
   if (url === '/api/admin/dashboard') { send(response, { cseProfessional: { id: 1 } }); return }
   if (url === '/api/admin/courses/1') {
-    send(response, { subjects: [{ slug: 'numerical-ability', topics: [{ slug: 'fractions', lessons: lessons.map(({ id, slug, title, lessonType, estimatedMinutes, status, position }) => ({ id, slug, title, lessonType, estimatedMinutes, status, position })) }] }] })
+    send(response, { subjects: [{ slug: 'numerical-ability', topics: [{ slug: 'decimals', lessons: lessons.map(({ id, slug, title, lessonType, estimatedMinutes, status, position }) => ({ id, slug, title, lessonType, estimatedMinutes, status, position })) }] }] })
     return
   }
 
-  const reconcileMatch = url.match(/^\/api\/admin\/lessons\/(\d+)\/fractions-teaching-system-v1$/u)
+  const reconcileMatch = url.match(/^\/api\/admin\/lessons\/(\d+)\/decimals-teaching-system-v1$/u)
   if (reconcileMatch?.[1] !== undefined && request.method === 'PUT') {
     mutationCalls += 1
     const lessonId = Number(reconcileMatch[1])
@@ -183,7 +182,7 @@ afterAll(async () => {
 })
 function runPublisher(extraArgs: string[] = []): Promise<{ stdout: string; stderr: string; status: number | null }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [script, '--base-url', baseUrl, '--cookie', 'test-admin-session', '--confirm', 'publish-fractions-teaching-system-v1', ...extraArgs], { cwd: root, windowsHide: true })
+    const child = spawn(process.execPath, [script, '--base-url', baseUrl, '--cookie', 'test-admin-session', '--confirm', 'publish-decimals-teaching-system-v1', ...extraArgs], { cwd: root, windowsHide: true })
     let stdout = ''; let stderr = ''
     child.stdout.on('data', (chunk) => { stdout += String(chunk) })
     child.stderr.on('data', (chunk) => { stderr += String(chunk) })
@@ -192,25 +191,27 @@ function runPublisher(extraArgs: string[] = []): Promise<{ stdout: string; stder
   })
 }
 
-describe('Fractions Teaching System v1 publisher', () => {
+describe('Decimals Teaching System v1 publisher', () => {
   it('reconciles the production-shaped lesson structure, preserves a retained block ID, and is idempotent', async () => {
     const validation = await runPublisher(['--validate-only'])
     expect(validation).toMatchObject({ status: 0, stderr: '' })
-    expect(JSON.parse(validation.stdout)).toMatchObject({
+    const validationPlan = JSON.parse(validation.stdout) as { deletionPlanFingerprint: string; [key: string]: unknown }
+    expect(validationPlan).toMatchObject({
       valid: true,
       lessonCount: 12,
       writesRequired: true,
       totals: {
         lessonsChanged: 12,
-        blocksCreated: 0,
-        blocksUpdated: 75,
-        blocksDeleted: 20,
+        blocksCreated: 4,
+        blocksUpdated: 72,
+        blocksDeleted: 1,
         guidedBlocksRemoved: 0,
       },
     })
     expect(mutationCalls).toBe(0)
 
-    const first = await runPublisher()
+    expect(validationPlan).toMatchObject({ deletionReviewRequired: true, deletions: [{ lessonSlug: 'decimal-place-value', position: 7, learnerContentAssessment: 'requires-human-review' }] })
+    const first = await runPublisher(['--approve-deletions', validationPlan.deletionPlanFingerprint])
     expect(first).toMatchObject({ status: 0, stderr: '' })
     expect(JSON.parse(first.stdout)).toMatchObject({
       published: true,
@@ -218,9 +219,9 @@ describe('Fractions Teaching System v1 publisher', () => {
       lessonCount: 12,
       totals: {
         lessonsChanged: 12,
-        blocksCreated: 0,
-        blocksUpdated: 75,
-        blocksDeleted: 20,
+        blocksCreated: 4,
+        blocksUpdated: 72,
+        blocksDeleted: 1,
         guidedBlocksRemoved: 0,
       },
       unrelatedTopicsModified: 0,
