@@ -788,3 +788,46 @@ messages:
 - [Cloudflare Workers Web Crypto](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/)
 - [Cloudflare Workers Vitest integration](https://developers.cloudflare.com/workers/testing/vitest-integration/)
 - [Hono on Cloudflare Workers](https://hono.dev/docs/getting-started/cloudflare-workers)
+
+## Dedicated CSE QA student workflow
+
+`scripts/create-or-reset-qa-student.mjs` configures one normal student account
+for manual CSE Professional QA. It does not bypass lesson access. Unlocked mode
+creates authoritative completed `lesson_progress` rows for every published,
+non-preview CSE lesson; practice and quiz access then follows the same lesson
+access service used by ordinary learners. Subject assessments and the Full Mock
+continue to use their existing active-enrollment guards.
+
+Fresh mode preserves the user and active CSE enrollment, removes that user's CSE
+lesson progress plus practice, quiz, subject-assessment, and mock attempts, and
+removes in-progress Smart Recovery sets. Submitted Smart Recovery attempts remain
+because migration 0015 intentionally makes their snapshots immutable.
+
+Local setup:
+
+```powershell
+$env:CSE_QA_ADMIN_PASSWORD='<admin-password>'
+$env:CSE_QA_STUDENT_PASSWORD='<qa-student-password>'
+node scripts/create-or-reset-qa-student.mjs --base-url http://127.0.0.1:5173 --admin-email '<admin-email>' --qa-email 'cse+qa@example.com' --mode unlocked
+Remove-Item Env:CSE_QA_ADMIN_PASSWORD
+Remove-Item Env:CSE_QA_STUDENT_PASSWORD
+```
+
+Use `--mode fresh` to return the same account to ordinary fresh-student lesson
+locking. Use `--inspect-only` to display the target without mutation.
+
+Remote mutation additionally requires both `--remote` and the exact confirmation
+phrase:
+
+```powershell
+$env:CSE_QA_ADMIN_PASSWORD='<admin-password>'
+$env:CSE_QA_STUDENT_PASSWORD='<qa-student-password>'
+node scripts/create-or-reset-qa-student.mjs --base-url https://<worker-origin> --remote --admin-email '<admin-email>' --qa-email 'cse+qa@example.com' --mode unlocked --confirm configure-cse-qa-student
+Remove-Item Env:CSE_QA_ADMIN_PASSWORD
+Remove-Item Env:CSE_QA_STUDENT_PASSWORD
+```
+
+An address whose local part does not contain a delimited `qa` or `test` marker is
+rejected unless the exact target is repeated with
+`--allow-non-qa-email <same-email>`. Passwords are read only from environment
+variables and are never included in output or audit metadata.

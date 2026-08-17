@@ -21,6 +21,7 @@ import { adminDashboardRoutes } from './admin/dashboard.routes'
 import { adminLessonBlockRoutes } from './admin/lesson-block.routes'
 import { adminSubjectAssessmentRoutes } from './admin/subject-assessment.routes'
 import { adminMockExamRoutes } from './admin/mock-exam.routes'
+import { adminQaStudentRoutes } from './admin/qa-student.routes'
 
 export const adminRoutes = new Hono<AppEnv>()
 
@@ -51,3 +52,4 @@ adminRoutes.route('/', adminBetaStudentRoutes)
 adminRoutes.route('/', adminAuditRoutes)
 adminRoutes.route('/', adminSubjectAssessmentRoutes)
 adminRoutes.route('/', adminMockExamRoutes)
+adminRoutes.route('/', adminQaStudentRoutes)

@@ -380,7 +380,7 @@ function attemptPayload(
   }
 }
 
-async function assertActiveCourseEnrollment(
+export async function assertSubjectAssessmentCourseAccess(
   database: D1Database,
   userId: number,
   courseId: number,
@@ -496,7 +496,7 @@ export async function getSubjectAssessmentSummary(
       'The requested subject assessment is not available.',
     )
   }
-  await assertActiveCourseEnrollment(database, userId, assessment.course_id)
+  await assertSubjectAssessmentCourseAccess(database, userId, assessment.course_id)
   const { unavailableReason } = await loadValidatedBlueprint(database, assessment)
   const history = await mapHistory(
     database,
@@ -646,7 +646,7 @@ export async function startSubjectAssessmentAttempt(
   if (assessment === null || assessment.status !== 'published') {
     throw new AppError(404, 'SUBJECT_ASSESSMENT_NOT_FOUND', 'The assessment is not available.')
   }
-  await assertActiveCourseEnrollment(database, userId, assessment.course_id)
+  await assertSubjectAssessmentCourseAccess(database, userId, assessment.course_id)
   const { blueprint, blueprintId, unavailableReason } =
     await loadValidatedBlueprint(database, assessment)
   if (unavailableReason !== null) {
