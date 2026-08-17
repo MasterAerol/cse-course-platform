@@ -7,6 +7,10 @@ import { hashPassword } from '../src/worker/auth/password'
 const password = 'ValidPassword123'
 const confirmation = 'configure-cse-qa-student'
 
+function testClientAddress(): string {
+  return `2001:db8::${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`
+}
+
 interface QaConfigureResponse {
   data: {
     target: { email: string; role: string; status: string }
@@ -25,11 +29,44 @@ interface QaConfigureResponse {
     state: { requiredLessonCount: number; completedLessonCount: number }
     verification: {
       enrollmentActive: boolean
-      lessons: { total: number; accessible: number; locked: number }
+      expectation: 'unlocked' | 'fresh' | 'inspect'
+      subjects: Array<{
+        slug: string
+        title: string
+        total: number
+        accessible: number
+      }>
+      lessons: {
+        total: number
+        accessible: number
+        locked: number
+        requiredLocked: number
+      }
       practices: { total: number; accessible: number }
       quizzes: { total: number; accessible: number }
-      subjectAssessments: Array<{ available: boolean }>
-      fullMockExamination: { available: boolean }
+      activities: Array<{
+        subjectSlug: string
+        topicSlug: string
+        title: string
+        activityType: 'lesson' | 'practice' | 'quiz'
+        accessible: boolean
+        progressStatus: string
+        prerequisiteState: string
+        route: string
+        apiRoute: string
+      }>
+      lockedActivities: Array<{ title: string }>
+      subjectAssessments: Array<{
+        assessmentSlug: string
+        title: string
+        available: boolean
+        route: string
+      }>
+      fullMockExamination: {
+        slug: string | null
+        available: boolean
+        route: string | null
+      }
     }
   }
 }
@@ -64,7 +101,10 @@ async function createAdmin(email: string): Promise<string> {
     '/api/auth/login',
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': testClientAddress(),
+      },
       body: JSON.stringify({ email, password }),
     },
     env,
@@ -96,7 +136,10 @@ async function createStudent(email: string): Promise<{ id: number; cookie: strin
     '/api/auth/login',
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': testClientAddress(),
+      },
       body: JSON.stringify({ email, password }),
     },
     env,
@@ -187,6 +230,16 @@ beforeAll(async () => {
       `${slug}-subject-assessment`,
       position,
     ).run()
+    const assessment = await env.DB.prepare(
+      `SELECT id, current_blueprint_version
+      FROM subject_assessments WHERE subject_id = ?1`,
+    ).bind(subject.id).first<{ id: number; current_blueprint_version: number }>()
+    if (assessment === null) throw new Error(`Assessment fixture ${slug} is missing.`)
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO subject_assessment_blueprints (
+        assessment_id, version, total_questions, passing_score_percent
+      ) VALUES (?1, ?2, 1, 70)`,
+    ).bind(assessment.id, assessment.current_blueprint_version).run()
   }
 
   const numericalAssessment = await env.DB.prepare(
@@ -263,6 +316,64 @@ describe('dedicated QA student workflow', () => {
     expect(body.data.state.completedLessonCount).toBe(
       body.data.state.requiredLessonCount,
     )
+    expect(body.data.verification.subjects.map((item) => item.slug)).toEqual([
+      'numerical-ability',
+      'analytical-ability',
+      'verbal-ability',
+      'general-information',
+    ])
+    expect(body.data.verification.activities.length).toBeGreaterThan(
+      body.data.verification.lessons.total,
+    )
+    expect(body.data.verification.activities.every((item) => (
+      item.accessible
+      && item.title.length > 0
+      && item.topicSlug.length > 0
+      && item.route.length > 0
+      && item.apiRoute.length > 0
+      && item.prerequisiteState.length > 0
+    ))).toBe(true)
+    expect(body.data.verification.lockedActivities).toEqual([])
+
+    const studentLogin = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': testClientAddress(),
+      },
+      body: JSON.stringify({ email, password }),
+    }, env)
+    expect(studentLogin.status).toBe(200)
+    const studentCookie = cookieFrom(studentLogin)
+    const authenticatedGets = [
+      '/api/auth/me',
+      '/api/student/courses/cse-professional/curriculum',
+      `/api/student/mock-examinations/${body.data.verification.fullMockExamination.slug}`,
+    ]
+    const representativeLessons = new Map<string, string>()
+    for (const activity of body.data.verification.activities) {
+      if (
+        activity.activityType === 'lesson'
+        && !representativeLessons.has(activity.subjectSlug)
+      ) {
+        representativeLessons.set(activity.subjectSlug, activity.apiRoute)
+      }
+    }
+    expect(representativeLessons.size).toBe(4)
+    authenticatedGets.push(...representativeLessons.values())
+    for (const route of authenticatedGets) {
+      const verified = await app.request(route, {
+        headers: { cookie: studentCookie },
+      }, env)
+      expect(verified.status, `${route}: ${await verified.clone().text()}`).toBe(200)
+    }
+    const me = await app.request('/api/auth/me', {
+      headers: { cookie: studentCookie },
+    }, env)
+    await expect(me.json()).resolves.toMatchObject({
+      success: true,
+      data: { user: { email, role: 'student' } },
+    })
   })
 
   it('keeps unlocked enrollment and completion rows idempotent', async () => {
@@ -383,6 +494,7 @@ describe('dedicated QA student workflow', () => {
       recovery_attempts: 0,
     })
     expect(body.data.verification.lessons.locked).toBeGreaterThan(0)
+    expect(body.data.verification.lessons.requiredLocked).toBeGreaterThan(0)
   })
 
   it('does not change another student and leaves normal lesson locking intact', async () => {
@@ -464,5 +576,99 @@ describe('dedicated QA student workflow', () => {
       success: false,
       error: { code: 'QA_STUDENT_EMAIL_CONFIRMATION_REQUIRED' },
     })
+  })
+  it('reuses an existing student, securely resets its password, and keeps one account', async () => {
+    const cookie = await createAdmin(`qa-admin-${crypto.randomUUID()}@example.test`)
+    const email = `test-${crypto.randomUUID()}@example.test`
+    const student = await createStudent(email)
+    await env.DB.prepare('UPDATE users SET password_hash = ?1 WHERE id = ?2')
+      .bind(await hashPassword('DifferentPassword123'), student.id)
+      .run()
+
+    const response = await configure(cookie, email, 'unlocked')
+    const body = await response.json<QaConfigureResponse>()
+    const login = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': testClientAddress(),
+      },
+      body: JSON.stringify({ email, password }),
+    }, env)
+    const users = await env.DB.prepare(
+      'SELECT COUNT(*) AS count FROM users WHERE email = ?1',
+    ).bind(email).first<{ count: number }>()
+    const audit = await env.DB.prepare(
+      `SELECT metadata_json FROM audit_logs
+      WHERE action = 'qa_student.unlocked'
+      ORDER BY id DESC LIMIT 1`,
+    ).first<{ metadata_json: string }>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.accountCreated).toBe(false)
+    expect(body.data.target.role).toBe('student')
+    expect(body.data.enrollment.unchanged).toBe(true)
+    expect(login.status).toBe(200)
+    expect(users?.count).toBe(1)
+    expect(audit?.metadata_json).not.toContain(password)
+    expect(audit?.metadata_json).not.toContain('passwordHash')
+  })
+
+  it('rejects missing or incorrect administrator authentication without creating the target', async () => {
+    const adminEmail = `qa-admin-${crypto.randomUUID()}@example.test`
+    await createAdmin(adminEmail)
+    const email = `test-${crypto.randomUUID()}@example.test`
+    const wrongLogin = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': testClientAddress(),
+      },
+      body: JSON.stringify({ email: adminEmail, password: 'WrongPassword123' }),
+    }, env)
+    const unauthenticated = await configure('', email, 'unlocked')
+    const target = await env.DB.prepare(
+      'SELECT COUNT(*) AS count FROM users WHERE email = ?1',
+    ).bind(email).first<{ count: number }>()
+
+    expect(wrongLogin.status).toBe(401)
+    expect(unauthenticated.status).toBe(401)
+    expect(target?.count).toBe(0)
+  })
+
+  it('inspect-only endpoint reports access without changing QA learner records', async () => {
+    const cookie = await createAdmin(`qa-admin-${crypto.randomUUID()}@example.test`)
+    const email = `test-${crypto.randomUUID()}@example.test`
+    expect((await configure(cookie, email, 'unlocked')).status).toBe(200)
+    const before = await env.DB.prepare(
+      `SELECT
+        (SELECT COUNT(*) FROM lesson_progress WHERE user_id = users.id) AS progress,
+        (SELECT COUNT(*) FROM course_enrollments WHERE user_id = users.id) AS enrollments,
+        users.password_hash
+      FROM users WHERE email = ?1`,
+    ).bind(email).first<{ progress: number; enrollments: number; password_hash: string }>()
+
+    const inspected = await app.request(
+      `/api/admin/qa-students/target?email=${encodeURIComponent(email)}`,
+      { headers: { cookie } },
+      env,
+    )
+    const inspectedBody = await inspected.json<{
+      data: {
+        verification: QaConfigureResponse['data']['verification'] | null
+      }
+    }>()
+    const after = await env.DB.prepare(
+      `SELECT
+        (SELECT COUNT(*) FROM lesson_progress WHERE user_id = users.id) AS progress,
+        (SELECT COUNT(*) FROM course_enrollments WHERE user_id = users.id) AS enrollments,
+        users.password_hash
+      FROM users WHERE email = ?1`,
+    ).bind(email).first<{ progress: number; enrollments: number; password_hash: string }>()
+
+    expect(inspected.status).toBe(200)
+    expect(inspectedBody.data.verification?.expectation).toBe('inspect')
+    expect(inspectedBody.data.verification?.lockedActivities).toEqual([])
+    expect(after).toEqual(before)
   })
 })

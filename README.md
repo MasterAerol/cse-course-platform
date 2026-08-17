@@ -791,43 +791,89 @@ messages:
 
 ## Dedicated CSE QA student workflow
 
-`scripts/create-or-reset-qa-student.mjs` configures one normal student account
-for manual CSE Professional QA. It does not bypass lesson access. Unlocked mode
-creates authoritative completed `lesson_progress` rows for every published,
-non-preview CSE lesson; practice and quiz access then follows the same lesson
-access service used by ordinary learners. Subject assessments and the Full Mock
-continue to use their existing active-enrollment guards.
+`scripts/create-or-reset-qa-student.mjs` creates or resets one normal CSE
+Professional QA student through guarded administrator APIs. It never bypasses
+lesson authorization. Unlocked mode writes authoritative completed
+`lesson_progress` rows only for published, non-preview lessons; the existing
+prerequisite service then naturally unlocks lessons, practices, and quizzes.
+Subject assessments and the Full Mock continue to use their normal active-enrollment
+guards.
 
-Fresh mode preserves the user and active CSE enrollment, removes that user's CSE
-lesson progress plus practice, quiz, subject-assessment, and mock attempts, and
-removes in-progress Smart Recovery sets. Submitted Smart Recovery attempts remain
-because migration 0015 intentionally makes their snapshots immutable.
+The command then signs in as the QA student and verifies `/api/auth/me`, the
+student dashboard, the complete curriculum response, one lesson endpoint per
+subject, all four Subject Assessment summaries, and the Full Mock summary. The
+server response also reports every lesson, practice, and quiz with its subject,
+topic, title, activity type, progress/prerequisite state, route, and access result.
+Any unexpected required lock makes the command fail.
 
-Local setup:
+Run `node scripts/create-or-reset-qa-student.mjs --help` for the complete option
+list. `--remote`, `--inspect-only`, and `--help` are boolean flags and do not take
+`true` or `false` values. Remote operation always requires an explicit
+`--base-url` origin.
+
+Fresh mode preserves the normal student and active CSE enrollment, removes only
+that student's CSE progress and practice, quiz, Subject Assessment, mock, and
+in-progress Smart Recovery attempts, then verifies that normal prerequisite
+locks reappear. Submitted Smart Recovery attempts remain because migration 0015
+intentionally makes their snapshots immutable.
+
+Local unlocked setup:
 
 ```powershell
-$env:CSE_QA_ADMIN_PASSWORD='<admin-password>'
-$env:CSE_QA_STUDENT_PASSWORD='<qa-student-password>'
-node scripts/create-or-reset-qa-student.mjs --base-url http://127.0.0.1:5173 --admin-email '<admin-email>' --qa-email 'cse+qa@example.com' --mode unlocked
+$env:CSE_QA_ADMIN_PASSWORD = '<admin-password>'
+$env:CSE_QA_STUDENT_PASSWORD = '<qa-student-password>'
+
+node scripts/create-or-reset-qa-student.mjs `
+  --base-url "http://127.0.0.1:5173" `
+  --qa-email "test@pasawise.com" `
+  --admin-email "<admin-email>" `
+  --mode unlocked
+
 Remove-Item Env:CSE_QA_ADMIN_PASSWORD
 Remove-Item Env:CSE_QA_STUDENT_PASSWORD
 ```
 
-Use `--mode fresh` to return the same account to ordinary fresh-student lesson
-locking. Use `--inspect-only` to display the target without mutation.
+Use `--mode fresh` to return the same account to ordinary fresh-student locking.
+Use `--inspect-only` for a repeatable read-only target inspection. Administrator
+login creates a normal authentication session, but inspect-only performs no QA
+account, enrollment, progress, or attempt mutation.
 
-Remote mutation additionally requires both `--remote` and the exact confirmation
-phrase:
+Exact production credential setup and one-command configuration:
 
 ```powershell
-$env:CSE_QA_ADMIN_PASSWORD='<admin-password>'
-$env:CSE_QA_STUDENT_PASSWORD='<qa-student-password>'
-node scripts/create-or-reset-qa-student.mjs --base-url https://<worker-origin> --remote --admin-email '<admin-email>' --qa-email 'cse+qa@example.com' --mode unlocked --confirm configure-cse-qa-student
+$qaPassword = Read-Host "Password for test@pasawise.com" -AsSecureString
+
+$qaCredential = [System.Management.Automation.PSCredential]::new(
+  "test@pasawise.com",
+  $qaPassword
+)
+
+$env:CSE_QA_STUDENT_PASSWORD =
+  $qaCredential.GetNetworkCredential().Password
+
+$adminCredential =
+  Get-Credential -Message "Production CSE administrator"
+
+$env:CSE_QA_ADMIN_PASSWORD =
+  $adminCredential.GetNetworkCredential().Password
+
+node scripts/create-or-reset-qa-student.mjs `
+  --remote `
+  --base-url "https://cse-course-platform.master-course.workers.dev" `
+  --qa-email "test@pasawise.com" `
+  --admin-email $adminCredential.UserName `
+  --mode unlocked `
+  --confirm configure-cse-qa-student
+
 Remove-Item Env:CSE_QA_ADMIN_PASSWORD
 Remove-Item Env:CSE_QA_STUDENT_PASSWORD
 ```
 
-An address whose local part does not contain a delimited `qa` or `test` marker is
-rejected unless the exact target is repeated with
-`--allow-non-qa-email <same-email>`. Passwords are read only from environment
-variables and are never included in output or audit metadata.
+`test@pasawise.com` matches the protected QA-address policy. A non-QA-looking
+address is rejected unless the exact address is repeated with
+`--allow-non-qa-email <same-email>`. Existing administrators are always rejected.
+Passwords are accepted only through environment variables and are never printed,
+placed in audit metadata, or accepted as command-line options. Cookie mode remains
+available through `--cookie` for advanced local or inspection use, but normal
+production operation authenticates with `--admin-email` and
+`CSE_QA_ADMIN_PASSWORD`.

@@ -11,13 +11,13 @@ import {
   countQaStudentState,
   findPublishedCseCourse,
   findQaStudentTargetByEmail,
-  type QaStudentStateCounts,
 } from '../../repositories/admin/qa-student.repository'
 import type { ConfigureQaStudentInput } from '../../schemas/admin/qa-student.schemas'
 import type { AuthenticatedPrincipal } from '../../types/auth'
 import { AppError } from '../../utils/app-error'
 import {
   getLessonAccessibilityFromOrderedRows,
+  isRequiredLesson,
 } from '../lesson-access.service'
 import { mapEnrollment } from '../enrollment.service'
 import { assertMockExamCourseAccess } from '../mock-exam.service'
@@ -53,21 +53,28 @@ function safeTarget(target: Awaited<ReturnType<typeof findQaStudentTargetByEmail
 export async function inspectAdminQaStudent(
   database: D1Database,
   email: string,
-): Promise<{
-  target: ReturnType<typeof safeTarget>
-  emailLooksLikeQa: boolean
-  state: QaStudentStateCounts
-}> {
+) {
   const target = await findQaStudentTargetByEmail(database, email)
+  const state = await countQaStudentState(database, email)
+  const course = await findPublishedCseCourse(database)
+  const verification = target !== null
+    && target.role === 'student'
+    && target.has_active_access === 1
+    && course !== null
+    ? await verifyQaStudentAccess(database, target.id, course.id, 'inspect')
+    : null
+
   return {
     target: safeTarget(target),
     emailLooksLikeQa: isQaStudentEmail(email),
-    state: await countQaStudentState(database, email),
+    state,
+    verification,
   }
 }
 
 interface ActivityAccessRow {
   kind: 'practice' | 'quiz'
+  activity_title: string
   lesson_public_id: string
 }
 
@@ -75,7 +82,7 @@ async function verifyQaStudentAccess(
   database: D1Database,
   userId: number,
   courseId: number,
-  expectUnlocked: boolean,
+  expectation: 'unlocked' | 'fresh' | 'inspect',
 ) {
   const [enrollmentRow, curriculumRows, activityResult, assessments, mock] =
     await Promise.all([
@@ -83,7 +90,8 @@ async function verifyQaStudentAccess(
       findPublishedCurriculumLessons(database, courseId, userId),
       database
         .prepare(
-          `SELECT 'practice' AS kind, lessons.public_id AS lesson_public_id
+          `SELECT 'practice' AS kind, practice_sets.title AS activity_title,
+            lessons.public_id AS lesson_public_id
           FROM practice_sets
           INNER JOIN lessons ON lessons.id = practice_sets.lesson_id
           INNER JOIN topics ON topics.id = lessons.topic_id
@@ -94,7 +102,8 @@ async function verifyQaStudentAccess(
             AND topics.status = 'published'
             AND subjects.status = 'published'
           UNION ALL
-          SELECT 'quiz' AS kind, lessons.public_id AS lesson_public_id
+          SELECT 'quiz' AS kind, quizzes.title AS activity_title,
+            lessons.public_id AS lesson_public_id
           FROM quizzes
           INNER JOIN lessons ON lessons.id = quizzes.lesson_id
           INNER JOIN topics ON topics.id = lessons.topic_id
@@ -120,31 +129,73 @@ async function verifyQaStudentAccess(
   }
 
   const enrollment = mapEnrollment(enrollmentRow)
-  const lessonAccess = curriculumRows.map((row) => ({
-    subjectSlug: row.subject_slug,
-    lessonPublicId: row.lesson_public_id,
-    lessonType: row.lesson_type,
-    ...getLessonAccessibilityFromOrderedRows(row, curriculumRows, enrollment),
-  }))
-  const inaccessibleLessons = lessonAccess.filter((item) => !item.canAccess)
-  const accessByLesson = new Map(
-    lessonAccess.map((item) => [item.lessonPublicId, item.canAccess]),
-  )
-  const activities = activityResult.results.map((row) => ({
-    kind: row.kind,
-    lessonPublicId: row.lesson_public_id,
-    canAccess: accessByLesson.get(row.lesson_public_id) === true,
-  }))
-  const inaccessibleActivities = activities.filter((item) => !item.canAccess)
+  const lessonAccess = curriculumRows.map((row) => {
+    const accessibility = getLessonAccessibilityFromOrderedRows(
+      row,
+      curriculumRows,
+      enrollment,
+    )
+    const prerequisiteState = row.requires_previous === 0
+      ? 'not_required'
+      : accessibility.reason === 'previous_required_lesson_incomplete'
+        ? 'incomplete'
+        : 'completed_or_not_applicable'
 
-  const subjectCounts = new Map<string, { total: number; accessible: number }>()
+    return {
+      subjectSlug: row.subject_slug,
+      subjectTitle: row.subject_title,
+      topicSlug: row.topic_slug,
+      topicTitle: row.topic_title,
+      lessonPublicId: row.lesson_public_id,
+      title: row.lesson_title,
+      activityType: 'lesson' as const,
+      lessonType: row.lesson_type,
+      required: isRequiredLesson(row),
+      requiresPrevious: row.requires_previous === 1,
+      progressStatus: row.progress_status ?? 'not_started',
+      prerequisiteState,
+      accessible: accessibility.canAccess,
+      accessReason: accessibility.reason,
+      route: `/courses/cse-professional/lessons/${row.lesson_public_id}`,
+      apiRoute: `/api/student/lessons/${row.lesson_public_id}`,
+    }
+  })
+  const inaccessibleLessons = lessonAccess.filter((item) => !item.accessible)
+  const accessByLesson = new Map(
+    lessonAccess.map((item) => [item.lessonPublicId, item]),
+  )
+  const activities = activityResult.results.map((row) => {
+    const lesson = accessByLesson.get(row.lesson_public_id)
+    return {
+      subjectSlug: lesson?.subjectSlug ?? 'unknown',
+      subjectTitle: lesson?.subjectTitle ?? 'Unknown subject',
+      topicSlug: lesson?.topicSlug ?? 'unknown',
+      topicTitle: lesson?.topicTitle ?? 'Unknown topic',
+      lessonPublicId: row.lesson_public_id,
+      title: row.activity_title,
+      activityType: row.kind,
+      required: lesson?.required ?? true,
+      progressStatus: lesson?.progressStatus ?? 'not_started',
+      prerequisiteState: lesson?.prerequisiteState ?? 'unknown',
+      accessible: lesson?.accessible === true,
+      route: `/courses/cse-professional/lessons/${row.lesson_public_id}`,
+      apiRoute: `/api/student/lessons/${row.lesson_public_id}/${row.kind}`,
+    }
+  })
+  const inaccessibleActivities = activities.filter((item) => !item.accessible)
+
+  const subjectCounts = new Map<
+    string,
+    { title: string; total: number; accessible: number }
+  >()
   for (const item of lessonAccess) {
     const current = subjectCounts.get(item.subjectSlug) ?? {
+      title: item.subjectTitle,
       total: 0,
       accessible: 0,
     }
     current.total += 1
-    current.accessible += item.canAccess ? 1 : 0
+    current.accessible += item.accessible ? 1 : 0
     subjectCounts.set(item.subjectSlug, current)
   }
 
@@ -153,9 +204,14 @@ async function verifyQaStudentAccess(
       await assertSubjectAssessmentCourseAccess(database, userId, courseId)
       return {
         subjectSlug: assessment.subject_slug,
+        subjectTitle: assessment.subject_title,
+        title: assessment.title,
         assessmentSlug: assessment.slug,
+        activityType: 'subject_assessment' as const,
         available: true,
         reason: null,
+        route: `/subject-assessments/${assessment.slug}`,
+        apiRoute: `/api/student/subject-assessments/${assessment.slug}`,
       }
     }),
   )
@@ -172,17 +228,17 @@ async function verifyQaStudentAccess(
     )
   const assessmentsAvailable = subjectSetIsComplete
     && assessmentChecks.every((assessment) => assessment.available)
-  const practiceCount = activities.filter((item) => item.kind === 'practice').length
+  const practiceCount = activities.filter((item) => item.activityType === 'practice').length
   const accessiblePracticeCount = activities.filter(
-    (item) => item.kind === 'practice' && item.canAccess,
+    (item) => item.activityType === 'practice' && item.accessible,
   ).length
-  const quizCount = activities.filter((item) => item.kind === 'quiz').length
+  const quizCount = activities.filter((item) => item.activityType === 'quiz').length
   const accessibleQuizCount = activities.filter(
-    (item) => item.kind === 'quiz' && item.canAccess,
+    (item) => item.activityType === 'quiz' && item.accessible,
   ).length
 
   if (
-    expectUnlocked
+    expectation === 'unlocked'
     && (
       inaccessibleLessons.length > 0
       || inaccessibleActivities.length > 0
@@ -200,8 +256,13 @@ async function verifyQaStudentAccess(
     )
   }
 
+  const freshRequiredLocks = lessonAccess.filter(
+    (item) => item.required && item.requiresPrevious && !item.accessible,
+  ).length
+
   return {
     enrollmentActive: true,
+    expectation,
     subjects: [...subjectCounts.entries()].map(([slug, counts]) => ({
       slug,
       ...counts,
@@ -210,6 +271,7 @@ async function verifyQaStudentAccess(
       total: lessonAccess.length,
       accessible: lessonAccess.length - inaccessibleLessons.length,
       locked: inaccessibleLessons.length,
+      requiredLocked: freshRequiredLocks,
     },
     practices: {
       total: practiceCount,
@@ -219,10 +281,21 @@ async function verifyQaStudentAccess(
       total: quizCount,
       accessible: accessibleQuizCount,
     },
+    activities: [...lessonAccess, ...activities],
+    lockedActivities: [
+      ...inaccessibleLessons,
+      ...inaccessibleActivities,
+    ],
     subjectAssessments: assessmentChecks,
     fullMockExamination: {
+      title: mock?.title ?? null,
       slug: mock?.slug ?? null,
+      activityType: 'full_mock' as const,
       available: mockAvailable,
+      route: mock === null ? null : `/mock-examinations/${mock.slug}`,
+      apiRoute: mock === null
+        ? null
+        : `/api/student/mock-examinations/${mock.slug}`,
     },
   }
 }
@@ -321,8 +394,22 @@ export async function configureAdminQaStudent(
     database,
     configuredUser.id,
     course.id,
-    input.mode === 'unlocked',
+    input.mode,
   )
+  if (
+    input.mode === 'fresh'
+    && (
+      after.progressRecordCount !== 0
+      || after.completedLessonCount !== 0
+      || verification.lessons.requiredLocked === 0
+    )
+  ) {
+    throw new AppError(
+      409,
+      'QA_STUDENT_FRESH_VERIFICATION_FAILED',
+      'The QA student did not return to the expected fresh-student lock state.',
+    )
+  }
 
   return {
     target: {
