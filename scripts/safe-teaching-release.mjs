@@ -14,12 +14,12 @@ function credentials(meta){const resolved=resolveTeachingCredentials(meta);retur
 function qaVerification(topicSlug){if(!process.env.CSE_QA_STUDENT_PASSWORD)return undefined;return()=>{run(process.execPath,[path.resolve('scripts/verify-qa-student-topic-access.mjs'),'--base-url',LIVE,'--qa-email','test@pasawise.com','--topic',topicSlug],{CSE_QA_STUDENT_PASSWORD:process.env.CSE_QA_STUDENT_PASSWORD});return{status:'passed',account:'test@pasawise.com',productionContentMutated:false}}}
 async function main(){const args=parse(process.argv.slice(2));if(args.has('help')){console.log('Usage: npm.cmd run release:teaching -- --codex --topic average --message "Message" --confirm release-production');return}const meta=resolveTeachingPublisher(args.get('topic'));const message=args.get('message');if(!message)throw new Error('--message is required.');const dry=args.has('dry-run');if(!dry&&args.get('confirm')!=='release-production')throw new Error('--confirm release-production is required.');console.log(JSON.stringify({phase:'publisher-discovery',topic:meta.topicSlug,script:meta.script,dryRun:dry}))
  if(dry){npm(['run','release:safe','--','--message',message,'--dry-run']);if(!args.has('allow-production-read')){console.log('TEACHING RELEASE — DRY RUN PASS\nProduction validate-only skipped; add --allow-production-read with credentials to inspect production.');return}const auth=credentials(meta);const raw=publisher(meta,['--base-url',LIVE,'--email',auth.email,'--validate-only'],auth.env);const plan=normalizePublisherPlan(raw);console.log(JSON.stringify({dryRun:true,plan,safety:analyzeTeachingPlan(plan)},null,2));return}
- const auth=credentials(meta)
- const validateArgs=['--base-url',LIVE,'--email',auth.email,'--validate-only']
+ let auth
+ const getAuth=()=>auth??=credentials(meta)
  const result=await runTeachingReleasePipeline({
   safeRelease:()=>npm(['run','release:safe','--',...(args.has('codex')?['--codex']:[]),'--message',message,'--confirm','release-production']),
-  validate:()=>publisher(meta,validateArgs,auth.env),
-  publish:(fingerprint)=>{const writeArgs=['--base-url',LIVE,'--email',auth.email,'--confirm',meta.confirmation];if(fingerprint)writeArgs.push('--approve-deletions',fingerprint);return publisher(meta,writeArgs,auth.env)},
+  validate:()=>{const current=getAuth();return publisher(meta,['--base-url',LIVE,'--email',current.email,'--validate-only'],current.env)},
+  publish:(fingerprint)=>{const current=getAuth();const writeArgs=['--base-url',LIVE,'--email',current.email,'--confirm',meta.confirmation];if(fingerprint)writeArgs.push('--approve-deletions',fingerprint);return publisher(meta,writeArgs,current.env)},
   inspect:meta.inspectorScript?()=>JSON.parse(run(process.execPath,[path.resolve(meta.inspectorScript)]).trim()):undefined,
   qaVerify:qaVerification(meta.topicSlug),
  })
