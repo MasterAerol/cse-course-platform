@@ -17,6 +17,7 @@ Options:
   --confirm <phrase>    Required for release: release-production
   --dry-run             Inspect, classify, and validate without Git or production writes
   --codex               Noninteractive mode; missing approval or review risk blocks
+  --skip-deploy         Commit and push validated tooling without a Worker deploy
   --skip-validation     Dry-run only: classify without the full validation suite
   --help                Show this help
 

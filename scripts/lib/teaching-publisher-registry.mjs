@@ -1,0 +1,8 @@
+export const teachingPublisherRegistry=Object.freeze({
+ percentages:{topicSlug:'percentages',aliases:['percentage'],script:'scripts/create-and-publish-percentage-visual-teaching.mjs',passwordEnv:'CSE_PERCENTAGES_ADMIN_PASSWORD',confirmation:'publish-percentage-teaching-system-v1'},
+ fractions:{topicSlug:'fractions',aliases:['fraction'],script:'scripts/create-and-publish-fractions-teaching-system.mjs',passwordEnv:'CSE_FRACTIONS_ADMIN_PASSWORD',confirmation:'publish-fractions-teaching-system-v1'},
+ decimals:{topicSlug:'decimals',aliases:['decimal'],script:'scripts/create-and-publish-decimals-teaching-system.mjs',passwordEnv:'CSE_DECIMALS_ADMIN_PASSWORD',confirmation:'publish-decimals-teaching-system-v1'},
+ 'ratio-proportion':{topicSlug:'ratio-and-proportion',aliases:['ratio-and-proportion','ratioProportion'],script:'scripts/create-and-publish-ratio-proportion-teaching-system.mjs',passwordEnv:'CSE_RATIO_PROPORTION_ADMIN_PASSWORD',confirmation:'publish-ratio-proportion-teaching-system-v1'},
+ average:{topicSlug:'average',aliases:['averages'],script:'scripts/create-and-publish-average-teaching-system.mjs',passwordEnv:'CSE_AVERAGE_ADMIN_PASSWORD',confirmation:'publish-average-teaching-system-v1'},
+})
+export function resolveTeachingPublisher(value){const key=String(value??'').trim();for(const [name,item] of Object.entries(teachingPublisherRegistry))if(name===key||item.topicSlug===key||item.aliases.includes(key))return{name,...item};throw new Error(`Unknown teaching topic: ${key||'(missing)'}. Supported: ${Object.keys(teachingPublisherRegistry).join(', ')}.`)}

@@ -6,7 +6,7 @@ export const DEFAULT_HEALTH_URL = 'https://cse-course-platform.master-course.wor
 export const DEFAULT_LIVE_URL = 'https://cse-course-platform.master-course.workers.dev'
 export const MAX_CHANGED_FILE_BYTES = 15 * 1024 * 1024
 
-const booleanFlags = new Set(['help', 'dry-run', 'codex', 'skip-validation'])
+const booleanFlags = new Set(['help', 'dry-run', 'codex', 'skip-validation', 'skip-deploy'])
 const valueOptions = new Set(['message', 'confirm'])
 
 export function parseReleaseArgs(argv = process.argv.slice(2)) {
@@ -33,7 +33,7 @@ export function validateReleaseOptions(args) {
   if (message.length > 120) throw new Error('Commit message must be 120 characters or fewer.')
   if (/\r|\n/u.test(message)) throw new Error('Commit message must be a single line.')
   if (!dryRun && args.get('confirm') !== RELEASE_CONFIRMATION) throw new Error(`Production release requires --confirm ${RELEASE_CONFIRMATION}.`)
-  return { message, dryRun, codex: args.has('codex'), skipValidation: args.has('skip-validation') }
+  return { message, dryRun, codex: args.has('codex'), skipValidation: args.has('skip-validation'), skipDeploy: args.has('skip-deploy') }
 }
 
 export function normalizeGitPath(file) { return file.replaceAll('\\', '/').replace(/^\.\//u, '') }
@@ -87,7 +87,7 @@ export function inspectChangedFiles(root, files, options = {}) {
       const content = fs.readFileSync(absolute, 'utf8')
       for (const kind of detectSecrets(file, content)) secretFindings.push({ file, kind })
       const isPublisher = /(^|\/)create-and-publish-[^/]+\.mjs$/u.test(file)
-      const isReleaseWorkflow = /(^|\/)safe-release(?:\.d\.mts|\.mjs|\.node\.ts)?$/u.test(file)
+      const isReleaseWorkflow = /(^|\/)safe-(?:teaching-)?release(?:\.d\.mts|\.mjs|\.node\.ts)?$/u.test(file)
       if (file.startsWith('scripts/') && !isPublisher && !isReleaseWorkflow && /--approve-deletions|wrangler\s+d1[\s\S]{0,120}--remote|manual rollback required|production mutation required/iu.test(content)) productionMutationSignals.push({ file, kind: 'explicit production mutation signal' })
     }
   }

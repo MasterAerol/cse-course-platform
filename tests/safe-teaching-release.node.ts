@@ -1,0 +1,16 @@
+import {describe,expect,it} from 'vitest'
+import {resolveTeachingPublisher,teachingPublisherRegistry} from '../scripts/lib/teaching-publisher-registry.mjs'
+import {analyzeTeachingPlan,isIdempotentResult,normalizePublisherPlan,sameValidationSnapshot} from '../scripts/lib/safe-teaching-release.mjs'
+const plan=(overrides={})=>normalizePublisherPlan({topicSlug:'average',lessonCount:12,writesRequired:true,totals:{blocksCreated:0,blocksUpdated:3,blocksDeleted:0},unrelatedTopicsModified:0,...overrides})
+describe('Automatic Teaching Release v1',()=>{
+ it('resolves registry topics and aliases',()=>{expect(Object.keys(teachingPublisherRegistry)).toHaveLength(5);expect(resolveTeachingPublisher('ratio-and-proportion').name).toBe('ratio-proportion');expect(resolveTeachingPublisher('average').confirmation).toBe('publish-average-teaching-system-v1')})
+ it('rejects unknown topics',()=>{expect(()=>resolveTeachingPublisher('number-problems')).toThrow('Unknown teaching topic')})
+ it('allows zero deletions',()=>{expect(analyzeTeachingPlan(plan())).toMatchObject({allowed:true,approvalFingerprint:null})})
+ it('allows only classified safe duplicates',()=>{const p=plan({deletionPlanFingerprint:'abc',deletions:[{learnerContentAssessment:'safe-duplicate'}],totals:{blocksCreated:0,blocksUpdated:1,blocksDeleted:1}});expect(analyzeTeachingPlan(p)).toEqual({allowed:true,reason:null,approvalFingerprint:'abc'})})
+ it('requires evidence for equivalent replacements',()=>{const p=plan({deletionPlanFingerprint:'abc',deletions:[{learnerContentAssessment:'superseded-with-equivalent-content'}],totals:{blocksCreated:0,blocksUpdated:1,blocksDeleted:1}});expect(analyzeTeachingPlan(p).reason).toBe('missing_replacement_evidence')})
+ it.each(['requires-human-review','unknown','potentially-valuable','unsafe'])('blocks %s deletions',(status)=>{const p=plan({deletionPlanFingerprint:'abc',deletions:[{learnerContentAssessment:status}],totals:{blocksCreated:0,blocksUpdated:1,blocksDeleted:1}});expect(analyzeTeachingPlan(p).reason).toBe('content_review_required')})
+ it('blocks unclassified deletion totals',()=>{expect(analyzeTeachingPlan(plan({totals:{blocksCreated:0,blocksUpdated:1,blocksDeleted:2}})).reason).toBe('unclassified_deletions')})
+ it('blocks unrelated topic mutation, warnings, and blockers',()=>{expect(analyzeTeachingPlan(plan({unrelatedTopicsModified:1})).reason).toBe('unrelated_topic_mutation');expect(analyzeTeachingPlan(plan({warnings:['x']})).allowed).toBe(false);expect(analyzeTeachingPlan(plan({blockers:['x']})).allowed).toBe(false)})
+ it('detects TOCTOU fingerprint/count changes',()=>{const a=plan();expect(sameValidationSnapshot(a,a)).toBe(true);expect(sameValidationSnapshot(a,plan({deletionPlanFingerprint:'new'}))).toBe(false)})
+ it('requires a truly write-free idempotent result',()=>{expect(isIdempotentResult({topicSlug:'average',updated:false,writeRequired:false,totals:{blocksCreated:0,blocksUpdated:0,blocksDeleted:0},unrelatedTopicsModified:0})).toBe(true);expect(isIdempotentResult({topicSlug:'average',updated:true,totals:{blocksCreated:0,blocksUpdated:1,blocksDeleted:0}})).toBe(false)})
+})

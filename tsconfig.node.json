@@ -34,6 +34,7 @@
     "vitest.qa-student-script.config.ts",
     "vitest.safe-release.config.ts",
     "vitest.average-publisher.config.ts",
+    "vitest.safe-teaching-release.config.ts",
     "eslint.config.js",
     "tests",
     "src/worker"

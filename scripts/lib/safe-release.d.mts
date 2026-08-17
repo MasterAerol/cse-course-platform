@@ -2,7 +2,7 @@ export const RELEASE_CONFIRMATION: string
 export const DEFAULT_HEALTH_URL: string
 export const DEFAULT_LIVE_URL: string
 export const MAX_CHANGED_FILE_BYTES: number
-export type ReleaseOptions = { message: string; dryRun: boolean; codex: boolean; skipValidation: boolean }
+export type ReleaseOptions = { message: string; dryRun: boolean; codex: boolean; skipValidation: boolean; skipDeploy: boolean }
 export type RiskBlocker = { code: string; reason: string; files: string[] }
 export function parseReleaseArgs(argv?: string[]): Map<string, string>
 export function validateReleaseOptions(args: Map<string, string>): ReleaseOptions
