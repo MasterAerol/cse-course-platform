@@ -68,6 +68,7 @@ import type {
   TopicUpdateInput,
 } from '../../schemas/admin/course-admin.schemas'
 import type {
+  AgeProblemsTeachingSystemReconcileInput,
   AverageTeachingSystemReconcileInput,
   DecimalsTeachingSystemReconcileInput,
   FixedQuestionInput,
@@ -2143,6 +2144,111 @@ export async function reconcileNumberProblemsTeachingSystemLesson(
       metadataJson: JSON.stringify({
         lessonId,
         operation: 'number-problems-teaching-system-v1-reconcile',
+        createdCount: creates.length,
+        updatedCount,
+        deletedCount: deleteIds.length,
+      }),
+    })
+  }
+
+  return {
+    blocks: (await listLessonBlocksForLesson(database, lessonId)).map(mapBlock),
+    writeRequired,
+    createdCount: creates.length,
+    updatedCount,
+    deletedCount: deleteIds.length,
+  }
+}
+
+export async function reconcileAgeProblemsTeachingSystemLesson(
+  database: D1Database,
+  actor: AuthenticatedPrincipal,
+  lessonId: number,
+  input: AgeProblemsTeachingSystemReconcileInput,
+): Promise<{
+  blocks: AdminLessonBlock[]
+  writeRequired: boolean
+  createdCount: number
+  updatedCount: number
+  deletedCount: number
+}> {
+  const lesson = await findLessonById(database, lessonId)
+  if (lesson === null) throw notFound('Lesson')
+  const topic = await findTopicById(database, lesson.topic_id)
+  const subject = topic === null ? null : await findSubjectById(database, topic.subject_id)
+  const course = subject === null ? null : await findCourseById(database, subject.course_id)
+  if (
+    topic?.slug !== 'age-problems' ||
+    subject?.slug !== 'numerical-ability' ||
+    course?.slug !== 'cse-professional'
+  ) {
+    throw new AppError(
+      409,
+      'AGE_PROBLEMS_TEACHING_SYSTEM_TARGET_MISMATCH',
+      'Age Problems Teaching System reconciliation is restricted to the CSE Age Problems topic.',
+    )
+  }
+
+  const desired = input.blocks.map((block) => {
+    assertNoRawHtmlContent(block.content)
+    const content = validateAdminLessonBlockContent(block.blockType, block.content)
+    return {
+      blockType: block.blockType,
+      contentJson: JSON.stringify(content),
+      position: block.position,
+    }
+  })
+  if (desired.some((block) => block.blockType === 'illustrated-guided-teaching')) {
+    throw new AppError(
+      409,
+      'AGE_PROBLEMS_GUIDED_TEACHING_NOT_ALLOWED',
+      'Age Problems Teaching System v1 does not include illustrated guided teaching.',
+    )
+  }
+
+  const existing = await listLessonBlocksForLesson(database, lessonId)
+  const guided = existing.filter(
+    (block) => block.block_type === 'illustrated-guided-teaching',
+  )
+  const allowed = existing.filter(
+    (block) => block.block_type !== 'illustrated-guided-teaching',
+  )
+  const retainedCount = Math.min(allowed.length, desired.length)
+  const retained = allowed.slice(0, retainedCount).map((block, index) => {
+    const target = desired[index]
+    if (target === undefined) throw new Error('Age Problems reconciliation target is missing.')
+    return {
+      id: block.id,
+      blockType: target.blockType,
+      contentJson: target.contentJson,
+      position: target.position,
+      contentChanged:
+        block.block_type !== target.blockType ||
+        !lessonBlockContentJsonEquals(block.content_json, target.contentJson),
+      positionChanged: block.position !== target.position,
+    }
+  })
+  const deleteIds = [
+    ...guided.map((block) => block.id),
+    ...allowed.slice(desired.length).map((block) => block.id),
+  ]
+  const creates = desired.slice(allowed.length)
+  const updatedCount = retained.filter(
+    (block) => block.contentChanged || block.positionChanged,
+  ).length
+  const writeRequired =
+    updatedCount > 0 || deleteIds.length > 0 || creates.length > 0
+
+  if (writeRequired) {
+    await reconcileTeachingSystemLessonBlocksWithAudit(database, {
+      lessonId,
+      actorUserId: actor.internalUserId,
+      retained,
+      deleteIds,
+      creates,
+      metadataJson: JSON.stringify({
+        lessonId,
+        operation: 'age-problems-teaching-system-v1-reconcile',
         createdCount: creates.length,
         updatedCount,
         deletedCount: deleteIds.length,

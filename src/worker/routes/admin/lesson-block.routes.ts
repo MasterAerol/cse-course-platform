@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 
 import { lessonIdParamsSchema } from '../../schemas/admin/course-admin.schemas'
 import {
+  ageProblemsTeachingSystemReconcileSchema,
   averageTeachingSystemReconcileSchema,
   decimalsTeachingSystemReconcileSchema,
   lessonBlockCreateSchema,
@@ -19,6 +20,7 @@ import {
   getAdminLessonBlocks,
   moveLessonBlock,
   repairPercentageGuidedTeaching,
+  reconcileAgeProblemsTeachingSystemLesson,
   reconcileAverageTeachingSystemLesson,
   reconcileNumberProblemsTeachingSystemLesson,
   reconcileDecimalsTeachingSystemLesson,
@@ -210,6 +212,25 @@ adminLessonBlockRoutes.put(
     return successResponse(
       context,
       await reconcileNumberProblemsTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/age-problems-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    const input = await parseJsonBody(context, ageProblemsTeachingSystemReconcileSchema)
+    return successResponse(
+      context,
+      await reconcileAgeProblemsTeachingSystemLesson(
         context.env.DB,
         context.get('authUser'),
         params.lessonId,
