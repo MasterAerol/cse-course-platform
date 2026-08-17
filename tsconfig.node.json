@@ -32,6 +32,7 @@
     "vitest.decimals-publisher.config.ts",
     "vitest.ratio-proportion-publisher.config.ts",
     "vitest.qa-student-script.config.ts",
+    "vitest.safe-release.config.ts",
     "eslint.config.js",
     "tests",
     "src/worker"

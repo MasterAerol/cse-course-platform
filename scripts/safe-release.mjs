@@ -1,0 +1,115 @@
+#!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
+import process from 'node:process'
+import { DEFAULT_HEALTH_URL, DEFAULT_LIVE_URL, classifyChangedFiles, formatBytes, inspectChangedFiles, parseReleaseArgs, parseStatusPorcelainZ, validateHealthResponse, validateReleaseOptions } from './lib/safe-release.mjs'
+
+const HELP = `Safe Release Workflow v1
+
+Usage:
+  npm.cmd run release:safe -- --message "Commit message" --confirm release-production
+  npm.cmd run release:safe -- --codex --message "Commit message" --confirm release-production
+  npm.cmd run release:safe -- --message "Inspect only" --dry-run
+
+Options:
+  --message <text>       Required single-line commit message (maximum 120 characters)
+  --confirm <phrase>    Required for release: release-production
+  --dry-run             Inspect, classify, and validate without Git or production writes
+  --codex               Noninteractive mode; missing approval or review risk blocks
+  --skip-validation     Dry-run only: classify without the full validation suite
+  --help                Show this help
+
+This workflow never runs D1 migrations or content publishers.`
+
+function run(command, args, options = {}) {
+  const result = spawnSync(command, args, { cwd: options.cwd ?? process.cwd(), encoding: 'utf8', shell: false, windowsHide: true, env: { ...process.env, ...(options.env ?? {}) } })
+  if (options.print !== false) { if (result.stdout) process.stdout.write(result.stdout); if (result.stderr) process.stderr.write(result.stderr) }
+  if (result.error) throw result.error
+  if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with code ${result.status}.`)
+  return { stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
+}
+const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const git = (args, options) => run('git', args, options)
+function fail(reason, detail = 'No commit/push/deploy performed.') { console.error(`\nSAFE RELEASE — BLOCKED\n\nReason:\n${reason}\n\n${detail}`); process.exitCode = 1 }
+
+function ensureNoConflictMarkers(root, files) {
+  const findings = []
+  for (const file of files) {
+    const absolute = path.join(root, ...file.split('/'))
+    if (!fs.existsSync(absolute) || !fs.lstatSync(absolute).isFile() || fs.statSync(absolute).size > 2 * 1024 * 1024) continue
+    if (/^(?:<<<<<<< |=======|>>>>>>> )/mu.test(fs.readFileSync(absolute, 'utf8'))) findings.push(file)
+  }
+  if (findings.length) throw new Error(`Unresolved conflict markers detected in: ${findings.join(', ')}`)
+}
+
+function validateRepository() {
+  const root = git(['rev-parse', '--show-toplevel'], { print: false }).stdout.trim()
+  if (path.resolve(root) !== path.resolve(process.cwd())) throw new Error(`Run from repository root: ${root}`)
+  const branch = git(['branch', '--show-current'], { print: false }).stdout.trim()
+  if (!branch) throw new Error('Detached HEAD detected.')
+  if (branch !== 'main') throw new Error(`Current branch is ${branch}; Safe Release requires main.`)
+  const gitDir = git(['rev-parse', '--git-dir'], { print: false }).stdout.trim()
+  for (const marker of ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply']) if (fs.existsSync(path.resolve(root, gitDir, marker))) throw new Error(`Git operation in progress (${marker}).`)
+  const conflicts = git(['diff', '--name-only', '--diff-filter=U'], { print: false }).stdout.trim()
+  if (conflicts) throw new Error(`Unresolved Git conflicts detected: ${conflicts.replaceAll('\n', ', ')}`)
+  if (!git(['remote', 'get-url', 'origin'], { print: false }).stdout.trim()) throw new Error('Git remote origin is missing.')
+  const status = git(['status', '--porcelain=v1', '-z', '--untracked-files=all'], { print: false }).stdout
+  return { root, branch, files: parseStatusPorcelainZ(status) }
+}
+
+function runValidation() {
+  const checks = [['Typecheck', NPM_COMMAND, ['run', 'typecheck']], ['Lint', NPM_COMMAND, ['run', 'lint']], ['Tests', NPM_COMMAND, ['test', '--', '--testTimeout=30000']], ['Build', NPM_COMMAND, ['run', 'build']], ['Diff check', 'git', ['diff', '--check']]], passed = []
+  for (const [label, command, args] of checks) { console.log(`\nVALIDATION — ${label}`); run(command, args); passed.push(label) }
+  return passed
+}
+
+async function main() {
+  let args
+  try { args = parseReleaseArgs() } catch (error) { fail(error.message); return }
+  if (args.has('help')) { console.log(HELP); return }
+  let options
+  try { options = validateReleaseOptions(args) } catch (error) { fail(error.message); return }
+  if (options.skipValidation && !options.dryRun) { fail('--skip-validation is permitted only with --dry-run.'); return }
+  console.log('SAFE RELEASE — PREFLIGHT')
+  let repository
+  try { repository = validateRepository() } catch (error) { fail(error.message); return }
+  if (!repository.files.length) { console.log('\nNothing to release.'); return }
+  console.log('\ngit status --short'); git(['status', '--short'])
+  console.log('\ngit diff --stat'); git(['diff', '--stat'])
+  console.log('\ngit diff --name-only'); git(['diff', '--name-only'])
+  const risk = classifyChangedFiles(repository.files)
+  console.log(`\nRISK CLASSIFICATION\nChanged files: ${risk.files.length}\nMigrations: ${risk.migrations.length}\nPublishers requiring separate manual execution: ${risk.publishers.length}\nWrangler/binding changes: ${risk.wranglerConfig.length}`)
+  risk.publishers.forEach((file) => console.log(`  Publisher: ${file}`))
+  try {
+    ensureNoConflictMarkers(repository.root, repository.files)
+    const inspection = inspectChangedFiles(repository.root, repository.files)
+    if (inspection.secretFindings.length) throw new Error(`Possible secret detected in ${inspection.secretFindings.map((item) => item.file).join(', ')}. Values were not printed.`)
+    if (inspection.largeFiles.length) throw new Error(`Oversized changed file detected: ${inspection.largeFiles.map((item) => `${item.file} (${formatBytes(item.bytes)})`).join(', ')}`)
+    if (inspection.suspiciousTemporaryFiles.length) throw new Error(`Suspicious temporary binary detected: ${inspection.suspiciousTemporaryFiles.map((item) => `${item.file} (${formatBytes(item.bytes)})`).join(', ')}`)
+    if (inspection.productionMutationSignals.length) throw new Error(`Explicit production-mutation signal detected in ${inspection.productionMutationSignals.map((item) => item.file).join(', ')}.`)
+    if (risk.blockers.length) throw new Error(`${risk.blockers.map((item) => `${item.reason}\n${item.files.map((file) => `  - ${file}`).join('\n')}`).join('\n')}\n\nHuman action required: use the controlled production procedure.`)
+  } catch (error) { fail(error.message); return }
+  let passed = []
+  if (!options.skipValidation) try { passed = runValidation() } catch (error) { fail(error.message); return }
+  if (options.dryRun) { console.log(`\nSAFE RELEASE — DRY RUN PASS\nWould commit ${repository.files.length} changed file(s) with message: ${options.message}\nNo staging, commit, push, deployment, migration, or publisher execution occurred.`); return }
+  console.log('\nGIT — STAGE')
+  try {
+    git(['add', '--all'])
+    const actual = [...new Set(parseStatusPorcelainZ(git(['status', '--porcelain=v1', '-z', '--untracked-files=all'], { print: false }).stdout))].sort()
+    const expected = [...new Set(repository.files)].sort()
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) { git(['restore', '--staged', '--', '.']); throw new Error(`Staged scope differs from preflight scope. Expected ${expected.length}; found ${actual.length}. Changes were unstaged.`) }
+    const stagedInspection = inspectChangedFiles(repository.root, actual)
+    if (stagedInspection.secretFindings.length || stagedInspection.largeFiles.length || stagedInspection.suspiciousTemporaryFiles.length || stagedInspection.productionMutationSignals.length) { git(['restore', '--staged', '--', '.']); throw new Error('Staged safety inspection failed. Changes were unstaged.') }
+  } catch (error) { fail(error.message); return }
+  let commit
+  try { console.log('\nGIT — COMMIT'); git(['commit', '-m', options.message]); commit = git(['log', '-1', '--format=%h %s'], { print: false }).stdout.trim(); console.log(commit) } catch (error) { fail(error.message, 'No push/deploy performed. Local work was preserved.'); return }
+  try { console.log('\nGIT — PUSH'); git(['push', 'origin', 'main']) } catch { fail('Git push unavailable in this environment.', `Local commit preserved: ${commit}\nDeployment not performed.`); return }
+  try { console.log('\nCLOUDFLARE — AUTHENTICATION'); run(process.execPath, [path.join(repository.root, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), 'whoami'], { env: options.codex ? { CI: 'true' } : {} }) } catch { fail('Cloudflare authentication unavailable.', `Push succeeded for ${commit}; deployment not performed.`); return }
+  let deployOutput
+  try { console.log('\nCLOUDFLARE — DEPLOY'); deployOutput = run(NPM_COMMAND, ['run', 'deploy']).stdout } catch { fail('Cloudflare Worker deployment failed.', `Push succeeded for ${commit}; deployment did not complete.`); return }
+  try { console.log('\nPOST-DEPLOY — HEALTH'); const response = await fetch(DEFAULT_HEALTH_URL, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15_000) }); validateHealthResponse(response.status, await response.text()) } catch (error) { console.error(`\nDEPLOYED BUT HEALTH CHECK FAILED\n${error.message}\nNo automatic rollback was attempted.`); process.exitCode = 1; return }
+  const version = deployOutput.match(/(?:Version ID|Current Version ID):\s*([\w-]+)/iu)?.[1] ?? 'reported by Wrangler output above'
+  console.log(`\nSAFE RELEASE — APPLICATION DEPLOYED\nValidation: ${passed.join(', ')}\nGit: ${commit}; pushed main → origin/main\nWorker: deployed; version ${version}\nHealth: ${DEFAULT_HEALTH_URL} → 200, status ok\nMigration: None\nPublisher: ${risk.publisherRequired ? 'NOT PUBLISHED — separate validate/review/confirmation workflow required' : 'None'}\nLive: ${DEFAULT_LIVE_URL}`)
+}
+await main()
