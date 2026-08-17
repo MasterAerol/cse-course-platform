@@ -3,6 +3,7 @@
 import { jsonFingerprint, sameJson } from './lib/canonical-json.mjs'
 import { createHash } from 'node:crypto'
 import { averageLessonSpecs } from './lib/average-teaching-system-content.mjs'
+import { classifyReviewedAverageDeletion } from './lib/average-reviewed-legacy-deletions.mjs'
 
 const confirmation = 'publish-average-teaching-system-v1'
 const csrfHeaderValue = 'same-origin-admin-mutation'
@@ -31,7 +32,7 @@ function blockIdentifier(block) {
   return String(value).replace(/\s+/g, ' ').slice(0, 160)
 }
 
-function buildPlan(existingBlocks, desiredBlocks) {
+function buildPlan(existingBlocks, desiredBlocks, lessonSlug) {
   const all = ordered(existingBlocks)
   const guided = all.filter((block) => block.type === guidedBlockType)
   const allowed = all.filter((block) => block.type !== guidedBlockType)
@@ -39,13 +40,14 @@ function buildPlan(existingBlocks, desiredBlocks) {
   const retained = allowed.slice(0, desiredBlocks.length)
   const updates = retained.filter((block, index) => !sameBlock(block, desiredBlocks[index], index + 1))
   const creates = desiredBlocks.slice(retained.length)
+  const canonicalLesson = { slug: lessonSlug, blocks: desiredBlocks }
   const deletions = [...guided, ...excess].map((block) => ({
     blockId: block.id,
     position: block.position,
     blockType: block.type,
     identifier: blockIdentifier(block),
     reason: block.type === guidedBlockType ? 'IllustratedGuidedTeaching is outside the approved Average v1 teaching architecture.' : 'The block is beyond the canonical lesson block sequence.',
-    learnerContentAssessment: 'requires-human-review',
+    ...classifyReviewedAverageDeletion({ lessonSlug, block, canonicalLesson }),
   }))
   return {
     guidedCount: guided.length,
@@ -113,7 +115,7 @@ async function main() {
     const response = await request(`/api/admin/lessons/${lesson.id}/blocks`)
     const positions = response.blocks.map((block) => block.position)
     if (new Set(positions).size !== positions.length) throw new Error(`${spec.title} has duplicate block positions.`)
-    const plan = buildPlan(response.blocks, spec.blocks)
+    const plan = buildPlan(response.blocks, spec.blocks, spec.slug)
     states.push({ spec, lesson, existingBlocks: response.blocks, plan })
   }
 
