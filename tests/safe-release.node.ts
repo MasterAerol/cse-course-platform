@@ -78,6 +78,11 @@ describe('Safe Release Workflow v1', () => {
     expect(detectSecrets('scripts/release.mjs', 'const password = environment.CSE_CONTENT_ADMIN_PASSWORD')).toEqual([])
   })
 
+  it('recognizes content-release as controlled release tooling', () => {
+    const controlled = tempFile('scripts/content-release.mjs', '--approve-deletions validated-fingerprint')
+    expect(inspectChangedFiles(controlled.directory, [controlled.relative]).productionMutationSignals).toEqual([])
+  })
+
   it('detects oversized files and suspicious temporary binaries', () => {
     const big = tempFile('assets/large.bin', Buffer.alloc(101))
     const inspection = inspectChangedFiles(big.directory, [big.relative], { maxBytes: 100 })

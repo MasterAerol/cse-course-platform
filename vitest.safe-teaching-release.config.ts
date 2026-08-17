@@ -1,2 +1,2 @@
 import {defineConfig} from 'vitest/config'
-export default defineConfig({test:{environment:'node',include:['tests/safe-teaching-release.node.ts']}})
+export default defineConfig({test:{environment:'node',include:['tests/safe-teaching-release.node.ts','tests/content-release.node.ts']}})

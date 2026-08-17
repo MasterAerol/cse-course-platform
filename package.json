@@ -8,6 +8,7 @@
     "build": "npm run typecheck && vite build",
     "deploy": "npm run build && wrangler deploy",
     "release:safe": "node scripts/safe-release.mjs",
+    "content:release": "node scripts/content-release.mjs",
     "release:teaching": "node scripts/safe-teaching-release.mjs",
     "preview": "npm run build && vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.ui-test.json --noEmit && tsc -p tsconfig.node.json --noEmit && npm run cf-typegen:check",

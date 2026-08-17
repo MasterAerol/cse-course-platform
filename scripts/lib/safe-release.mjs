@@ -87,7 +87,7 @@ export function inspectChangedFiles(root, files, options = {}) {
       const content = fs.readFileSync(absolute, 'utf8')
       for (const kind of detectSecrets(file, content)) secretFindings.push({ file, kind })
       const isPublisher = /(^|\/)create-and-publish-[^/]+\.mjs$/u.test(file)
-      const isReleaseWorkflow = /(^|\/)safe-(?:teaching-)?release(?:\.d\.mts|\.mjs|\.node\.ts)?$/u.test(file)
+      const isReleaseWorkflow = /(^|\/)(?:safe-(?:teaching-)?release|content-release)(?:\.d\.mts|\.mjs|\.node\.ts)?$/u.test(file)
       if (file.startsWith('scripts/') && !isPublisher && !isReleaseWorkflow && /--approve-deletions|wrangler\s+d1[\s\S]{0,120}--remote|manual rollback required|production mutation required/iu.test(content)) productionMutationSignals.push({ file, kind: 'explicit production mutation signal' })
     }
   }
