@@ -75,6 +75,7 @@ describe('Safe Release Workflow v1', () => {
     const value = `ghp_${'a'.repeat(30)}`
     expect(detectSecrets('src/config.ts', `token = '${value}'`)).toContain('GitHub token')
     expect(detectSecrets('tests/config.test.ts', `token = '${value}'`)).toEqual([])
+    expect(detectSecrets('scripts/release.mjs', 'const password = environment.CSE_CONTENT_ADMIN_PASSWORD')).toEqual([])
   })
 
   it('detects oversized files and suspicious temporary binaries', () => {

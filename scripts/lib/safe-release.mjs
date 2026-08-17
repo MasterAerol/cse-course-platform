@@ -61,7 +61,7 @@ const secretRules = [
   { name: 'GitHub token', expression: /\b(?:ghp|github_pat)_[A-Za-z0-9_]{20,}\b/u },
   { name: 'Cloudflare API token', expression: /\bCLOUDFLARE_API_TOKEN\s*[=:]\s*["']?(?!\$|<|example|replace|test|fake|dummy)[A-Za-z0-9._-]{20,}/iu },
   { name: 'bearer token', expression: /\bAuthorization\s*[=:]\s*["']?Bearer\s+(?!\$|<|example|test|fake|dummy)[A-Za-z0-9._-]{20,}/iu },
-  { name: 'password', expression: /\b(?:password|passwd|pwd)\s*[=:]\s*["']?(?!\$|process\.env|<|example|replace|test|fake|dummy|undefined|null)[^\s"']{12,}/iu },
+  { name: 'password', expression: /\b(?:password|passwd|pwd)\s*[=:]\s*["']?(?!\$|process\.env|environment(?:\.|\[)|<|example|replace|test|fake|dummy|undefined|null)[^\s"']{12,}/iu },
 ]
 
 export function detectSecrets(file, content) {

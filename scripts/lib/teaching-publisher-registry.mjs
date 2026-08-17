@@ -1,5 +1,5 @@
 export const teachingPublisherRegistry=Object.freeze({
- percentages:{topicSlug:'percentages',aliases:['percentage'],script:'scripts/create-and-publish-percentage-visual-teaching.mjs',passwordEnv:'CSE_PERCENTAGES_ADMIN_PASSWORD',confirmation:'publish-percentage-teaching-system-v1'},
+ percentages:{topicSlug:'percentages',aliases:['percentage'],script:'scripts/create-and-publish-percentage-visual-teaching.mjs',inspectorScript:'scripts/inspect-percentage-teaching-system-state.mjs',passwordEnv:'CSE_PERCENTAGES_ADMIN_PASSWORD',confirmation:'publish-percentage-teaching-system-v1'},
  fractions:{topicSlug:'fractions',aliases:['fraction'],script:'scripts/create-and-publish-fractions-teaching-system.mjs',passwordEnv:'CSE_FRACTIONS_ADMIN_PASSWORD',confirmation:'publish-fractions-teaching-system-v1'},
  decimals:{topicSlug:'decimals',aliases:['decimal'],script:'scripts/create-and-publish-decimals-teaching-system.mjs',passwordEnv:'CSE_DECIMALS_ADMIN_PASSWORD',confirmation:'publish-decimals-teaching-system-v1'},
  'ratio-proportion':{topicSlug:'ratio-and-proportion',aliases:['ratio-and-proportion','ratioProportion'],script:'scripts/create-and-publish-ratio-proportion-teaching-system.mjs',passwordEnv:'CSE_RATIO_PROPORTION_ADMIN_PASSWORD',confirmation:'publish-ratio-proportion-teaching-system-v1'},

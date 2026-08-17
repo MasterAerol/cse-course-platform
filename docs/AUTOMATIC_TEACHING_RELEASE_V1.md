@@ -6,6 +6,8 @@ The orchestrator resolves one of five registered publishers (`percentages`, `fra
 
 Human review remains mandatory for unclassified, unknown, potentially valuable, unsafe, or `requires-human-review` deletions; migrations and DB repairs remain Safe Release blockers. Percentage/Fractions deletion plans are conservatively blocked if they report deletions without classifications. QA verification is optional and skipped when secure QA credentials are absent.
 
+When `CSE_QA_STUDENT_PASSWORD` is present, `scripts/verify-qa-student-topic-access.mjs` signs in as `test@pasawise.com`, verifies active enrollment and unlocked curriculum state, and opens every lesson route in the released topic. It never configures, unlocks, resets, or changes learner progress; without that credential the QA phase reports `skipped`.
+
 Dry run: `npm.cmd run release:teaching -- --topic average --message "Inspect Average release" --dry-run`. Add `--allow-production-read` only to permit credentialed production validate-only; dry run never writes.
 
 Future prompt footer:
