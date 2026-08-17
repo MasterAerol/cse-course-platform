@@ -5,6 +5,7 @@ import {
   averageTeachingSystemReconcileSchema,
   decimalsTeachingSystemReconcileSchema,
   lessonBlockCreateSchema,
+  numberProblemsTeachingSystemReconcileSchema,
   fractionsTeachingSystemReconcileSchema,
   lessonBlockIdParamsSchema,
   lessonBlockUpdateSchema,
@@ -19,6 +20,7 @@ import {
   moveLessonBlock,
   repairPercentageGuidedTeaching,
   reconcileAverageTeachingSystemLesson,
+  reconcileNumberProblemsTeachingSystemLesson,
   reconcileDecimalsTeachingSystemLesson,
   reconcileFractionsTeachingSystemLesson,
   reconcilePercentageTeachingSystemLesson,
@@ -198,6 +200,25 @@ adminLessonBlockRoutes.put(
     )
   },
 )
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/number-problems-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    const input = await parseJsonBody(context, numberProblemsTeachingSystemReconcileSchema)
+    return successResponse(
+      context,
+      await reconcileNumberProblemsTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+
 adminLessonBlockRoutes.patch('/lesson-blocks/:blockId', async (context) => {
   const params = parseValidatedInput(
     lessonBlockIdParamsSchema.safeParse({
