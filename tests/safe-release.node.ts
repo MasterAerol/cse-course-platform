@@ -93,6 +93,12 @@ describe('Safe Release Workflow v1', () => {
   it('allows dry-run without production confirmation', () => {
     expect(validateReleaseOptions(parseReleaseArgs(['--message', 'Inspect', '--dry-run']))).toMatchObject({ dryRun: true, message: 'Inspect' })
   })
+  it('preserves the tooling-only skip-deploy boundary', () => {
+    expect(validateReleaseOptions(parseReleaseArgs([
+      '--message', 'Release tooling', '--confirm', 'release-production', '--skip-deploy',
+    ]))).toMatchObject({ dryRun: false, skipDeploy: true, message: 'Release tooling' })
+  })
+
 
   it('blocks Codex mode when explicit production confirmation is missing', () => {
     expect(() => validateReleaseOptions(parseReleaseArgs(['--codex', '--message', 'Release']))).toThrow('Production release requires')

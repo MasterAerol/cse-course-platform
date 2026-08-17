@@ -109,6 +109,10 @@ async function main() {
   let commit
   try { console.log('\nGIT — COMMIT'); git(['commit', '-m', options.message]); commit = git(['log', '-1', '--format=%h %s'], { print: false }).stdout.trim(); console.log(commit) } catch (error) { fail(error.message, 'No push/deploy performed. Local work was preserved.'); return }
   try { console.log('\nGIT — PUSH'); git(['push', 'origin', 'main']) } catch { fail('Git push unavailable in this environment.', `Local commit preserved: ${commit}\nDeployment not performed.`); return }
+  if (options.skipDeploy) {
+    console.log(`\nSAFE RELEASE — TOOLING RELEASED\nValidation: ${passed.join(', ')}\nGit: ${commit}; pushed main → origin/main\nWorker: not deployed (--skip-deploy)\nMigration: None\nPublisher: ${risk.publisherRequired ? 'NOT PUBLISHED — separate validate/review/confirmation workflow required' : 'None'}`)
+    return
+  }
   try { console.log('\nCLOUDFLARE — AUTHENTICATION'); run(process.execPath, [path.join(repository.root, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), 'whoami'], { env: options.codex ? { CI: 'true' } : {} }) } catch { fail('Cloudflare authentication unavailable.', `Push succeeded for ${commit}; deployment not performed.`); return }
   let deployOutput
   try { console.log('\nCLOUDFLARE — DEPLOY'); deployOutput = run(NPM_COMMAND, [...NPM_PREFIX, 'run', 'deploy']).stdout } catch { fail('Cloudflare Worker deployment failed.', `Push succeeded for ${commit}; deployment did not complete.`); return }
