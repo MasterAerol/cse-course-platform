@@ -36,6 +36,7 @@
     "vitest.average-publisher.config.ts",
     "vitest.number-problems-publisher.config.ts",
     "vitest.age-problems-publisher.config.ts",
+    "vitest.work-rate-publisher.config.ts",
     "vitest.safe-teaching-release.config.ts",
     "eslint.config.js",
     "tests",
