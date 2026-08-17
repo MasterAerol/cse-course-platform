@@ -11,6 +11,7 @@ import {
   countQaStudentState,
   findPublishedCseCourse,
   findQaStudentTargetByEmail,
+  repairQaStudentPublicId,
 } from '../../repositories/admin/qa-student.repository'
 import type { ConfigureQaStudentInput } from '../../schemas/admin/qa-student.schemas'
 import type { AuthenticatedPrincipal } from '../../types/auth'
@@ -36,6 +37,13 @@ export function isQaStudentEmail(email: string): boolean {
   return localPart !== undefined
     && /(^|[+._-])(qa|test)([+._-]|$)/u.test(localPart)
 }
+
+const legacyQaStudentPublicIdPattern = /^qa-student-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u
+
+function isLegacyQaStudentPublicId(publicId: string): boolean {
+  return legacyQaStudentPublicIdPattern.test(publicId)
+}
+
 
 function safeTarget(target: Awaited<ReturnType<typeof findQaStudentTargetByEmail>>) {
   return target === null
@@ -333,6 +341,19 @@ export async function configureAdminQaStudent(
 
   const before = await countQaStudentState(database, input.email)
   const beforeTarget = await findQaStudentTargetByEmail(database, input.email)
+  const shouldRepairPublicId = input.mode === 'unlocked'
+    && beforeTarget !== null
+    && isLegacyQaStudentPublicId(beforeTarget.public_id)
+    && beforeTarget.role === 'student'
+  const publicId = shouldRepairPublicId
+    ? crypto.randomUUID()
+    : beforeTarget?.public_id ?? crypto.randomUUID()
+  if (shouldRepairPublicId) {
+    const repaired = await repairQaStudentPublicId(database, beforeTarget.id, publicId)
+    if (repaired !== 1) {
+      throw new Error('The QA student public identifier could not be repaired.')
+    }
+  }
   const passwordHash = await hashPassword(input.password)
   const enrollmentCreated = beforeTarget?.enrollment_id === null
     || beforeTarget === null
@@ -369,7 +390,7 @@ export async function configureAdminQaStudent(
 
   await configureQaStudentRecords(database, {
     actorUserId: actor.internalUserId,
-    publicId: existingUser?.publicId ?? `qa-student-${crypto.randomUUID()}`,
+    publicId,
     email: input.email,
     passwordHash,
     mode: input.mode,

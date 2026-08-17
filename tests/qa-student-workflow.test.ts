@@ -6,6 +6,8 @@ import { hashPassword } from '../src/worker/auth/password'
 
 const password = 'ValidPassword123'
 const confirmation = 'configure-cse-qa-student'
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u
+
 
 function testClientAddress(): string {
   return `2001:db8::${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`
@@ -13,7 +15,7 @@ function testClientAddress(): string {
 
 interface QaConfigureResponse {
   data: {
-    target: { email: string; role: string; status: string }
+    target: { id: string; email: string; role: string; status: string }
     mode: 'unlocked' | 'fresh'
     accountCreated: boolean
     enrollment: { created: boolean; updated: boolean; unchanged: boolean }
@@ -670,5 +672,399 @@ describe('dedicated QA student workflow', () => {
     expect(inspectedBody.data.verification?.expectation).toBe('inspect')
     expect(inspectedBody.data.verification?.lockedActivities).toEqual([])
     expect(after).toEqual(before)
+  })
+
+  async function qaStudentRelationSnapshot(userId: number): Promise<{
+    enrollmentCount: number
+    progressCount: number
+    completedProgressCount: number
+    practiceAttemptCount: number
+    quizAttemptCount: number
+    subjectAssessmentAttemptCount: number
+    mockExamAttemptCount: number
+    recoveryAttemptCount: number
+    submittedRecoveryAttemptCount: number
+  }> {
+    const snapshot = await env.DB
+      .prepare(
+        `SELECT
+          (SELECT COUNT(*) FROM course_enrollments WHERE user_id = ?1) AS enrollmentCount,
+          (SELECT COUNT(*) FROM lesson_progress WHERE user_id = ?1) AS progressCount,
+          (SELECT COUNT(*) FROM lesson_progress WHERE user_id = ?1 AND status = 'completed') AS completedProgressCount,
+          (SELECT COUNT(*) FROM practice_attempts WHERE user_id = ?1) AS practiceAttemptCount,
+          (SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ?1) AS quizAttemptCount,
+          (SELECT COUNT(*) FROM subject_assessment_attempts WHERE user_id = ?1) AS subjectAssessmentAttemptCount,
+          (SELECT COUNT(*) FROM mock_exam_attempts WHERE user_id = ?1) AS mockExamAttemptCount,
+          (SELECT COUNT(*) FROM recovery_attempts WHERE user_id = ?1) AS recoveryAttemptCount,
+          (SELECT COUNT(*) FROM recovery_attempts WHERE user_id = ?1 AND status = 'submitted') AS submittedRecoveryAttemptCount
+        `,
+      )
+      .bind(userId)
+      .first<{
+        enrollmentCount: number
+        progressCount: number
+        completedProgressCount: number
+        practiceAttemptCount: number
+        quizAttemptCount: number
+        subjectAssessmentAttemptCount: number
+        mockExamAttemptCount: number
+        recoveryAttemptCount: number
+        submittedRecoveryAttemptCount: number
+      }>()
+
+    if (snapshot === null) {
+      throw new Error('QA student relation snapshot could not be loaded.')
+    }
+    return snapshot
+  }
+  it('creates a QA user with a UUID public identifier', async () => {
+    const cookie = await createAdmin(`qa-admin-${crypto.randomUUID()}@example.test`)
+    const email = `qa-student-${crypto.randomUUID()}@example.test`
+    const response = await configure(cookie, email, 'unlocked')
+    const body = await response.json<QaConfigureResponse>()
+
+    expect(response.status).toBe(200)
+    expect(body.data.target.id).toMatch(uuidPattern)
+  })
+
+  it('repairs test@pasawise.com legacy publicId without changing ownership and remains idempotent', async () => {
+    const cookie = await createAdmin(`qa-admin-${crypto.randomUUID()}@example.test`)
+    const email = 'test@pasawise.com'
+    const legacyPublicId = `qa-student-${crypto.randomUUID()}`
+    const passwordHash = await hashPassword(password)
+    const unrelatedUsersBefore = (await env.DB
+      .prepare(
+        `SELECT id, public_id, role, status FROM users WHERE email <> ?1 ORDER BY id`,
+      )
+      .bind(email)
+      .all<{ id: number; public_id: string; role: string; status: string }>()).results
+
+    const existing = await env.DB
+      .prepare('SELECT id FROM users WHERE email = ?1')
+      .bind(email)
+      .first<{ id: number }>()
+
+    if (existing === null) {
+      const inserted = await env.DB
+        .prepare(`
+          INSERT INTO users (
+            public_id, email, password_hash, first_name, last_name, role, status
+          ) VALUES (?1, ?2, ?3, 'CSE', 'QA Student', 'student', 'active')
+        `)
+        .bind(legacyPublicId, email, passwordHash)
+        .run()
+      const userId = Number(inserted.meta.last_row_id)
+      await env.DB.prepare(`
+        INSERT INTO course_enrollments (
+          user_id, course_id, enrollment_status, enrollment_source
+        )
+        SELECT ?1, (SELECT id FROM courses WHERE slug = 'cse-professional'), 'active', 'admin'
+        WHERE (SELECT id FROM courses WHERE slug = 'cse-professional') IS NOT NULL
+        ON CONFLICT(user_id, course_id) DO UPDATE SET
+          enrollment_status = 'active',
+          access_starts_at = CURRENT_TIMESTAMP,
+          access_expires_at = NULL,
+          completed_at = NULL
+      `)
+        .bind(userId)
+        .run()
+    } else {
+      await env.DB
+        .prepare("UPDATE users SET public_id = ?1, password_hash = ?2, role = 'student', status = 'active' WHERE id = ?3")
+        .bind(legacyPublicId, passwordHash, existing.id)
+        .run()
+      await env.DB
+        .prepare('DELETE FROM lesson_progress WHERE user_id = ?1')
+        .bind(existing.id)
+        .run()
+      await env.DB
+        .prepare('DELETE FROM practice_attempts WHERE user_id = ?1')
+        .bind(existing.id)
+        .run()
+      await env.DB
+        .prepare('DELETE FROM quiz_attempts WHERE user_id = ?1')
+        .bind(existing.id)
+        .run()
+      await env.DB
+        .prepare('DELETE FROM subject_assessment_attempts WHERE user_id = ?1')
+        .bind(existing.id)
+        .run()
+      await env.DB
+        .prepare('DELETE FROM mock_exam_attempts WHERE user_id = ?1')
+        .bind(existing.id)
+        .run()
+      await env.DB
+        .prepare('DELETE FROM recovery_attempts WHERE user_id = ?1')
+        .bind(existing.id)
+        .run()
+      await env.DB
+        .prepare(`
+          INSERT INTO course_enrollments (
+            user_id, course_id, enrollment_status, enrollment_source
+          )
+          SELECT ?1, (SELECT id FROM courses WHERE slug = 'cse-professional'), 'active', 'admin'
+          WHERE (SELECT id FROM courses WHERE slug = 'cse-professional') IS NOT NULL
+          ON CONFLICT(user_id, course_id) DO UPDATE SET
+            enrollment_status = 'active',
+            access_starts_at = CURRENT_TIMESTAMP,
+            access_expires_at = NULL,
+            completed_at = NULL
+        `)
+        .bind(existing.id)
+        .run()
+    }
+
+    const target = await env.DB
+      .prepare('SELECT id FROM users WHERE email = ?1')
+      .bind(email)
+      .first<{ id: number }>()
+    if (target === null) throw new Error('Legacy QA student target is missing.')
+    const userId = target.id
+
+    const firstLesson = await env.DB
+      .prepare(
+        `SELECT lessons.id
+         FROM lessons
+         INNER JOIN topics ON topics.id = lessons.topic_id
+         INNER JOIN subjects ON topics.subject_id = subjects.id
+         WHERE subjects.course_id = (SELECT id FROM courses WHERE slug = 'cse-professional')
+           AND subjects.status = 'published' AND topics.status = 'published'
+           AND lessons.status = 'published' AND lessons.is_preview = 0
+         ORDER BY subjects.position, topics.position, lessons.position
+         LIMIT 1`,
+      )
+      .first<{ id: number }>()
+    if (firstLesson === null) throw new Error('Lesson fixture is missing.')
+
+    await env.DB
+      .prepare(`
+        INSERT INTO lesson_progress (
+          user_id, lesson_id, status, started_at, completed_at, last_viewed_at, progress_percent
+        ) VALUES (?1, ?2, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 100)
+      `)
+      .bind(userId, firstLesson.id)
+      .run()
+
+    const firstPracticeSet = await env.DB
+      .prepare('SELECT id FROM practice_sets LIMIT 1')
+      .first<{ id: number }>()
+    if (firstPracticeSet !== null) {
+      await env.DB.prepare(
+        `INSERT INTO practice_attempts (
+          public_id, practice_set_id, user_id, attempt_number, total_points
+        ) VALUES (?1, ?2, ?3, 1, 1)`,
+      ).bind(`practice-${crypto.randomUUID()}`, firstPracticeSet.id, userId).run()
+    }
+
+    const firstQuiz = await env.DB
+      .prepare('SELECT id FROM quizzes LIMIT 1')
+      .first<{ id: number }>()
+    if (firstQuiz !== null) {
+      await env.DB.prepare(
+        `INSERT INTO quiz_attempts (
+          public_id, quiz_id, user_id, attempt_number, total_points
+        ) VALUES (?1, ?2, ?3, 1, 1)`,
+      ).bind(`quiz-${crypto.randomUUID()}`, firstQuiz.id, userId).run()
+    }
+
+    const firstSubjectAssessment = await env.DB
+      .prepare("SELECT id FROM subject_assessments WHERE slug = 'numerical-ability-subject-assessment'")
+      .first<{ id: number }>()
+    if (firstSubjectAssessment !== null) {
+      const assessmentBlueprint = await env.DB
+        .prepare(
+          `SELECT id AS blueprint_id
+           FROM subject_assessment_blueprints
+           WHERE assessment_id = ?1
+           LIMIT 1`,
+        )
+        .bind(firstSubjectAssessment.id)
+        .first<{ blueprint_id: number }>()
+      if (assessmentBlueprint !== null) {
+        await env.DB.prepare(
+          `INSERT INTO subject_assessment_attempts (
+            public_id, assessment_id, blueprint_id, user_id, attempt_seed,
+            attempt_number, total_points
+          ) VALUES (?1, ?2, ?3, ?4, ?5, 1, 1)`,
+        ).bind(
+          `assessment-${crypto.randomUUID()}`,
+          firstSubjectAssessment.id,
+          assessmentBlueprint.blueprint_id,
+          userId,
+          crypto.randomUUID(),
+        ).run()
+      }
+    }
+
+    const mockExam = await env.DB
+      .prepare("SELECT id FROM mock_examinations WHERE slug = 'full-cse-professional-mock-examination'")
+      .first<{ id: number }>()
+    if (mockExam !== null) {
+      const mockBlueprint = await env.DB
+        .prepare(
+          `SELECT id AS blueprint_id
+           FROM mock_exam_blueprints
+           WHERE mock_exam_id = ?1
+           LIMIT 1`,
+        )
+        .bind(mockExam.id)
+        .first<{ blueprint_id: number }>()
+      if (mockBlueprint !== null) {
+        await env.DB.prepare(
+          `INSERT INTO mock_exam_attempts (
+            public_id, mock_exam_id, blueprint_id, user_id, attempt_seed,
+            attempt_number, mode, total_points
+          ) VALUES (?1, ?2, ?3, ?4, ?5, 1, 'untimed', 150)`,
+        ).bind(
+          `mock-attempt-${crypto.randomUUID()}`,
+          mockExam.id,
+          mockBlueprint.blueprint_id,
+          userId,
+          crypto.randomUUID(),
+        ).run()
+      }
+    }
+
+    await env.DB.prepare(
+      `INSERT INTO recovery_attempts (
+        public_id, user_id, course_id, attempt_seed, idempotency_key,
+        taxonomy_version, weakness_formula_version, question_count
+      ) VALUES (?1, ?2, (SELECT id FROM courses WHERE slug = 'cse-professional'), ?3, ?4, 1, 1, 1)`,
+    ).bind(
+      `recovery-${crypto.randomUUID()}`,
+      userId,
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+    ).run()
+
+    const before = await qaStudentRelationSnapshot(userId)
+    const beforeProgressRow = await env.DB
+      .prepare('SELECT id FROM lesson_progress WHERE user_id = ?1 AND lesson_id = ?2')
+      .bind(userId, firstLesson.id)
+      .first<{ id: number }>()
+
+    if (beforeProgressRow === null) throw new Error('Legacy baseline lesson progress is missing.')
+
+    const firstResponse = await configure(cookie, email, 'unlocked')
+    const repairedBody = await firstResponse.json<QaConfigureResponse>()
+    const repairedId = repairedBody.data.target.id
+
+    expect(firstResponse.status).toBe(200)
+    expect(repairedId).toMatch(uuidPattern)
+    expect(repairedId).not.toMatch(/^qa-student-/u)
+    expect(repairedBody.data.target.email).toBe(email)
+
+    const configuredUser = await env.DB
+      .prepare('SELECT id, public_id, role FROM users WHERE id = ?1')
+      .bind(userId)
+      .first<{ id: number; public_id: string; role: string }>()
+
+    expect(configuredUser?.id).toBe(userId)
+    expect(configuredUser?.role).toBe('student')
+    expect(configuredUser?.public_id).toBe(repairedId)
+    expect(configuredUser?.public_id).not.toBe(legacyPublicId)
+
+    const preservedProgress = await env.DB
+      .prepare(
+        'SELECT status, progress_percent FROM lesson_progress WHERE id = ?1',
+      )
+      .bind(beforeProgressRow.id)
+      .first<{ status: string; progress_percent: number }>()
+    expect(preservedProgress?.status).toBe('completed')
+    expect(preservedProgress?.progress_percent).toBe(100)
+
+    const loginAfterRepair = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': testClientAddress(),
+      },
+      body: JSON.stringify({ email, password }),
+    }, env)
+    expect(loginAfterRepair.status).toBe(200)
+
+    const after = await qaStudentRelationSnapshot(userId)
+    expect(after.enrollmentCount).toBe(before.enrollmentCount)
+    expect(after.progressCount).toBeGreaterThanOrEqual(before.progressCount)
+    expect(after.completedProgressCount).toBeGreaterThanOrEqual(
+      before.completedProgressCount,
+    )
+    expect(after.practiceAttemptCount).toBe(before.practiceAttemptCount)
+    expect(after.quizAttemptCount).toBe(before.quizAttemptCount)
+    expect(after.subjectAssessmentAttemptCount).toBe(before.subjectAssessmentAttemptCount)
+    expect(after.mockExamAttemptCount).toBe(before.mockExamAttemptCount)
+    expect(after.submittedRecoveryAttemptCount).toBe(before.submittedRecoveryAttemptCount)
+    expect(after.recoveryAttemptCount).toBe(before.recoveryAttemptCount)
+
+    const unrelatedUsersAfter = (await env.DB
+      .prepare(
+        `SELECT id, public_id, role, status FROM users WHERE email <> ?1 ORDER BY id`,
+      )
+      .bind(email)
+      .all<{ id: number; public_id: string; role: string; status: string }>()).results
+    expect(unrelatedUsersAfter).toEqual(unrelatedUsersBefore)
+
+    const secondResponse = await configure(cookie, email, 'unlocked')
+    const secondBody = await secondResponse.json<QaConfigureResponse>()
+    const afterSecond = await qaStudentRelationSnapshot(userId)
+
+    expect(secondResponse.status).toBe(200)
+    expect(secondBody.data.target.id).toBe(repairedId)
+    expect(afterSecond.enrollmentCount).toBe(after.enrollmentCount)
+    expect(afterSecond.progressCount).toBe(after.progressCount)
+    expect(afterSecond.completedProgressCount).toBe(after.completedProgressCount)
+    expect(afterSecond.practiceAttemptCount).toBe(after.practiceAttemptCount)
+    expect(afterSecond.quizAttemptCount).toBe(after.quizAttemptCount)
+    expect(afterSecond.subjectAssessmentAttemptCount).toBe(after.subjectAssessmentAttemptCount)
+    expect(afterSecond.mockExamAttemptCount).toBe(after.mockExamAttemptCount)
+    expect(afterSecond.submittedRecoveryAttemptCount).toBe(after.submittedRecoveryAttemptCount)
+  })
+
+  it('rejects wrong-password and unknown-account logins for QA student credentials', async () => {
+    const cookie = await createAdmin(`qa-admin-${crypto.randomUUID()}@example.test`)
+    const email = `qa-login-${crypto.randomUUID()}@example.test`
+
+    expect((await configure(cookie, email, 'unlocked')).status).toBe(200)
+
+    const wrongPassword = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': testClientAddress(),
+      },
+      body: JSON.stringify({ email, password: 'WrongPassword123' }),
+    }, env)
+    const unknownAccount = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': testClientAddress(),
+      },
+      body: JSON.stringify({ email: `missing-${crypto.randomUUID()}@example.test`, password }),
+    }, env)
+
+    expect(wrongPassword.status).toBe(401)
+    expect(unknownAccount.status).toBe(401)
+  })
+
+  it('keeps QA email normalization behavior after provisioning', async () => {
+    const cookie = await createAdmin(`qa-admin-${crypto.randomUUID()}@example.test`)
+    const rawEmail = `UPPER-TEST-${crypto.randomUUID()}@Example.Test`
+    const normalized = rawEmail.toLowerCase()
+    const configured = await configure(cookie, rawEmail, 'unlocked')
+    const body = await configured.json<QaConfigureResponse>()
+
+    const login = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': testClientAddress(),
+      },
+      body: JSON.stringify({ email: rawEmail, password }),
+    }, env)
+
+    expect(configured.status).toBe(200)
+    expect(body.data.target.email).toBe(normalized)
+    expect(login.status).toBe(200)
   })
 })

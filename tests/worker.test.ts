@@ -172,6 +172,7 @@ interface ApiErrorBody {
 
 interface StoredAuthenticationRow {
   password_hash: string
+  public_id: string
   token_hash: string
   expires_at: string
   revoked_at: string | null
@@ -621,6 +622,8 @@ interface PracticeResultBody {
 }
 
 const validPassword = 'SecurePassword123'
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u
+
 
 const cseProfessionalLessonSlugs = [
   'introduction-to-percentages',
@@ -6323,6 +6326,7 @@ describe('Authentication API', () => {
     const stored = await env.DB.prepare(
       `SELECT
         users.password_hash,
+        users.public_id,
         user_sessions.token_hash,
         user_sessions.expires_at,
         user_sessions.revoked_at,
@@ -6341,6 +6345,7 @@ describe('Authentication API', () => {
     expect(responseText).not.toContain('token')
     expect(responseText).toContain('juandelacruz@example.com')
     expect(stored).not.toBeNull()
+    expect(stored?.public_id).toMatch(uuidPattern)
     expect(stored?.password_hash).toMatch(
       /^pbkdf2-sha256\$v1\$100000\$/u,
     )
@@ -6359,10 +6364,10 @@ describe('Authentication API', () => {
     const email = 'worker-limit-login@example.com'
     const { response: registrationResponse } = await register(email)
     const stored = await env.DB.prepare(
-      'SELECT password_hash FROM users WHERE email = ?1',
+      'SELECT public_id, password_hash FROM users WHERE email = ?1',
     )
       .bind(email)
-      .first<{ password_hash: string }>()
+      .first<{ public_id: string; password_hash: string }>()
     const loginResponse = await app.request(
       '/api/auth/login',
       jsonRequest({
@@ -6373,6 +6378,7 @@ describe('Authentication API', () => {
     )
 
     expect(registrationResponse.status).toBe(201)
+    expect(stored?.public_id).toMatch(uuidPattern)
     expect(stored?.password_hash).toMatch(
       /^pbkdf2-sha256\$v1\$100000\$/u,
     )

@@ -38,6 +38,22 @@ export interface ConfigureQaStudentRecordInput {
   metadataJson: string
 }
 
+export async function repairQaStudentPublicId(
+  database: D1Database,
+  userId: number,
+  publicId: string,
+): Promise<number> {
+  const result = await database
+    .prepare(
+      `UPDATE users
+      SET public_id = ?1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?2 AND role = 'student'`,
+    )
+    .bind(publicId, userId)
+    .run()
+  return result.meta.changes
+}
+
 const targetSelect = `SELECT
   users.id,
   users.public_id,
