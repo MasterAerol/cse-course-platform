@@ -29,7 +29,10 @@ function run(command, args, options = {}) {
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with code ${result.status}.`)
   return { stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
 }
-const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const npmExecPath = process.env.npm_execpath
+if (process.platform === 'win32' && !npmExecPath) throw new Error('npm_execpath is required for Safe Release on Windows.')
+const NPM_COMMAND = process.platform === 'win32' ? process.execPath : 'npm'
+const NPM_PREFIX = process.platform === 'win32' ? [npmExecPath] : []
 const git = (args, options) => run('git', args, options)
 function fail(reason, detail = 'No commit/push/deploy performed.') { console.error(`\nSAFE RELEASE — BLOCKED\n\nReason:\n${reason}\n\n${detail}`); process.exitCode = 1 }
 
@@ -59,7 +62,7 @@ function validateRepository() {
 }
 
 function runValidation() {
-  const checks = [['Typecheck', NPM_COMMAND, ['run', 'typecheck']], ['Lint', NPM_COMMAND, ['run', 'lint']], ['Tests', NPM_COMMAND, ['test', '--', '--testTimeout=30000']], ['Build', NPM_COMMAND, ['run', 'build']], ['Diff check', 'git', ['diff', '--check']]], passed = []
+  const checks = [['Typecheck', NPM_COMMAND, [...NPM_PREFIX, 'run', 'typecheck']], ['Lint', NPM_COMMAND, [...NPM_PREFIX, 'run', 'lint']], ['Tests', NPM_COMMAND, [...NPM_PREFIX, 'test', '--', '--testTimeout=30000']], ['Build', NPM_COMMAND, [...NPM_PREFIX, 'run', 'build']], ['Diff check', 'git', ['diff', '--check']]], passed = []
   for (const [label, command, args] of checks) { console.log(`\nVALIDATION — ${label}`); run(command, args); passed.push(label) }
   return passed
 }
@@ -107,7 +110,7 @@ async function main() {
   try { console.log('\nGIT — PUSH'); git(['push', 'origin', 'main']) } catch { fail('Git push unavailable in this environment.', `Local commit preserved: ${commit}\nDeployment not performed.`); return }
   try { console.log('\nCLOUDFLARE — AUTHENTICATION'); run(process.execPath, [path.join(repository.root, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), 'whoami'], { env: options.codex ? { CI: 'true' } : {} }) } catch { fail('Cloudflare authentication unavailable.', `Push succeeded for ${commit}; deployment not performed.`); return }
   let deployOutput
-  try { console.log('\nCLOUDFLARE — DEPLOY'); deployOutput = run(NPM_COMMAND, ['run', 'deploy']).stdout } catch { fail('Cloudflare Worker deployment failed.', `Push succeeded for ${commit}; deployment did not complete.`); return }
+  try { console.log('\nCLOUDFLARE — DEPLOY'); deployOutput = run(NPM_COMMAND, [...NPM_PREFIX, 'run', 'deploy']).stdout } catch { fail('Cloudflare Worker deployment failed.', `Push succeeded for ${commit}; deployment did not complete.`); return }
   try { console.log('\nPOST-DEPLOY — HEALTH'); const response = await fetch(DEFAULT_HEALTH_URL, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15_000) }); validateHealthResponse(response.status, await response.text()) } catch (error) { console.error(`\nDEPLOYED BUT HEALTH CHECK FAILED\n${error.message}\nNo automatic rollback was attempted.`); process.exitCode = 1; return }
   const version = deployOutput.match(/(?:Version ID|Current Version ID):\s*([\w-]+)/iu)?.[1] ?? 'reported by Wrangler output above'
   console.log(`\nSAFE RELEASE — APPLICATION DEPLOYED\nValidation: ${passed.join(', ')}\nGit: ${commit}; pushed main → origin/main\nWorker: deployed; version ${version}\nHealth: ${DEFAULT_HEALTH_URL} → 200, status ok\nMigration: None\nPublisher: ${risk.publisherRequired ? 'NOT PUBLISHED — separate validate/review/confirmation workflow required' : 'None'}\nLive: ${DEFAULT_LIVE_URL}`)
