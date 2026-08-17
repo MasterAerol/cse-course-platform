@@ -65,6 +65,9 @@ export const fractionsTeachingSystemReconcileSchema =
 export const decimalsTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
 
+export const ratioProportionTeachingSystemReconcileSchema =
+  percentageTeachingSystemReconcileSchema
+
 export const generatedDifficultyConfigSchema = z
   .object({
     easy: z.coerce.number().int().min(0).max(20).default(0),
@@ -206,6 +209,7 @@ export type LessonBlockUpdateInput = z.infer<typeof lessonBlockUpdateSchema>
 export type PercentageTeachingSystemReconcileInput = z.infer<typeof percentageTeachingSystemReconcileSchema>
 export type FractionsTeachingSystemReconcileInput = z.infer<typeof fractionsTeachingSystemReconcileSchema>
 export type DecimalsTeachingSystemReconcileInput = z.infer<typeof decimalsTeachingSystemReconcileSchema>
+export type RatioProportionTeachingSystemReconcileInput = z.infer<typeof ratioProportionTeachingSystemReconcileSchema>
 export type PracticeSetInput = z.infer<typeof practiceSetInputSchema>
 export type FixedQuestionInput = z.infer<typeof fixedQuestionInputSchema>
 export type QuizInput = z.infer<typeof quizInputSchema>

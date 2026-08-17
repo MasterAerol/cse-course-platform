@@ -2,7 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { ratioScalingVisual } from './lib/visual-teaching-content.mjs'
+import { ratioProportionLessonSpecs } from './lib/ratio-proportion-teaching-system-content.mjs'
 
 const confirmation = 'create-validate-publish-ratio-proportion'
 const csrfHeaderValue = 'same-origin-admin-mutation'
@@ -19,207 +19,18 @@ const generatedPracticeByLessonSlug = {
   'ratio-and-proportion-word-problems': 'ratio-word-problems',
 }
 
-const lessonSpecs = [
-  ['Introduction to Ratios', 'introduction-to-ratios', 'reading', 9],
-  ['Writing and Simplifying Ratios', 'writing-and-simplifying-ratios', 'practice', 11],
-  ['Equivalent Ratios', 'equivalent-ratios', 'practice', 10],
-  ['Comparing Ratios', 'comparing-ratios', 'practice', 11],
-  ['Introduction to Proportions', 'introduction-to-proportions', 'reading', 9],
-  ['Solving Proportions', 'solving-proportions', 'practice', 11],
-  ['Direct Proportion', 'direct-proportion', 'practice', 12],
-  ['Inverse Proportion', 'inverse-proportion', 'practice', 12],
-  ['Sharing an Amount in a Ratio', 'sharing-an-amount-in-a-ratio', 'practice', 12],
-  ['Ratio and Proportion Word Problems', 'ratio-and-proportion-word-problems', 'practice', 13],
-  ['Mixed Ratio and Proportion Applications', 'mixed-ratio-and-proportion-applications', 'practice', 14],
-  ['Ratio and Proportion Topic Quiz', 'ratio-and-proportion-topic-quiz', 'quiz', 18],
-].map(([title, slug, lessonType, minutes], index) => ({
+const lessonSpecs = ratioProportionLessonSpecs.map(({ title, slug, lessonType, estimatedMinutes }, index) => ({
   title,
   slug,
   lessonType,
-  minutes,
+  minutes: estimatedMinutes,
   position: index + 1,
 }))
 
-function parseArgs() {
-  const args = new Map()
-
-  for (let index = 2; index < process.argv.length; index += 1) {
-    const key = process.argv[index]
-    const value = process.argv[index + 1]
-
-    if (key?.startsWith('--') !== true || value === undefined) {
-      throw new Error(`Invalid argument near ${key ?? '(end)'}.`)
-    }
-
-    args.set(key.slice(2), value)
-    index += 1
-  }
-
-  return args
-}
-
-const heading = (text, level = 2) => ({
-  blockType: 'heading',
-  content: { level, text },
-})
-const paragraph = (text) => ({ blockType: 'paragraph', content: { text } })
-const formula = (expression, description) => ({
-  blockType: 'formula',
-  content: { expression, description },
-})
-const callout = (title, text, variant = 'info') => ({
-  blockType: 'callout',
-  content: { title, text, variant },
-})
-const example = (title, problem, steps, answer, visual) => ({
-  blockType: 'example',
-  content: { title, problem, steps, answer, ...(visual === undefined ? {} : { visual }) },
-})
-const summary = (items) => ({ blockType: 'summary', content: { items } })
-
-function practiceBlocks(title, concept, procedure, examples, mistakes, transition) {
-  return [
-    heading(title),
-    paragraph(concept),
-    formula(procedure.expression, procedure.description),
-    example(...examples[0]),
-    example(...examples[1]),
-    callout('Common mistakes', mistakes, 'warning'),
-    summary([procedure.description, transition]),
-    paragraph(transition),
-  ]
-}
-
 function lessonBlocks(slug) {
-  const blocks = {
-    'introduction-to-ratios': [
-      heading('What a ratio means'),
-      paragraph('A ratio compares two quantities. It can compare part to part, part to whole, or whole to part.'),
-      formula('a to b = a:b = a/b', 'These three forms express the same ordered comparison.'),
-      example('Pens', 'There are 2 red pens and 3 blue pens.', ['Name red pens first because the request says red to blue.', 'Write 2:3.'], 'The ratio of red pens to blue pens is 2:3.'),
-      example('Attendance', 'Five of eight employees are present.', ['Present is the part: 5.', 'Total is the whole: 8.'], 'Present to total is 5:8.'),
-      example('Budget', '\u20b1300 is spent and \u20b1700 is saved.', ['Write spent to saved as 300:700.', 'Divide both terms by 100.'], 'Spent to saved is 3:7.'),
-      callout('Use compatible units', 'Convert quantities to the same unit before writing a ratio. For example, compare centimeters with centimeters.', 'warning'),
-      callout('Order matters', '2:3 is not the same comparison as 3:2. Read the requested order before writing the terms.'),
-      callout('Common mistakes', 'Avoid reversing the order, comparing incompatible units, treating a ratio as subtraction, or leaving it unsimplified when simplification is requested.', 'warning'),
-      summary(['A ratio is an ordered comparison.', 'Ratios may compare parts and wholes.', 'Use compatible units.', 'Simplify when requested.']),
-    ],
-    'writing-and-simplifying-ratios': practiceBlocks(
-      'Writing and Simplifying Ratios',
-      'Write quantities in the requested order, convert compatible units, then divide both terms by their greatest common divisor.',
-      { expression: 'a:b \u2192 (a \u00f7 GCD):(b \u00f7 GCD)', description: 'Divide both terms by the same greatest common divisor.' },
-      [
-        ['Simplify 12:18', 'Find the simplest form.', ['GCD(12, 18) = 6.', '12 \u00f7 6 = 2 and 18 \u00f7 6 = 3.'], '12:18 = 2:3.'],
-        ['Convert units first', 'Simplify 20 cm : 1 m.', ['1 m = 100 cm.', '20:100 simplifies by 20.'], '20 cm : 1 m = 1:5.'],
-      ],
-      'Do not divide only one term, subtract a common factor, stop too early, or reverse the requested order. Simplifying preserves the relationship.',
-      'Now practice writing and simplifying ratios with exact integer arithmetic.',
-    ),
-    'equivalent-ratios': practiceBlocks(
-      'Equivalent Ratios',
-      'Equivalent ratios describe the same relationship. Multiply or divide both terms by the same nonzero factor.',
-      { expression: 'a:b = (a \u00d7 k):(b \u00d7 k)', description: 'Apply the same scale factor to both terms.' },
-      [
-        ['Scale both terms', 'Find a ratio equivalent to 3:5 using a factor of 4.', ['3 \u00d7 4 = 12.', '5 \u00d7 4 = 20.'], '3:5 = 12:20.'],
-        ['Find a missing term', '4:7 = 20:x', ['4 was multiplied by 5.', 'Multiply 7 by 5.'], 'x = 35.'],
-      ],
-      'Multiplying one term only or adding the scale factor changes the relationship.',
-      'Practice identifying and completing equivalent ratios.',
-    ),
-    'comparing-ratios': practiceBlocks(
-      'Comparing Ratios',
-      'Compare ratios as fractions, decimals, or exact cross-products. Do not compare only their first terms or group totals.',
-      { expression: 'a:b ? c:d \u2192 compare a \u00d7 d with c \u00d7 b', description: 'Cross-products compare ratios without rounding.' },
-      [
-        ['Compare 3:5 and 4:7', 'Which ratio is greater?', ['3 \u00d7 7 = 21.', '4 \u00d7 5 = 20.'], '3:5 is greater.'],
-        ['Compare attendance', 'Group A has 6 present out of 8; Group B has 8 present out of 12.', ['6/8 = 3/4.', '8/12 = 2/3.'], 'Group A has the larger present-to-total ratio.'],
-      ],
-      'A larger numerator or larger total does not automatically mean a larger ratio. Keep the requested order.',
-      'Practice exact ratio comparisons.',
-    ),
-    'introduction-to-proportions': [
-      heading('What a proportion means'),
-      paragraph('A ratio is one comparison. A proportion states that two ratios are equal.'),
-      formula('a/b = c/d \u2194 a \u00d7 d = b \u00d7 c', 'Equal ratios have equal cross-products.'),
-      example('Verify a proportion', 'Is 2/3 = 4/6?', ['2 \u00d7 6 = 12.', '3 \u00d7 4 = 12.'], 'Yes. The cross-products are equal.'),
-      example('Reject a false proportion', 'Is 3/5 = 8/10?', ['3 \u00d7 10 = 30.', '5 \u00d7 8 = 40.'], 'No. The cross-products differ.'),
-      callout('Ratio versus proportion', '3:5 is a ratio. 3:5 = 6:10 is a proportion because it equates two ratios.'),
-      callout('Common mistake', 'Do not add across ratios. Use a common scale factor or compare cross-products.', 'warning'),
-      summary(['A proportion equates two ratios.', 'Equal cross-products verify a proportion.', 'Keep numerator and denominator positions consistent.']),
-    ],
-    'solving-proportions': practiceBlocks(
-      'Solving Proportions',
-      'Use cross multiplication to form a one-step equation, then divide by the coefficient of the unknown.',
-      { expression: 'a/b = c/x \u2192 ax = bc \u2192 x = bc/a', description: 'Cross multiply, then isolate the unknown.' },
-      [
-        ['Solve 3/5 = x/20', 'Find x.', ['3 \u00d7 20 = 5x.', '60 \u00f7 5 = 12.'], 'x = 12.'],
-        ['Solve 7:9 = 21:x', 'Find x.', ['7x = 9 \u00d7 21.', '189 \u00f7 7 = 27.'], 'x = 27.'],
-      ],
-      'Do not cross multiply the wrong terms, divide by the wrong coefficient, add across, or reverse the final ratio.',
-      'Practice solving proportions with clean integer or controlled decimal results.',
-    ),
-    'direct-proportion': practiceBlocks(
-      'Direct Proportion',
-      'Two quantities are directly proportional when they increase or decrease by the same scale factor. The unit rate stays constant.',
-      { expression: 'y = kx or y\u2081/x\u2081 = y\u2082/x\u2082', description: 'Use a constant unit rate and state the unchanged conditions.' },
-      [
-        ['Notebook cost', 'Four notebooks cost \u20b1120. What do 10 cost at the same price?', ['Unit price: \u20b1120 \u00f7 4 = \u20b130.', '10 \u00d7 \u20b130 = \u20b1300.'], '\u20b1300.'],
-        ['Production', 'Six workers produce 180 units in the same time. What would 10 equally productive workers produce?', ['180 \u00f7 6 = 30 units per worker.', '10 \u00d7 30 = 300.'], '300 units.'],
-      ],
-      'Do not use inverse proportion when the unit rate is constant, and do not add quantities instead of scaling.',
-      'Practice direct relationships with explicit constant conditions.',
-    ),
-    'inverse-proportion': practiceBlocks(
-      'Inverse Proportion',
-      'Two quantities are inversely proportional when one increases while the other decreases and their product stays constant.',
-      { expression: 'x\u2081y\u2081 = x\u2082y\u2082', description: 'Use a constant product only when the total work or distance is fixed.' },
-      [
-        ['Workers and days', 'Six workers finish a task in 10 days. How long for 12 equally productive workers?', ['6 \u00d7 10 = 60 worker-days.', '60 \u00f7 12 = 5.'], '5 days.'],
-        ['Speed and time', 'A fixed trip takes 4 hours at 60 km/h. How long at 80 km/h?', ['Distance is fixed: 60 \u00d7 4 = 240 km.', '240 \u00f7 80 = 3.'], '3 hours.'],
-      ],
-      'Do not make both quantities move in the same direction. Inverse proportion requires an explicit fixed total and constant productivity or speed conditions.',
-      'Practice inverse relationships with realistic assumptions.',
-    ),
-    'sharing-an-amount-in-a-ratio': practiceBlocks(
-      'Sharing an Amount in a Ratio',
-      'Add the ratio parts, find the value of one part, then multiply by each ratio term.',
-      { expression: 'one part = total/(a + b)', description: 'The denominator is the sum of all ratio parts.' },
-      [
-        ['Share \u20b112,000 in 2:3', 'Find both shares.', ['2 + 3 = 5 parts.', '\u20b112,000 \u00f7 5 = \u20b12,400 per part.'], 'The shares are \u20b14,800 and \u20b17,200.'],
-        ['Budget sharing', 'Share \u20b19,000 in 1:2.', ['1 + 2 = 3 parts.', '\u20b19,000 \u00f7 3 = \u20b13,000 per part.'], 'The shares are \u20b13,000 and \u20b16,000.'],
-      ],
-      'Do not divide by only one ratio term, treat ratio terms as percentages, or reverse the requested shares.',
-      'Practice finding one share, both shares, and the larger share.',
-    ),
-    'ratio-and-proportion-word-problems': practiceBlocks(
-      'Ratio and Proportion Word Problems',
-      'Translate the context into an ordered ratio, identify the known scale factor, and keep units and assumptions consistent.',
-      { expression: 'known quantity/known ratio part = value of one part', description: 'Find one ratio part, then scale to the requested group.' },
-      [
-        ['Employees', 'Male to female employees is 3:5. There are 24 male employees.', ['One part is 24 \u00f7 3 = 8.', 'Female employees: 5 \u00d7 8 = 40.'], 'There are 40 female employees.', ratioScalingVisual],
-        ['Concrete mix', 'Cement to sand is 1:3. Eight bags of cement are used.', ['One ratio part equals 8 bags.', 'Sand: 3 \u00d7 8 = 24.'], 'Use 24 bags of sand in this simplified educational example.'],
-      ],
-      'Avoid reversing the ratio, using a difference as a scale factor, or mixing units. Treat construction examples as simplified mathematics, not engineering specifications.',
-      'Practice ratios in staffing, inventory, recipes, budgets, maps, and groups.',
-    ),
-    'mixed-ratio-and-proportion-applications': [
-      heading('Mixed Ratio and Proportion Applications'),
-      paragraph('This fixed practice combines writing, simplifying, comparing, proportions, direct and inverse relationships, and ratio sharing.'),
-      formula('classify \u2192 model \u2192 calculate \u2192 check', 'First decide whether the problem is a ratio, direct proportion, or inverse proportion.'),
-      example('Classification', 'More identical items cost more at a fixed unit price.', ['Both quantities move in the same direction.', 'The unit price stays constant.'], 'This is direct proportion.'),
-      example('Classification', 'More equally productive workers need fewer days for fixed work.', ['The quantities move in opposite directions.', 'Worker-days stay constant.'], 'This is inverse proportion.'),
-      callout('Check your model', 'A correct computation using the wrong relationship still gives a wrong answer.', 'warning'),
-      summary(['Preserve ratio order.', 'Use cross-products for proportions.', 'Check whether the relationship is direct or inverse.']),
-    ],
-    'ratio-and-proportion-topic-quiz': [
-      heading('Ratio and Proportion Topic Quiz'),
-      paragraph('This 15-question quiz checks ratio meaning, unit conversion, simplification, proportions, direct and inverse relationships, sharing, and applications.'),
-      callout('Before starting', 'Read the requested order and units, classify the relationship, and estimate whether your result is reasonable.'),
-      summary(['Use exact arithmetic.', 'State constant conditions.', 'Check cross-products and units.']),
-    ],
-  }
-
-  return blocks[slug]
+  const canonical = ratioProportionLessonSpecs.find((lesson) => lesson.slug === slug)
+  if (canonical === undefined) throw new Error(`No canonical Ratio and Proportion content for ${slug}.`)
+  return canonical.blocks
 }
 
 function fixedQuestion(prompt, correct, distractors, explanation, position) {

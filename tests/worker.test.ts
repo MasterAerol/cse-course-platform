@@ -7,6 +7,7 @@ import { percentageExampleContent } from '../scripts/lib/visual-teaching-content
 import { percentageLessonSpecs } from '../scripts/lib/percentage-teaching-system-content.mjs'
 import { fractionsLessonSpecs } from '../scripts/lib/fractions-teaching-system-content.mjs'
 import { decimalsLessonSpecs } from '../scripts/lib/decimals-teaching-system-content.mjs'
+import { ratioProportionLessonSpecs } from '../scripts/lib/ratio-proportion-teaching-system-content.mjs'
 import { app } from '../src/worker'
 import {
   hashPassword,
@@ -8381,6 +8382,162 @@ describe('Admin Content Builder Lite API', () => {
 
       const secondResponse = await app.request(
         `/api/admin/lessons/${lesson.id}/decimals-teaching-system-v1`,
+        adminJsonRequest(desired, cookie, 'PUT'),
+        createBindings('production'),
+      )
+      const second = await secondResponse.json<{
+        success: true
+        data: { writeRequired: boolean; createdCount: number; updatedCount: number; deletedCount: number }
+      }>()
+      expect(secondResponse.status).toBe(200)
+      expect(second.data).toMatchObject({
+        writeRequired: false,
+        createdCount: 0,
+        updatedCount: 0,
+        deletedCount: 0,
+      })
+      expect((await env.DB.prepare(
+        'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position,id',
+      ).bind(lesson.id).all()).results).toEqual(rowsAfterFirst)
+    } finally {
+      await env.DB.prepare(
+        "DELETE FROM audit_logs WHERE entity_type='lesson' AND entity_id=?1 AND action='reconcile'",
+      ).bind(String(lesson.id)).run()
+      await env.DB.prepare('DELETE FROM topics WHERE id=?1').bind(topic.id).run()
+    }
+  })
+  it('reconciles a partial Ratio and Proportion lesson atomically, rejects malformed content, and is idempotent', async () => {
+    const { cookie } = await registerAdmin('admin-ratio-proportion-v1-reconcile@example.com')
+    const spec = ratioProportionLessonSpecs[0]
+    const subject = await env.DB.prepare(
+      `SELECT subjects.id
+       FROM subjects
+       JOIN courses ON courses.id=subjects.course_id
+       WHERE courses.slug='cse-professional' AND subjects.slug='numerical-ability'`,
+    ).first<{ id: number }>()
+    if (subject === null) throw new Error('Seeded Numerical Ability subject is missing.')
+    const nextPosition = await env.DB.prepare(
+      'SELECT COALESCE(MAX(position),0)+1 AS position FROM topics WHERE subject_id=?1',
+    ).bind(subject.id).first<{ position: number }>()
+    const topic = await env.DB.prepare(
+      `INSERT INTO topics(subject_id,title,slug,position,status)
+       VALUES(?1,'Ratio and Proportion','ratio-and-proportion',?2,'draft') RETURNING id`,
+    ).bind(subject.id, nextPosition?.position ?? 1).first<{ id: number }>()
+    if (topic === null) throw new Error('Ratio and Proportion topic fixture was not created.')
+    const lesson = await env.DB.prepare(
+      `INSERT INTO lessons(
+        topic_id,public_id,title,slug,lesson_type,estimated_minutes,position,status
+       ) VALUES(?1,?2,?3,?4,?5,?6,1,'draft') RETURNING id`,
+    ).bind(
+      topic.id,
+      `lesson-ratio-proportion-v1-${crypto.randomUUID()}`,
+      spec.title,
+      spec.slug,
+      spec.lessonType,
+      spec.estimatedMinutes,
+    ).first<{ id: number }>()
+    if (lesson === null) throw new Error('Ratio and Proportion lesson fixture was not created.')
+
+    try {
+      const fixtureIds: number[] = []
+      for (const [index, block] of spec.blocks.entries()) {
+        const inserted = await env.DB.prepare(
+          `INSERT INTO lesson_blocks(lesson_id,block_type,content_json,position)
+           VALUES(?1,?2,?3,?4)`,
+        ).bind(
+          lesson.id,
+          block.blockType,
+          JSON.stringify(index === 1 ? { text: 'Stale Ratio and Proportion explanation.' } : block.content),
+          index + 1,
+        ).run()
+        fixtureIds.push(Number(inserted.meta.last_row_id))
+      }
+      await env.DB.prepare(
+        `INSERT INTO lesson_blocks(lesson_id,block_type,content_json,position)
+         VALUES(?1,'illustrated-guided-teaching',?2,?3)`,
+      ).bind(
+        lesson.id,
+        JSON.stringify({ title: 'Obsolete Ratio and Proportion pilot' }),
+        spec.blocks.length + 1,
+      ).run()
+      const firstId = fixtureIds[0]
+      const desired = {
+        blocks: spec.blocks.map((block, index) => ({ ...block, position: index + 1 })),
+      }
+      const rowsBefore = (await env.DB.prepare(
+        'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position,id',
+      ).bind(lesson.id).all()).results
+
+      const malformed = structuredClone(desired)
+      malformed.blocks[0] = {
+        ...malformed.blocks[0],
+        content: { text: '<script>alert(1)</script>' },
+      }
+      const malformedResponse = await app.request(
+        `/api/admin/lessons/${lesson.id}/ratio-proportion-teaching-system-v1`,
+        adminJsonRequest(malformed, cookie, 'PUT'),
+        createBindings('production'),
+      )
+      expect(malformedResponse.status).toBe(400)
+      expect((await env.DB.prepare(
+        'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position,id',
+      ).bind(lesson.id).all()).results).toEqual(rowsBefore)
+
+      await env.DB.prepare(
+        `CREATE TRIGGER fail_test_ratio_proportion_v1_reconcile_audit
+         BEFORE INSERT ON audit_logs
+         WHEN NEW.entity_type='lesson' AND NEW.action='reconcile'
+         BEGIN SELECT RAISE(ABORT,'forced Ratio and Proportion v1 reconcile audit failure'); END`,
+      ).run()
+      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      try {
+        const failedResponse = await app.request(
+          `/api/admin/lessons/${lesson.id}/ratio-proportion-teaching-system-v1`,
+          adminJsonRequest(desired, cookie, 'PUT'),
+          createBindings('production'),
+        )
+        expect(failedResponse.status).toBe(500)
+        expect((await env.DB.prepare(
+          'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position,id',
+        ).bind(lesson.id).all()).results).toEqual(rowsBefore)
+      } finally {
+        errorLog.mockRestore()
+        await env.DB.prepare('DROP TRIGGER fail_test_ratio_proportion_v1_reconcile_audit').run()
+      }
+
+      const firstResponse = await app.request(
+        `/api/admin/lessons/${lesson.id}/ratio-proportion-teaching-system-v1`,
+        adminJsonRequest(desired, cookie, 'PUT'),
+        createBindings('production'),
+      )
+      expect(firstResponse.status).toBe(200)
+      const first = await firstResponse.json<{
+        success: true
+        data: {
+          blocks: Array<{ id: number; type: string; position: number }>
+          writeRequired: boolean
+          createdCount: number
+          updatedCount: number
+          deletedCount: number
+        }
+      }>()
+      expect(first.data).toMatchObject({
+        writeRequired: true,
+        createdCount: 0,
+        updatedCount: 1,
+        deletedCount: 1,
+      })
+      expect(first.data.blocks[0]?.id).toBe(firstId)
+      expect(first.data.blocks.map((block) => block.position)).toEqual(
+        spec.blocks.map((_, index) => index + 1),
+      )
+      expect(first.data.blocks.some((block) => block.type === 'illustrated-guided-teaching')).toBe(false)
+      const rowsAfterFirst = (await env.DB.prepare(
+        'SELECT id,block_type,content_json,position FROM lesson_blocks WHERE lesson_id=?1 ORDER BY position,id',
+      ).bind(lesson.id).all()).results
+
+      const secondResponse = await app.request(
+        `/api/admin/lessons/${lesson.id}/ratio-proportion-teaching-system-v1`,
         adminJsonRequest(desired, cookie, 'PUT'),
         createBindings('production'),
       )

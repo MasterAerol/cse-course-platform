@@ -17,6 +17,7 @@ import {
 import { visualTeachingSchema } from '../src/shared/visual-teaching.schema'
 import * as authoredVisuals from '../scripts/lib/visual-teaching-content.mjs'
 import { decimalsLessonSpecs } from '../scripts/lib/decimals-teaching-system-content.mjs'
+import { ratioProportionLessonSpecs } from '../scripts/lib/ratio-proportion-teaching-system-content.mjs'
 
 type GuidedTeachingContent = Parameters<typeof IllustratedGuidedTeaching>[0]['content']
 
@@ -432,6 +433,21 @@ describe('visual teaching lesson blocks', () => {
     for (const [index, block] of visualBlocks.entries()) {
       const markup = renderToStaticMarkup(
         <LessonBlockRenderer block={{ id: 10_000 + index, position: index + 1, type: 'example', content: block.content } as Parameters<typeof LessonBlockRenderer>[0]['block']} />,
+      )
+      expect(markup).toContain('data-testid="visual-teaching-board"')
+      expect(markup).toContain('What changed:')
+      expect(markup).toContain('Why it works:')
+      expect(markup).toContain('data-testid="visual-teaching-memory"')
+    }
+  })
+  it('renders every Ratio and Proportion visual through the production lesson-block renderer', () => {
+    const visualBlocks = ratioProportionLessonSpecs.flatMap((lesson) =>
+      lesson.blocks.filter((block) => block.blockType === 'example' && block.content.visual !== undefined),
+    )
+    expect(visualBlocks).toHaveLength(8)
+    for (const [index, block] of visualBlocks.entries()) {
+      const markup = renderToStaticMarkup(
+        <LessonBlockRenderer block={{ id: 20_000 + index, position: index + 1, type: 'example', content: block.content } as Parameters<typeof LessonBlockRenderer>[0]['block']} />,
       )
       expect(markup).toContain('data-testid="visual-teaching-board"')
       expect(markup).toContain('What changed:')

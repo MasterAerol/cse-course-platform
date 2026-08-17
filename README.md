@@ -618,6 +618,36 @@ part of deployment. Known limitation: the script can report an exact production
 plan only when the deployed admin endpoint and valid administrator credentials
 are available. The recommended next teaching-system topic is Ratio and
 Proportion, followed by Average, Work and Rate, and Distance-Speed-Time.
+## Ratio and Proportion Teaching System v1
+
+Ratio and Proportion Teaching System v1 replaces only the structured teaching
+blocks of the twelve existing `ratio-and-proportion` activities. The canonical
+source is `scripts/lib/ratio-proportion-teaching-system-content.mjs`. Eight
+VisualTeachingBoard examples explain ratio parts, unit conversion, equivalent
+scaling, cross-multiplication derivation, missing-term scaling, direct and
+inverse invariants, and ratio sharing. Existing generators, eight fixed mixed
+questions, the fifteen-question quiz, scoring, attempts, and progression remain
+unchanged. No migration is required.
+
+Validate before any production write:
+
+```powershell
+$env:CSE_RATIO_PROPORTION_ADMIN_PASSWORD='<admin-password>'
+node scripts/create-and-publish-ratio-proportion-teaching-system.mjs --base-url https://<worker-origin> --email '<admin-email>' --validate-only
+```
+
+Validation reports every create, update, and deletion. Any deletion requires
+human review and the exact reported fingerprint:
+
+```powershell
+node scripts/create-and-publish-ratio-proportion-teaching-system.mjs --base-url https://<worker-origin> --email '<admin-email>' --confirm publish-ratio-proportion-teaching-system-v1 --approve-deletions <validated-deletion-plan-fingerprint>
+Remove-Item Env:CSE_RATIO_PROPORTION_ADMIN_PASSWORD
+```
+
+The publisher uses one atomic audited reconciliation per changed lesson. Run
+validate-only again afterward; canonical content reports zero creates, updates,
+and deletes with `writesRequired: false`. Publishing is separate from deployment.
+The recommended next Numerical Ability teaching-system topic is Average.
 ## D1 setup and migrations
 
 Authenticate and create the production database:

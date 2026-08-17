@@ -9,6 +9,7 @@ import {
   lessonBlockUpdateSchema,
   percentageGuidedTeachingRepairSchema,
   percentageTeachingSystemReconcileSchema,
+  ratioProportionTeachingSystemReconcileSchema,
 } from '../../schemas/admin/content-admin.schemas'
 import {
   createAdminLessonBlock,
@@ -19,6 +20,7 @@ import {
   reconcileDecimalsTeachingSystemLesson,
   reconcileFractionsTeachingSystemLesson,
   reconcilePercentageTeachingSystemLesson,
+  reconcileRatioProportionTeachingSystemLesson,
   updateAdminLessonBlock,
 } from '../../services/admin/admin-content.service'
 import type { AppEnv } from '../../types/app'
@@ -150,6 +152,24 @@ adminLessonBlockRoutes.put(
     return successResponse(
       context,
       await reconcilePercentageTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/ratio-proportion-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    const input = await parseJsonBody(context, ratioProportionTeachingSystemReconcileSchema)
+    return successResponse(
+      context,
+      await reconcileRatioProportionTeachingSystemLesson(
         context.env.DB,
         context.get('authUser'),
         params.lessonId,

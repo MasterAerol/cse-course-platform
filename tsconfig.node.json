@@ -30,6 +30,7 @@
     "vitest.percentage-publisher.config.ts",
     "vitest.fractions-publisher.config.ts",
     "vitest.decimals-publisher.config.ts",
+    "vitest.ratio-proportion-publisher.config.ts",
     "eslint.config.js",
     "tests",
     "src/worker"
