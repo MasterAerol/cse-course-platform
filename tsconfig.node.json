@@ -41,6 +41,7 @@
     "vitest.simple-interest-publisher.config.ts",
     "vitest.vocabulary-word-meaning-publisher.config.ts",
     "vitest.synonyms-antonyms-teaching-publisher.config.ts",
+    "vitest.context-clues-teaching-publisher.config.ts",
     "vitest.safe-teaching-release.config.ts",
     "eslint.config.js",
     "tests",
