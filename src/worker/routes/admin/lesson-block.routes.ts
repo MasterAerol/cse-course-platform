@@ -22,6 +22,7 @@ import {
   sentenceCompletionTeachingSystemReconcileSchema,
   grammarCorrectUsageTeachingSystemReconcileSchema,
   subjectVerbAgreementTeachingSystemReconcileSchema,
+  pronounsModifiersTeachingSystemReconcileSchema,
 } from '../../schemas/admin/content-admin.schemas'
 import {
   createAdminLessonBlock,
@@ -29,6 +30,7 @@ import {
   getAdminLessonBlocks,
   getGrammarCorrectUsageTeachingSystemCapability,
   getSubjectVerbAgreementTeachingSystemCapability,
+  getPronounsModifiersTeachingSystemCapability,
   moveLessonBlock,
   repairPercentageGuidedTeaching,
   reconcileAgeProblemsTeachingSystemLesson,
@@ -47,6 +49,7 @@ import {
   reconcileSentenceCompletionTeachingSystemLesson,
   reconcileGrammarCorrectUsageTeachingSystemLesson,
   reconcileSubjectVerbAgreementTeachingSystemLesson,
+  reconcilePronounsModifiersTeachingSystemLesson,
   updateAdminLessonBlock,
 } from '../../services/admin/admin-content.service'
 import type { AppEnv } from '../../types/app'
@@ -446,6 +449,37 @@ adminLessonBlockRoutes.put(
     return successResponse(
       context,
       await reconcileSubjectVerbAgreementTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+
+adminLessonBlockRoutes.get(
+  '/lessons/:lessonId/pronouns-and-modifiers-teaching-system-v1/capability',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    return successResponse(
+      context,
+      await getPronounsModifiersTeachingSystemCapability(context.env.DB, params.lessonId),
+    )
+  },
+)
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/pronouns-and-modifiers-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    const input = await parseJsonBody(context, pronounsModifiersTeachingSystemReconcileSchema)
+    return successResponse(
+      context,
+      await reconcilePronounsModifiersTeachingSystemLesson(
         context.env.DB,
         context.get('authUser'),
         params.lessonId,
