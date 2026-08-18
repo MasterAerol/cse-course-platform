@@ -17,6 +17,7 @@ import {
   distanceSpeedTimeTeachingSystemReconcileSchema,
   simpleInterestTeachingSystemReconcileSchema,
   vocabularyWordMeaningTeachingSystemReconcileSchema,
+  synonymsAntonymsTeachingSystemReconcileSchema,
 } from '../../schemas/admin/content-admin.schemas'
 import {
   createAdminLessonBlock,
@@ -35,6 +36,7 @@ import {
   reconcileDistanceSpeedTimeTeachingSystemLesson,
   reconcileSimpleInterestTeachingSystemLesson,
   reconcileVocabularyWordMeaningTeachingSystemLesson,
+  reconcileSynonymsAntonymsTeachingSystemLesson,
   updateAdminLessonBlock,
 } from '../../services/admin/admin-content.service'
 import type { AppEnv } from '../../types/app'
@@ -315,6 +317,25 @@ adminLessonBlockRoutes.put(
     return successResponse(
       context,
       await reconcileVocabularyWordMeaningTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/synonyms-antonyms-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    const input = await parseJsonBody(context, synonymsAntonymsTeachingSystemReconcileSchema)
+    return successResponse(
+      context,
+      await reconcileSynonymsAntonymsTeachingSystemLesson(
         context.env.DB,
         context.get('authUser'),
         params.lessonId,
