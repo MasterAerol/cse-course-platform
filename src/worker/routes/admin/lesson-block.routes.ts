@@ -19,6 +19,7 @@ import {
   vocabularyWordMeaningTeachingSystemReconcileSchema,
   synonymsAntonymsTeachingSystemReconcileSchema,
   contextCluesTeachingSystemReconcileSchema,
+  sentenceCompletionTeachingSystemReconcileSchema,
 } from '../../schemas/admin/content-admin.schemas'
 import {
   createAdminLessonBlock,
@@ -39,6 +40,7 @@ import {
   reconcileVocabularyWordMeaningTeachingSystemLesson,
   reconcileSynonymsAntonymsTeachingSystemLesson,
   reconcileContextCluesTeachingSystemLesson,
+  reconcileSentenceCompletionTeachingSystemLesson,
   updateAdminLessonBlock,
 } from '../../services/admin/admin-content.service'
 import type { AppEnv } from '../../types/app'
@@ -357,6 +359,25 @@ adminLessonBlockRoutes.put(
     return successResponse(
       context,
       await reconcileContextCluesTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/sentence-completion-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    const input = await parseJsonBody(context, sentenceCompletionTeachingSystemReconcileSchema)
+    return successResponse(
+      context,
+      await reconcileSentenceCompletionTeachingSystemLesson(
         context.env.DB,
         context.get('authUser'),
         params.lessonId,
