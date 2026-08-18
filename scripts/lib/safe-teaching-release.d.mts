@@ -41,5 +41,5 @@ export function resolveContentReleasePreflight(options: {
 export function validateContentInspection(value: Record<string, unknown>): Record<string, unknown>
 export function runContentReleasePipeline(operations: ContentReleaseOperations): Promise<Record<string, unknown>>
 export function runTeachingReleasePipeline(
-  operations: ContentReleaseOperations & { safeRelease: () => unknown | Promise<unknown> },
+  operations: ContentReleaseOperations & { safeRelease: () => unknown | Promise<unknown>; verifyCapability?: () => unknown | Promise<unknown> },
 ): Promise<Record<string, unknown>>

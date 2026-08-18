@@ -7,7 +7,9 @@ export type RiskBlocker = { code: string; reason: string; files: string[] }
 export function parseReleaseArgs(argv?: string[]): Map<string, string>
 export function validateReleaseOptions(args: Map<string, string>): ReleaseOptions
 export function normalizeGitPath(file: string): string
-export function classifyChangedFiles(files: string[]): { files: string[]; migrations: string[]; publishers: string[]; wranglerConfig: string[]; productionMutationScripts: string[]; developmentArtifacts: string[]; blockers: RiskBlocker[]; publisherRequired: boolean }
+export interface ReleaseRisk { files: string[]; runtimeFiles: string[]; migrations: string[]; publishers: string[]; wranglerConfig: string[]; productionMutationScripts: string[]; developmentArtifacts: string[]; blockers: RiskBlocker[]; publisherRequired: boolean; deploymentRequired: boolean }
+export function classifyChangedFiles(files: string[]): ReleaseRisk
+export function validateDeploymentPolicy(risk: ReleaseRisk, skipDeploy: boolean): { deploymentRequired: boolean; skipDeploy: boolean }
 export function detectSecrets(file: string, content: string): string[]
 export function inspectChangedFiles(root: string, files: string[], options?: { maxBytes?: number }): { secretFindings: Array<{ file: string; kind: string }>; largeFiles: Array<{ file: string; bytes: number }>; suspiciousTemporaryFiles: Array<{ file: string; bytes: number }>; productionMutationSignals: Array<{ file: string; kind: string }> }
 export function parseStatusPorcelainZ(output: string): string[]

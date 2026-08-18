@@ -40,6 +40,7 @@ export function normalizeGitPath(file) { return file.replaceAll('\\', '/').repla
 
 export function classifyChangedFiles(files) {
   const normalized = [...new Set(files.map(normalizeGitPath))].sort()
+  const runtimeFiles = normalized.filter((file) => file.startsWith('src/worker/'))
   const migrations = normalized.filter((file) => file.startsWith('migrations/'))
   const publishers = normalized.filter((file) => /(^|\/)create-and-publish-[^/]+\.mjs$/u.test(file))
   const wranglerConfig = normalized.filter((file) => /(^|\/)wrangler(?:\.[^/]+)?\.(?:jsonc|json|toml)$/iu.test(file))
@@ -53,7 +54,12 @@ export function classifyChangedFiles(files) {
   if (migrations.length > 0) blockers.push({ code: 'migration_detected', reason: 'Database migration detected.', files: migrations })
   if (wranglerConfig.length > 0) blockers.push({ code: 'wrangler_config_changed', reason: 'Wrangler or D1 binding configuration changed.', files: wranglerConfig })
   if (productionMutationScripts.length > 0) blockers.push({ code: 'production_mutation_script', reason: 'Production mutation, repair, migration, seed, or rollback script detected.', files: productionMutationScripts })
-  return { files: normalized, migrations, publishers, wranglerConfig, productionMutationScripts, developmentArtifacts, blockers, publisherRequired: publishers.length > 0 }
+  return { files: normalized, runtimeFiles, migrations, publishers, wranglerConfig, productionMutationScripts, developmentArtifacts, blockers, publisherRequired: publishers.length > 0, deploymentRequired: runtimeFiles.length > 0 }
+}
+
+export function validateDeploymentPolicy(risk, skipDeploy) {
+  if (skipDeploy && risk.deploymentRequired) throw new Error(`--skip-deploy is not permitted because Worker runtime files changed: ${risk.runtimeFiles.join(', ')}`)
+  return { deploymentRequired: risk.deploymentRequired, skipDeploy }
 }
 
 const secretRules = [

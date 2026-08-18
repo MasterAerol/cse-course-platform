@@ -11,6 +11,7 @@ import {
   inspectChangedFiles,
   parseReleaseArgs,
   runReleasePhases,
+  validateDeploymentPolicy,
   validateHealthResponse,
   validatePreflightSnapshot,
   validateReleaseOptions,
@@ -59,6 +60,14 @@ describe('Safe Release Workflow v1', () => {
     expect(risk.publisherRequired).toBe(true)
   })
 
+  it('requires deployment for Worker runtime routes but preserves tooling-only skip-deploy', () => {
+    const runtime = classifyChangedFiles(['src/worker/routes/admin/lesson-block.routes.ts', 'scripts/create-and-publish-example.mjs'])
+    expect(runtime).toMatchObject({ deploymentRequired: true, runtimeFiles: ['src/worker/routes/admin/lesson-block.routes.ts'] })
+    expect(() => validateDeploymentPolicy(runtime, true)).toThrow('--skip-deploy is not permitted')
+    const tooling = classifyChangedFiles(['scripts/lib/release-helper.mjs', 'tests/release-helper.test.ts'])
+    expect(tooling).toMatchObject({ deploymentRequired: false, runtimeFiles: [] })
+    expect(validateDeploymentPolicy(tooling, true)).toEqual({ deploymentRequired: false, skipDeploy: true })
+  })
   it('classifies ordinary frontend, Worker, test, and documentation changes as safe', () => {
     expect(classifyChangedFiles(['src/react-app/App.tsx', 'src/worker/index.ts', 'tests/app.test.ts', 'docs/guide.md']).blockers).toHaveLength(0)
   })

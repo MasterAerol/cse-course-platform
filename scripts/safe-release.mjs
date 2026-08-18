@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { DEFAULT_HEALTH_URL, DEFAULT_LIVE_URL, classifyChangedFiles, formatBytes, inspectChangedFiles, parseReleaseArgs, parseStatusPorcelainZ, validateHealthResponse, validateReleaseOptions } from './lib/safe-release.mjs'
+import { DEFAULT_HEALTH_URL, DEFAULT_LIVE_URL, classifyChangedFiles, formatBytes, inspectChangedFiles, parseReleaseArgs, parseStatusPorcelainZ, validateDeploymentPolicy, validateHealthResponse, validateReleaseOptions } from './lib/safe-release.mjs'
 
 const HELP = `Safe Release Workflow v1
 
@@ -83,9 +83,10 @@ async function main() {
   console.log('\ngit diff --stat'); git(['diff', '--stat'])
   console.log('\ngit diff --name-only'); git(['diff', '--name-only'])
   const risk = classifyChangedFiles(repository.files)
-  console.log(`\nRISK CLASSIFICATION\nChanged files: ${risk.files.length}\nMigrations: ${risk.migrations.length}\nPublishers requiring separate manual execution: ${risk.publishers.length}\nWrangler/binding changes: ${risk.wranglerConfig.length}`)
+  console.log(`\nRISK CLASSIFICATION\nChanged files: ${risk.files.length}\nWorker runtime files: ${risk.runtimeFiles.length}\nDeployment required: ${risk.deploymentRequired}\nMigrations: ${risk.migrations.length}\nPublishers requiring separate manual execution: ${risk.publishers.length}\nWrangler/binding changes: ${risk.wranglerConfig.length}`)
   risk.publishers.forEach((file) => console.log(`  Publisher: ${file}`))
   try {
+    validateDeploymentPolicy(risk, options.skipDeploy)
     ensureNoConflictMarkers(repository.root, repository.files)
     const inspection = inspectChangedFiles(repository.root, repository.files)
     if (inspection.secretFindings.length) throw new Error(`Possible secret detected in ${inspection.secretFindings.map((item) => item.file).join(', ')}. Values were not printed.`)

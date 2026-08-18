@@ -54,5 +54,6 @@ export async function runContentReleasePipeline(operations) {
 
 export async function runTeachingReleasePipeline(operations) {
   await operations.safeRelease()
+  if (operations.verifyCapability) await operations.verifyCapability()
   return runContentReleasePipeline(operations)
 }

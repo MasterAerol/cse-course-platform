@@ -12,7 +12,7 @@ function parseArgs() {
   const args = new Map()
   for (let index = 2; index < process.argv.length; index += 1) {
     const key = process.argv[index]
-    if (key === '--validate-only') { args.set('validate-only', 'true'); continue }
+    if (key === '--validate-only' || key === '--capability-check') { args.set(key.slice(2), 'true'); continue }
     const value = process.argv[index + 1]
     if (key?.startsWith('--') !== true || value === undefined) throw new Error(`Invalid argument near ${key ?? '(end)'}.`)
     args.set(key.slice(2), value)
@@ -65,8 +65,9 @@ function lessonMismatch(blocks, spec) {
 async function main() {
   const args = parseArgs()
   const validateOnly = args.get('validate-only') === 'true'
+  const capabilityCheck = args.get('capability-check') === 'true'
   const baseUrl = args.get('base-url') ?? 'http://127.0.0.1:5173'
-  if (!validateOnly && args.get('confirm') !== confirmation) throw new Error(`Pass --confirm ${confirmation} to publish.`)
+  if (!validateOnly && !capabilityCheck && args.get('confirm') !== confirmation) throw new Error(`Pass --confirm ${confirmation} to publish.`)
   let cookie = args.get('cookie') ?? null
   async function request(path, options = {}) {
     const headers = new Headers(options.headers)
@@ -94,6 +95,14 @@ async function main() {
   const subject = course.subjects.find((item) => item.slug === 'verbal-ability')
   const topic = subject?.topics.find((item) => item.slug === 'grammar-and-correct-usage')
   if (topic === undefined || topic.lessons.length !== grammarCorrectUsageLessonSpecs.length) throw new Error('Grammar and Correct Usage must contain exactly the twelve expected lessons.')
+  const capabilityLesson = topic.lessons.find((item) => item.slug === grammarCorrectUsageLessonSpecs[0]?.slug)
+  if (capabilityLesson === undefined) throw new Error('Grammar and Correct Usage capability lesson was not found.')
+  const capability = await request(`/api/admin/lessons/${capabilityLesson.id}/grammar-correct-usage-teaching-system-v1/capability`)
+  if (capability?.supported !== true || capability.operation !== 'grammar-correct-usage-teaching-system-v1' || capability.topicSlug !== 'grammar-and-correct-usage') throw new Error('Production Worker does not report the Grammar and Correct Usage reconciliation capability.')
+  if (capabilityCheck) {
+    console.log(JSON.stringify({ supported: true, operation: capability.operation, topicSlug: capability.topicSlug }))
+    return
+  }
   const states = []
   for (const [lessonIndex, spec] of grammarCorrectUsageLessonSpecs.entries()) {
     const lesson = topic.lessons.find((item) => item.slug === spec.slug)

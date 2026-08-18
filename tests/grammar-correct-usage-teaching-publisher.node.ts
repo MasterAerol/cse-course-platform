@@ -14,6 +14,7 @@ const blocksByLesson = new Map<number, StoredBlock[]>()
 const desiredBlockCount = lessons.reduce((sum, lesson) => sum + lesson.blocks.length, 0)
 let nextBlockId = 1_000
 let mutationCalls = 0
+let capabilityCalls = 0
 let baseUrl = ''
 let server: ReturnType<typeof createServer>
 let preservedRetainedBlockId = 0
@@ -96,6 +97,12 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  const capabilityMatch = url.match(/^\/api\/admin\/lessons\/(\d+)\/grammar-correct-usage-teaching-system-v1\/capability$/u)
+  if (capabilityMatch?.[1] !== undefined && request.method === 'GET') {
+    capabilityCalls += 1
+    send(response, { supported: true, operation: 'grammar-correct-usage-teaching-system-v1', topicSlug: 'grammar-and-correct-usage' })
+    return
+  }
   const reconcileMatch = url.match(/^\/api\/admin\/lessons\/(\d+)\/grammar-correct-usage-teaching-system-v1$/u)
   if (reconcileMatch?.[1] !== undefined && request.method === 'PUT') {
     mutationCalls += 1
@@ -197,6 +204,8 @@ describe('Grammar and Correct Usage Teaching System v1 publisher', () => {
       totals: { lessonsChanged: 12, blocksCreated: desiredBlockCount - productionBlockCount, blocksUpdated: productionBlockCount, blocksDeleted: 0, guidedBlocksRemoved: 0 },
     })
     expect(mutationCalls).toBe(0)
+
+    expect(capabilityCalls).toBeGreaterThan(0)
 
     const first = await runPublisher()
     expect(first).toMatchObject({ status: 0, stderr: '' })

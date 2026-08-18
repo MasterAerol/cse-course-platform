@@ -3008,6 +3008,28 @@ export async function reconcileSentenceCompletionTeachingSystemLesson(
   }
 }
 
+export async function getGrammarCorrectUsageTeachingSystemCapability(
+  database: D1Database,
+  lessonId: number,
+): Promise<{ supported: true; operation: string; topicSlug: string }> {
+  const lesson = await findLessonById(database, lessonId)
+  if (lesson === null) throw notFound('Lesson')
+  const topic = await findTopicById(database, lesson.topic_id)
+  const subject = topic === null ? null : await findSubjectById(database, topic.subject_id)
+  const course = subject === null ? null : await findCourseById(database, subject.course_id)
+  if (
+    topic?.slug !== 'grammar-and-correct-usage' ||
+    subject?.slug !== 'verbal-ability' ||
+    course?.slug !== 'cse-professional'
+  ) {
+    throw new AppError(
+      409,
+      'GRAMMAR_CORRECT_USAGE_TEACHING_SYSTEM_TARGET_MISMATCH',
+      'Grammar and Correct Usage Teaching System capability is restricted to the CSE Verbal Ability topic.',
+    )
+  }
+  return { supported: true, operation: 'grammar-correct-usage-teaching-system-v1', topicSlug: topic.slug }
+}
 export async function reconcileGrammarCorrectUsageTeachingSystemLesson(
   database: D1Database,
   actor: AuthenticatedPrincipal,

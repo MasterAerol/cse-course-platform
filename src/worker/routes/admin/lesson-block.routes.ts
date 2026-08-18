@@ -26,6 +26,7 @@ import {
   createAdminLessonBlock,
   deleteAdminLessonBlock,
   getAdminLessonBlocks,
+  getGrammarCorrectUsageTeachingSystemCapability,
   moveLessonBlock,
   repairPercentageGuidedTeaching,
   reconcileAgeProblemsTeachingSystemLesson,
@@ -389,6 +390,18 @@ adminLessonBlockRoutes.put(
   },
 )
 
+adminLessonBlockRoutes.get(
+  '/lessons/:lessonId/grammar-correct-usage-teaching-system-v1/capability',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    return successResponse(
+      context,
+      await getGrammarCorrectUsageTeachingSystemCapability(context.env.DB, params.lessonId),
+    )
+  },
+)
 adminLessonBlockRoutes.put(
   '/lessons/:lessonId/grammar-correct-usage-teaching-system-v1',
   async (context) => {

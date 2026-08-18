@@ -18,6 +18,7 @@ async function main(){const args=parse(process.argv.slice(2));if(args.has('help'
  const getAuth=()=>auth??=credentials(meta)
  const result=await runTeachingReleasePipeline({
   safeRelease:()=>npm(['run','release:safe','--',...(args.has('codex')?['--codex']:[]),'--message',message,'--confirm','release-production']),
+  verifyCapability:meta.capabilityCheck?()=>{const current=getAuth();const result=publisher(meta,['--base-url',current.baseUrl,'--email',current.email,'--capability-check'],current.env);if(result.supported!==true)throw new Error('Production reconciliation capability check failed.');return result}:undefined,
   validate:()=>{const current=getAuth();return publisher(meta,['--base-url',current.baseUrl,'--email',current.email,'--validate-only'],current.env)},
   publish:(fingerprint)=>{const current=getAuth();const writeArgs=['--base-url',current.baseUrl,'--email',current.email,'--confirm',meta.confirmation];if(fingerprint)writeArgs.push('--approve-deletions',fingerprint);return publisher(meta,writeArgs,current.env)},
   inspect:meta.inspectorScript?()=>JSON.parse(run(process.execPath,[path.resolve(meta.inspectorScript)]).trim()):undefined,
