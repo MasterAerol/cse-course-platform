@@ -77,6 +77,8 @@ export const workRateTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
 export const distanceSpeedTimeTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
+export const vocabularyWordMeaningTeachingSystemReconcileSchema =
+  percentageTeachingSystemReconcileSchema
 export const simpleInterestTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
 
@@ -228,6 +230,7 @@ export type AgeProblemsTeachingSystemReconcileInput = z.infer<typeof ageProblems
 export type WorkRateTeachingSystemReconcileInput = z.infer<typeof workRateTeachingSystemReconcileSchema>
 export type DistanceSpeedTimeTeachingSystemReconcileInput = z.infer<typeof distanceSpeedTimeTeachingSystemReconcileSchema>
 export type SimpleInterestTeachingSystemReconcileInput = z.infer<typeof simpleInterestTeachingSystemReconcileSchema>
+export type VocabularyWordMeaningTeachingSystemReconcileInput = z.infer<typeof vocabularyWordMeaningTeachingSystemReconcileSchema>
 export type PracticeSetInput = z.infer<typeof practiceSetInputSchema>
 export type FixedQuestionInput = z.infer<typeof fixedQuestionInputSchema>
 export type QuizInput = z.infer<typeof quizInputSchema>
