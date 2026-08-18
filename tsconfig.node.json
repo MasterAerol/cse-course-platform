@@ -44,6 +44,7 @@
     "vitest.context-clues-teaching-publisher.config.ts",
     "vitest.sentence-completion-teaching-publisher.config.ts",
     "vitest.grammar-correct-usage-teaching-publisher.config.ts",
+    "vitest.subject-verb-agreement-teaching-publisher.config.ts",
     "vitest.safe-teaching-release.config.ts",
     "eslint.config.js",
     "tests",
