@@ -7,6 +7,13 @@ export type RiskBlocker = { code: string; reason: string; files: string[] }
 export function parseReleaseArgs(argv?: string[]): Map<string, string>
 export function validateReleaseOptions(args: Map<string, string>): ReleaseOptions
 export function normalizeGitPath(file: string): string
+export type GitStatusEntry = { file:string; status:string; untracked:boolean; staged:boolean }
+export function parseStatusPorcelainZDetailed(output:string):GitStatusEntry[]
+export function isReleaseRelevantPath(file:string):boolean
+export function selectPreflightReleaseScope(entries:GitStatusEntry[]):{ approvedFiles:string[]; ignoredUntrackedFiles:string[] }
+export function validateConcurrentReleaseScope(approvedFiles:string[],entries:GitStatusEntry[]):{ ignoredUntrackedFiles:string[] }
+export function buildScopedStageArgs(approvedFiles:string[]):string[]
+export function validateStagedScope(approvedFiles:string[],stagedFiles:string[]):{ approvedCount:number; stagedCount:number }
 export interface ReleaseRisk { files: string[]; runtimeFiles: string[]; migrations: string[]; publishers: string[]; wranglerConfig: string[]; productionMutationScripts: string[]; developmentArtifacts: string[]; blockers: RiskBlocker[]; publisherRequired: boolean; deploymentRequired: boolean }
 export function classifyChangedFiles(files: string[]): ReleaseRisk
 export function validateDeploymentPolicy(risk: ReleaseRisk, skipDeploy: boolean): { deploymentRequired: boolean; skipDeploy: boolean }

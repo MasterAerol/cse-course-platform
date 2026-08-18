@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { DEFAULT_HEALTH_URL, DEFAULT_LIVE_URL, classifyChangedFiles, formatBytes, inspectChangedFiles, parseReleaseArgs, parseStatusPorcelainZ, validateDeploymentPolicy, validateHealthResponse, validateReleaseOptions } from './lib/safe-release.mjs'
+import { DEFAULT_HEALTH_URL, DEFAULT_LIVE_URL, buildScopedStageArgs, classifyChangedFiles, formatBytes, inspectChangedFiles, parseReleaseArgs, parseStatusPorcelainZDetailed, selectPreflightReleaseScope, validateConcurrentReleaseScope, validateDeploymentPolicy, validateHealthResponse, validateReleaseOptions, validateStagedScope } from './lib/safe-release.mjs'
 
 const HELP = `Safe Release Workflow v1
 
@@ -59,7 +59,9 @@ function validateRepository() {
   if (conflicts) throw new Error(`Unresolved Git conflicts detected: ${conflicts.replaceAll('\n', ', ')}`)
   if (!git(['remote', 'get-url', 'origin'], { print: false }).stdout.trim()) throw new Error('Git remote origin is missing.')
   const status = git(['status', '--porcelain=v1', '-z', '--untracked-files=all'], { print: false }).stdout
-  return { root, branch, files: parseStatusPorcelainZ(status) }
+  const entries = parseStatusPorcelainZDetailed(status)
+  const scope = selectPreflightReleaseScope(entries)
+  return { root, branch, entries, files: scope.approvedFiles, ignoredUntrackedFiles: scope.ignoredUntrackedFiles }
 }
 
 function runValidation() {
@@ -88,7 +90,7 @@ async function main() {
   try {
     validateDeploymentPolicy(risk, options.skipDeploy)
     ensureNoConflictMarkers(repository.root, repository.files)
-    const inspection = inspectChangedFiles(repository.root, repository.files)
+    const inspection = inspectChangedFiles(repository.root, [...repository.files, ...repository.ignoredUntrackedFiles])
     if (inspection.secretFindings.length) throw new Error(`Possible secret detected in ${inspection.secretFindings.map((item) => item.file).join(', ')}. Values were not printed.`)
     if (inspection.largeFiles.length) throw new Error(`Oversized changed file detected: ${inspection.largeFiles.map((item) => `${item.file} (${formatBytes(item.bytes)})`).join(', ')}`)
     if (inspection.suspiciousTemporaryFiles.length) throw new Error(`Suspicious temporary binary detected: ${inspection.suspiciousTemporaryFiles.map((item) => `${item.file} (${formatBytes(item.bytes)})`).join(', ')}`)
@@ -98,15 +100,28 @@ async function main() {
   let passed = []
   if (!options.skipValidation) try { passed = runValidation() } catch (error) { fail(error.message); return }
   if (options.dryRun) { console.log(`\nSAFE RELEASE — DRY RUN PASS\nWould commit ${repository.files.length} changed file(s) with message: ${options.message}\nNo staging, commit, push, deployment, migration, or publisher execution occurred.`); return }
-  console.log('\nGIT — STAGE')
+  console.log('\nGIT — SCOPED STAGE')
   try {
-    git(['add', '--all'])
-    const actual = [...new Set(parseStatusPorcelainZ(git(['status', '--porcelain=v1', '-z', '--untracked-files=all'], { print: false }).stdout))].sort()
-    const expected = [...new Set(repository.files)].sort()
-    if (JSON.stringify(actual) !== JSON.stringify(expected)) { git(['restore', '--staged', '--', '.']); throw new Error(`Staged scope differs from preflight scope. Expected ${expected.length}; found ${actual.length}. Changes were unstaged.`) }
-    const stagedInspection = inspectChangedFiles(repository.root, actual)
-    if (stagedInspection.secretFindings.length || stagedInspection.largeFiles.length || stagedInspection.suspiciousTemporaryFiles.length || stagedInspection.productionMutationSignals.length) { git(['restore', '--staged', '--', '.']); throw new Error('Staged safety inspection failed. Changes were unstaged.') }
-  } catch (error) { fail(error.message); return }
+    const currentStatus = git(['status', '--porcelain=v1', '-z', '--untracked-files=all'], { print: false }).stdout
+    const concurrent = validateConcurrentReleaseScope(repository.files, parseStatusPorcelainZDetailed(currentStatus))
+    git(buildScopedStageArgs(repository.files))
+    const stagedOutput = git(['diff', '--cached', '--name-only', '--no-renames', '-z'], { print: false }).stdout
+    const stagedFiles = stagedOutput.split('\0').filter(Boolean)
+    const scope = validateStagedScope(repository.files, stagedFiles)
+    console.log(`Approved release scope: ${scope.approvedCount} files`)
+    console.log(`Staged release scope: ${scope.stagedCount} files`)
+    console.log(`Unrelated untracked files ignored: ${concurrent.ignoredUntrackedFiles.length}`)
+    const stagedInspection = inspectChangedFiles(repository.root, stagedFiles)
+    if (stagedInspection.secretFindings.length || stagedInspection.largeFiles.length || stagedInspection.suspiciousTemporaryFiles.length || stagedInspection.productionMutationSignals.length) {
+      git(['restore', '--staged', '--', ...repository.files])
+      throw new Error('Staged safety inspection failed. Approved release files were unstaged.')
+    }
+  } catch (error) {
+    const staged = git(['diff', '--cached', '--name-only'], { print: false }).stdout.trim()
+    if (staged) git(['restore', '--staged', '--', ...repository.files])
+    fail(error.message)
+    return
+  }
   let commit
   try { console.log('\nGIT — COMMIT'); git(['commit', '-m', options.message]); commit = git(['log', '-1', '--format=%h %s'], { print: false }).stdout.trim(); console.log(commit) } catch (error) { fail(error.message, 'No push/deploy performed. Local work was preserved.'); return }
   try { console.log('\nGIT — PUSH'); git(['push', 'origin', 'main']) } catch { fail('Git push unavailable in this environment.', `Local commit preserved: ${commit}\nDeployment not performed.`); return }

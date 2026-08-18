@@ -30,9 +30,9 @@ async function handle(request:IncomingMessage,response:ServerResponse){
   const url=request.url??''
   if(url==='/api/admin/dashboard'){send(response,{cseProfessional:{id:1}});return}
   if(url==='/api/admin/courses/1'){send(response,{subjects:[{slug:'verbal-ability',topics:[{slug:'pronouns-and-modifiers',lessons:lessons.map(({id,slug,title,lessonType,estimatedMinutes,status,position})=>({id,slug,title,lessonType,estimatedMinutes,status,position}))}]}]});return}
-  const capability=url.match(/^\/api\/admin\/lessons\/(\d+)\/pronouns-modifiers-teaching-system-v1\/capability$/u)
-  if(capability?.[1]!==undefined&&request.method==='GET'){capabilityCalls+=1;send(response,{supported:true,operation:'pronouns-modifiers-teaching-system-v1',topicSlug:'pronouns-and-modifiers'});return}
-  const reconcile=url.match(/^\/api\/admin\/lessons\/(\d+)\/pronouns-modifiers-teaching-system-v1$/u)
+  const capability=url.match(/^\/api\/admin\/lessons\/(\d+)\/pronouns-and-modifiers-teaching-system-v1\/capability$/u)
+  if(capability?.[1]!==undefined&&request.method==='GET'){capabilityCalls+=1;send(response,{supported:true,operation:'pronouns-and-modifiers-teaching-system-v1',topicSlug:'pronouns-and-modifiers'});return}
+  const reconcile=url.match(/^\/api\/admin\/lessons\/(\d+)\/pronouns-and-modifiers-teaching-system-v1$/u)
   if(reconcile?.[1]!==undefined&&request.method==='PUT'){
     mutationCalls+=1
     const lessonId=Number(reconcile[1]);const existing=blocksByLesson.get(lessonId);if(existing===undefined){send(response,{message:'Missing lesson'},404);return}
@@ -48,7 +48,7 @@ async function handle(request:IncomingMessage,response:ServerResponse){
 }
 beforeAll(async()=>{server=createServer((request,response)=>{void handle(request,response).catch((error:unknown)=>send(response,{message:error instanceof Error?error.message:'Request failed'},500))});await new Promise<void>((resolve)=>server.listen(0,'127.0.0.1',resolve));const address=server.address();if(address===null||typeof address==='string')throw new Error('Test server address missing.');baseUrl=`http://127.0.0.1:${address.port}`})
 afterAll(async()=>{await new Promise<void>((resolve,reject)=>server.close((error)=>error?reject(error):resolve()))})
-function runPublisher(extraArgs:string[]=[]):Promise<{stdout:string;stderr:string;status:number|null}>{return new Promise((resolve,reject)=>{const child=spawn(process.execPath,[script,'--base-url',baseUrl,'--cookie','test-admin-session','--confirm','publish-pronouns-modifiers-teaching-system-v1',...extraArgs],{cwd:root,windowsHide:true});let stdout='';let stderr='';child.stdout.on('data',(chunk)=>{stdout+=String(chunk)});child.stderr.on('data',(chunk)=>{stderr+=String(chunk)});child.on('error',reject);child.on('close',(status)=>resolve({stdout,stderr,status}))})}
+function runPublisher(extraArgs:string[]=[]):Promise<{stdout:string;stderr:string;status:number|null}>{return new Promise((resolve,reject)=>{const child=spawn(process.execPath,[script,'--base-url',baseUrl,'--cookie','test-admin-session','--confirm','publish-pronouns-and-modifiers-teaching-system-v1',...extraArgs],{cwd:root,windowsHide:true});let stdout='';let stderr='';child.stdout.on('data',(chunk)=>{stdout+=String(chunk)});child.stderr.on('data',(chunk)=>{stderr+=String(chunk)});child.on('error',reject);child.on('close',(status)=>resolve({stdout,stderr,status}))})}
 
 describe('Pronouns and Modifiers Teaching System v1 publisher',()=>{
   it('validates read-only, publishes canonically, preserves IDs, proves idempotency, and fails closed on unknown deletion',async()=>{

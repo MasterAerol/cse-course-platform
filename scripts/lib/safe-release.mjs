@@ -37,6 +37,57 @@ export function validateReleaseOptions(args) {
 }
 
 export function normalizeGitPath(file) { return file.replaceAll('\\', '/').replace(/^\.\//u, '') }
+export function parseStatusPorcelainZDetailed(output) {
+  const entries = output.split('\0').filter(Boolean), result = []
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index], status = entry.slice(0, 2), file = normalizeGitPath(entry.slice(3))
+    const paths = [file]
+    if ((status.includes('R') || status.includes('C')) && entries[index + 1] !== undefined) { paths.push(normalizeGitPath(entries[index + 1])); index += 1 }
+    for (const item of paths) result.push({ file: item, status, untracked: status === '??', staged: status[0] !== ' ' && status[0] !== '?' })
+  }
+  return result
+}
+
+export function isReleaseRelevantPath(file) {
+  const normalized = normalizeGitPath(file)
+  return /^(?:src|scripts|tests|docs|migrations|public)\//u.test(normalized) || /^(?:package(?:-lock)?\.json|tsconfig[^/]*\.json|vite[^/]*\.[cm]?[jt]s|vitest[^/]*\.[cm]?[jt]s|eslint\.config\.[cm]?[jt]s|wrangler[^/]*\.(?:jsonc|json|toml))$/u.test(normalized)
+}
+
+export function selectPreflightReleaseScope(entries) {
+  const staged = entries.filter((entry) => entry.staged)
+  if (staged.length > 0) throw new Error(`Preexisting staged files are not permitted: ${[...new Set(staged.map((entry) => entry.file))].sort().join(', ')}`)
+  const approvedFiles = [], ignoredUntrackedFiles = []
+  for (const entry of entries) {
+    if (!entry.untracked || isReleaseRelevantPath(entry.file)) approvedFiles.push(entry.file)
+    else ignoredUntrackedFiles.push(entry.file)
+  }
+  return { approvedFiles: [...new Set(approvedFiles)].sort(), ignoredUntrackedFiles: [...new Set(ignoredUntrackedFiles)].sort() }
+}
+
+export function validateConcurrentReleaseScope(approvedFiles, entries) {
+  const approved = new Set(approvedFiles.map(normalizeGitPath))
+  const stagedOutside = entries.filter((entry) => entry.staged && !approved.has(entry.file)).map((entry) => entry.file)
+  if (stagedOutside.length > 0) throw new Error(`Unexpected staged files outside approved release scope: ${[...new Set(stagedOutside)].sort().join(', ')}`)
+  const conflicting = entries.filter((entry) => !approved.has(entry.file) && (!entry.untracked || isReleaseRelevantPath(entry.file))).map((entry) => entry.file)
+  if (conflicting.length > 0) throw new Error(`Concurrent tracked or release-relevant changes appeared outside approved release scope: ${[...new Set(conflicting)].sort().join(', ')}`)
+  const present = new Set(entries.map((entry) => entry.file))
+  const missing = [...approved].filter((file) => !present.has(file))
+  if (missing.length > 0) throw new Error(`Approved release files changed or disappeared during validation: ${missing.join(', ')}`)
+  return { ignoredUntrackedFiles: [...new Set(entries.filter((entry) => entry.untracked && !approved.has(entry.file)).map((entry) => entry.file))].sort() }
+}
+
+export function buildScopedStageArgs(approvedFiles) {
+  const files = [...new Set(approvedFiles.map(normalizeGitPath))].sort()
+  if (files.length === 0) throw new Error('Approved release scope is empty.')
+  return ['add', '--all', '--', ...files]
+}
+
+export function validateStagedScope(approvedFiles, stagedFiles) {
+  const approved = [...new Set(approvedFiles.map(normalizeGitPath))].sort()
+  const staged = [...new Set(stagedFiles.map(normalizeGitPath))].sort()
+  if (JSON.stringify(staged) !== JSON.stringify(approved)) throw new Error(`Staged scope differs from approved release scope. Expected ${approved.length}; found ${staged.length}.`)
+  return { approvedCount: approved.length, stagedCount: staged.length }
+}
 
 export function classifyChangedFiles(files) {
   const normalized = [...new Set(files.map(normalizeGitPath))].sort()
@@ -101,13 +152,7 @@ export function inspectChangedFiles(root, files, options = {}) {
 }
 
 export function parseStatusPorcelainZ(output) {
-  const entries = output.split('\0').filter(Boolean), files = []
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index], status = entry.slice(0, 2), file = entry.slice(3)
-    files.push(normalizeGitPath(file))
-    if ((status.includes('R') || status.includes('C')) && entries[index + 1] !== undefined) { files.push(normalizeGitPath(entries[index + 1])); index += 1 }
-  }
-  return [...new Set(files)]
+  return [...new Set(parseStatusPorcelainZDetailed(output).map((entry) => entry.file))]
 }
 
 export function validateHealthResponse(status, body) {

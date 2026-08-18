@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { jsonFingerprint, sameJson } from './lib/canonical-json.mjs'
 import { pronounsModifiersLessonSpecs } from './lib/pronouns-modifiers-teaching-system-content.mjs'
 
-const confirmation = 'publish-pronouns-modifiers-teaching-system-v1'
+const confirmation = 'publish-pronouns-and-modifiers-teaching-system-v1'
 const csrfHeaderValue = 'same-origin-admin-mutation'
 const guidedBlockType = 'illustrated-guided-teaching'
 
@@ -97,8 +97,8 @@ async function main() {
   if (topic === undefined || topic.lessons.length !== pronounsModifiersLessonSpecs.length) throw new Error('Pronouns and Modifiers must contain exactly the twelve expected lessons.')
   const capabilityLesson = topic.lessons.find((item) => item.slug === pronounsModifiersLessonSpecs[0]?.slug)
   if (capabilityLesson === undefined) throw new Error('Pronouns and Modifiers capability lesson was not found.')
-  const capability = await request(`/api/admin/lessons/${capabilityLesson.id}/pronouns-modifiers-teaching-system-v1/capability`)
-  if (capability?.supported !== true || capability.operation !== 'pronouns-modifiers-teaching-system-v1' || capability.topicSlug !== 'pronouns-and-modifiers') throw new Error('Production Worker does not report the Pronouns and Modifiers reconciliation capability.')
+  const capability = await request(`/api/admin/lessons/${capabilityLesson.id}/pronouns-and-modifiers-teaching-system-v1/capability`)
+  if (capability?.supported !== true || capability.operation !== 'pronouns-and-modifiers-teaching-system-v1' || capability.topicSlug !== 'pronouns-and-modifiers') throw new Error('Production Worker does not report the Pronouns and Modifiers reconciliation capability.')
   if (capabilityCheck) {
     console.log(JSON.stringify({ supported: true, operation: capability.operation, topicSlug: capability.topicSlug }))
     return
@@ -120,13 +120,13 @@ async function main() {
   const deletionPlanFingerprint = deletionPlan.length === 0 ? null : createHash('sha256').update(JSON.stringify(deletionPlan)).digest('hex')
   const deletionReviewRequired = deletionPlan.length > 0
   if (validateOnly) {
-    console.log(JSON.stringify({ valid: true, operation: 'pronouns-modifiers-teaching-system-v1', topicSlug: 'pronouns-and-modifiers', lessonCount: pronounsModifiersLessonSpecs.length, writesRequired: totals.lessonsChanged > 0, totals, deletionReviewRequired, deletionPlanFingerprint, deletions: deletionPlan, lessons: reports }, null, 2))
+    console.log(JSON.stringify({ valid: true, operation: 'pronouns-and-modifiers-teaching-system-v1', topicSlug: 'pronouns-and-modifiers', lessonCount: pronounsModifiersLessonSpecs.length, writesRequired: totals.lessonsChanged > 0, totals, deletionReviewRequired, deletionPlanFingerprint, deletions: deletionPlan, lessons: reports }, null, 2))
     return
   }
   if (deletionReviewRequired && args.get('approve-deletions') !== deletionPlanFingerprint) throw new Error(`Review every planned deletion, then pass --approve-deletions ${deletionPlanFingerprint}.`)
   for (const state of states) {
     if (!state.plan.writesRequired) continue
-    await request(`/api/admin/lessons/${state.lesson.id}/pronouns-modifiers-teaching-system-v1`, { method: 'PUT', body: JSON.stringify({ blocks: state.spec.blocks.map((block, index) => desiredPayload(block, index + 1)) }) })
+    await request(`/api/admin/lessons/${state.lesson.id}/pronouns-and-modifiers-teaching-system-v1`, { method: 'PUT', body: JSON.stringify({ blocks: state.spec.blocks.map((block, index) => desiredPayload(block, index + 1)) }) })
   }
   const verifiedLessons = []
   for (const state of states) {
@@ -136,7 +136,7 @@ async function main() {
     if (mismatch !== null) throw new Error(`Post-publish validation failed for ${state.spec.title}: ${mismatch}.`)
     verifiedLessons.push({ lessonSlug: state.spec.slug, blockCount: blocks.length, visualBlockCount: blocks.filter((block) => block.content?.visual !== undefined).length, guidedBlockCount: 0 })
   }
-  console.log(JSON.stringify({ published: true, updated: totals.lessonsChanged > 0, operation: 'pronouns-modifiers-teaching-system-v1', topicSlug: 'pronouns-and-modifiers', lessonCount: pronounsModifiersLessonSpecs.length, totals, lessons: verifiedLessons, unrelatedTopicsModified: 0 }, null, 2))
+  console.log(JSON.stringify({ published: true, updated: totals.lessonsChanged > 0, operation: 'pronouns-and-modifiers-teaching-system-v1', topicSlug: 'pronouns-and-modifiers', lessonCount: pronounsModifiersLessonSpecs.length, totals, lessons: verifiedLessons, unrelatedTopicsModified: 0 }, null, 2))
 }
 
 main().catch((error) => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1 })
