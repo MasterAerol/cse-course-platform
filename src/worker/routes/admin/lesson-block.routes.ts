@@ -23,6 +23,7 @@ import {
   grammarCorrectUsageTeachingSystemReconcileSchema,
   subjectVerbAgreementTeachingSystemReconcileSchema,
   pronounsModifiersTeachingSystemReconcileSchema,
+  sentenceStructureErrorsTeachingSystemReconcileSchema,
 } from '../../schemas/admin/content-admin.schemas'
 import {
   createAdminLessonBlock,
@@ -31,6 +32,7 @@ import {
   getGrammarCorrectUsageTeachingSystemCapability,
   getSubjectVerbAgreementTeachingSystemCapability,
   getPronounsModifiersTeachingSystemCapability,
+  getSentenceStructureErrorsTeachingSystemCapability,
   moveLessonBlock,
   repairPercentageGuidedTeaching,
   reconcileAgeProblemsTeachingSystemLesson,
@@ -50,6 +52,7 @@ import {
   reconcileGrammarCorrectUsageTeachingSystemLesson,
   reconcileSubjectVerbAgreementTeachingSystemLesson,
   reconcilePronounsModifiersTeachingSystemLesson,
+  reconcileSentenceStructureErrorsTeachingSystemLesson,
   updateAdminLessonBlock,
 } from '../../services/admin/admin-content.service'
 import type { AppEnv } from '../../types/app'
@@ -480,6 +483,37 @@ adminLessonBlockRoutes.put(
     return successResponse(
       context,
       await reconcilePronounsModifiersTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+
+adminLessonBlockRoutes.get(
+  '/lessons/:lessonId/sentence-structure-and-error-identification-teaching-system-v1/capability',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    return successResponse(
+      context,
+      await getSentenceStructureErrorsTeachingSystemCapability(context.env.DB, params.lessonId),
+    )
+  },
+)
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/sentence-structure-and-error-identification-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    const input = await parseJsonBody(context, sentenceStructureErrorsTeachingSystemReconcileSchema)
+    return successResponse(
+      context,
+      await reconcileSentenceStructureErrorsTeachingSystemLesson(
         context.env.DB,
         context.get('authUser'),
         params.lessonId,
