@@ -85,6 +85,8 @@ export const contextCluesTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
 export const sentenceCompletionTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
+export const grammarCorrectUsageTeachingSystemReconcileSchema =
+  percentageTeachingSystemReconcileSchema
 export const simpleInterestTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
 
@@ -240,6 +242,7 @@ export type VocabularyWordMeaningTeachingSystemReconcileInput = z.infer<typeof v
 export type SynonymsAntonymsTeachingSystemReconcileInput = z.infer<typeof synonymsAntonymsTeachingSystemReconcileSchema>
 export type ContextCluesTeachingSystemReconcileInput = z.infer<typeof contextCluesTeachingSystemReconcileSchema>
 export type SentenceCompletionTeachingSystemReconcileInput = z.infer<typeof sentenceCompletionTeachingSystemReconcileSchema>
+export type GrammarCorrectUsageTeachingSystemReconcileInput = z.infer<typeof grammarCorrectUsageTeachingSystemReconcileSchema>
 export type PracticeSetInput = z.infer<typeof practiceSetInputSchema>
 export type FixedQuestionInput = z.infer<typeof fixedQuestionInputSchema>
 export type QuizInput = z.infer<typeof quizInputSchema>
