@@ -75,6 +75,8 @@ export const ageProblemsTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
 export const workRateTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
+export const distanceSpeedTimeTeachingSystemReconcileSchema =
+  percentageTeachingSystemReconcileSchema
 
 export const generatedDifficultyConfigSchema = z
   .object({
@@ -222,6 +224,7 @@ export type AverageTeachingSystemReconcileInput = z.infer<typeof averageTeaching
 export type NumberProblemsTeachingSystemReconcileInput = z.infer<typeof numberProblemsTeachingSystemReconcileSchema>
 export type AgeProblemsTeachingSystemReconcileInput = z.infer<typeof ageProblemsTeachingSystemReconcileSchema>
 export type WorkRateTeachingSystemReconcileInput = z.infer<typeof workRateTeachingSystemReconcileSchema>
+export type DistanceSpeedTimeTeachingSystemReconcileInput = z.infer<typeof distanceSpeedTimeTeachingSystemReconcileSchema>
 export type PracticeSetInput = z.infer<typeof practiceSetInputSchema>
 export type FixedQuestionInput = z.infer<typeof fixedQuestionInputSchema>
 export type QuizInput = z.infer<typeof quizInputSchema>
