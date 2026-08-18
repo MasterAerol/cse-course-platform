@@ -24,6 +24,22 @@ export function resolveContentReleasePreflight({ meta, environment = process.env
   return { ...resolveTeachingCredentials(meta, environment, explicitEmail), baseUrl: validateContentBaseUrl(baseUrl) }
 }
 
+export async function verifyCapabilityWithRetry(verify, options = {}) {
+  const attempts = options.attempts ?? 1
+  const delayMs = options.delayMs ?? 0
+  const sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)))
+  let lastError
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try { return await verify() } catch (error) {
+      lastError = error
+      const message = error instanceof Error ? error.message : String(error)
+      if (attempt === attempts || !/(?:404|NOT_FOUND)/u.test(message)) throw error
+      await sleep(delayMs)
+    }
+  }
+  throw lastError
+}
+
 export function validateContentInspection(value) {
   if (value === null || typeof value !== 'object') throw new Error('Content inspector did not return a JSON object.')
   if (value.allMatch !== true) throw new Error('Production content inspection did not match the canonical teaching manifest.')

@@ -38,6 +38,7 @@ export function resolveContentReleasePreflight(options: {
   explicitEmail?: string
   baseUrl?: string
 }): { email: string; passwordEnv: string; password: string; baseUrl: string }
+export function verifyCapabilityWithRetry<T>(verify: () => T | Promise<T>, options?: { attempts?: number; delayMs?: number; sleep?: (milliseconds: number) => unknown | Promise<unknown> }): Promise<T>
 export function validateContentInspection(value: Record<string, unknown>): Record<string, unknown>
 export function runContentReleasePipeline(operations: ContentReleaseOperations): Promise<Record<string, unknown>>
 export function runTeachingReleasePipeline(
