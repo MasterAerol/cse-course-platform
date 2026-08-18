@@ -15,6 +15,7 @@ import {
   ratioProportionTeachingSystemReconcileSchema,
   workRateTeachingSystemReconcileSchema,
   distanceSpeedTimeTeachingSystemReconcileSchema,
+  simpleInterestTeachingSystemReconcileSchema,
 } from '../../schemas/admin/content-admin.schemas'
 import {
   createAdminLessonBlock,
@@ -31,6 +32,7 @@ import {
   reconcileRatioProportionTeachingSystemLesson,
   reconcileWorkRateTeachingSystemLesson,
   reconcileDistanceSpeedTimeTeachingSystemLesson,
+  reconcileSimpleInterestTeachingSystemLesson,
   updateAdminLessonBlock,
 } from '../../services/admin/admin-content.service'
 import type { AppEnv } from '../../types/app'
@@ -273,6 +275,25 @@ adminLessonBlockRoutes.put(
     return successResponse(
       context,
       await reconcileDistanceSpeedTimeTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/simple-interest-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    const input = await parseJsonBody(context, simpleInterestTeachingSystemReconcileSchema)
+    return successResponse(
+      context,
+      await reconcileSimpleInterestTeachingSystemLesson(
         context.env.DB,
         context.get('authUser'),
         params.lessonId,

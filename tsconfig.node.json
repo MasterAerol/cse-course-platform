@@ -38,6 +38,7 @@
     "vitest.age-problems-publisher.config.ts",
     "vitest.work-rate-publisher.config.ts",
     "vitest.distance-speed-time-publisher.config.ts",
+    "vitest.simple-interest-publisher.config.ts",
     "vitest.safe-teaching-release.config.ts",
     "eslint.config.js",
     "tests",
