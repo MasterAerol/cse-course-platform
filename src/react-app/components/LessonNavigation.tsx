@@ -25,7 +25,7 @@ export function LessonNavigation({
         className="button-link button-link--secondary"
         to={`/courses/${courseSlug}/lessons/${previousLesson.publicId}`}
       >
-        Previous: {previousLesson.title}
+        Previous · {previousLesson.title}
       </Link>
     )
   const nextLink =
@@ -36,14 +36,14 @@ export function LessonNavigation({
         className="button-link button-link--disabled"
         title={nextLesson.lockReason ?? undefined}
       >
-        Next locked
+        Next lesson locked
       </span>
     ) : (
       <Link
         className="button-link"
         to={`/courses/${courseSlug}/lessons/${nextLesson.publicId}`}
       >
-        Next: {nextLesson.title}
+        Next Lesson · {nextLesson.title}
       </Link>
     )
 

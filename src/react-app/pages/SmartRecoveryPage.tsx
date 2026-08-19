@@ -34,21 +34,26 @@ export function SmartRecoveryPageView({
 
   return (
     <main className="page-shell recovery-page">
-      <LearnerTopbar as="header" showSignOut>
+      <LearnerTopbar
+        as="header"
+        mobileCollapsible
+        showSignOut
+        ariaLabel="Main navigation"
+      >
         <Link className="button-link button-link--secondary" to="/dashboard">
           Dashboard
         </Link>
         <Link className="button-link button-link--secondary" to="/courses">
-          Catalog
+          Courses
         </Link>
       </LearnerTopbar>
 
       <header className="recovery-page-header">
         <p className="eyebrow">Smart Recovery</p>
-        <h1>Your skill signals</h1>
+        <h1>Focus where it matters most</h1>
         <p>
-          Review skill patterns, start a targeted recovery set, or continue saved
-          work.
+          PasaWise uses your recent submitted practice evidence to identify skills
+          that may benefit from targeted review.
         </p>
       </header>
       {state.status === 'error' && (

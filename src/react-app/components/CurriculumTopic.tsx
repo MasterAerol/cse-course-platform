@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 
 import type { StudentCourseCurriculum } from '../lib/curriculum.types'
 import { CurriculumLessonItem } from './CurriculumLessonItem'
@@ -18,15 +18,26 @@ export function CurriculumTopic({
   compact = false,
   onLessonNavigate,
 }: CurriculumTopicProps) {
-  const [expanded, setExpanded] = useState(true)
+  const hasCurrentLesson = topic.lessons.some(
+    (lesson) => lesson.publicId === currentLessonPublicId,
+  )
+  const [expanded, setExpanded] = useState(
+    currentLessonPublicId === undefined || hasCurrentLesson,
+  )
   const panelId = `topic-${topic.slug}`
   const lessonCount = topic.lessons.length
+  const completedLessonCount = topic.lessons.filter(
+    (lesson) => lesson.progressStatus === 'completed',
+  ).length
   const lessonCountLabel = `${lessonCount} ${lessonCount === 1 ? 'lesson' : 'lessons'}`
+  const progressLabel = completedLessonCount > 0
+    ? `${lessonCountLabel} · ${completedLessonCount} complete`
+    : lessonCountLabel
 
   return (
-    <section className="curriculum-topic">
+    <section className={`curriculum-topic ${hasCurrentLesson ? 'curriculum-topic--current' : ''}`}>
       <button
-        className="curriculum-toggle"
+        className={`curriculum-toggle ${hasCurrentLesson ? 'curriculum-toggle--current' : ''}`}
         type="button"
         aria-label={`${expanded ? 'Collapse' : 'Expand'} ${topic.title} lessons`}
         aria-expanded={expanded}
@@ -35,11 +46,10 @@ export function CurriculumTopic({
       >
         <span className="curriculum-toggle__title">
           <span>{topic.title}</span>
-          <span className="curriculum-toggle__meta">{lessonCountLabel}</span>
+          <span className="curriculum-toggle__meta">{progressLabel}</span>
         </span>
         <span className="curriculum-toggle__action" aria-hidden="true">
-          <span>{expanded ? '▾' : '▸'}</span>
-          <span>{expanded ? 'Hide lessons' : 'Show lessons'}</span>
+          <span className="curriculum-toggle__chevron">{expanded ? '▾' : '▸'}</span>
         </span>
       </button>
       {expanded && (

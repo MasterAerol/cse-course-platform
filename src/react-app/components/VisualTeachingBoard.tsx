@@ -87,33 +87,36 @@ export function VisualTeachingBoard({ visual }: VisualTeachingBoardProps) {
       aria-label={visual.ariaLabel}
       data-testid="visual-teaching-board"
     >
-      {hasMultipleStages && (
-        <div className="visual-teaching-board__toolbar" data-testid="visual-teaching-toolbar">
-          <strong>Follow the transformation</strong>
-          <div className="visual-teaching-board__scroll-controls">
-            <button
-              type="button"
-              className="visual-teaching-board__scroll-button"
-              aria-label="Scroll visual teaching board left"
-              data-testid="visual-scroll-left"
-              onClick={() => handleScroll(-1)}
-              disabled={!scrollState.canScrollLeft}
-            >
-              <span aria-hidden="true">&#8592;</span>
-            </button>
-            <button
-              type="button"
-              className="visual-teaching-board__scroll-button"
-              aria-label="Scroll visual teaching board right"
-              data-testid="visual-scroll-right"
-              onClick={() => handleScroll(1)}
-              disabled={!scrollState.canScrollRight}
-            >
-              <span aria-hidden="true">&#8594;</span>
-            </button>
+      <div className="visual-teaching-board__header">
+        <span className="visual-teaching-board__label">Visual Example</span>
+        {hasMultipleStages && (
+          <div className="visual-teaching-board__toolbar" data-testid="visual-teaching-toolbar">
+            <strong>Follow the transformation</strong>
+            <div className="visual-teaching-board__scroll-controls">
+              <button
+                type="button"
+                className="visual-teaching-board__scroll-button"
+                aria-label="Scroll visual teaching board left"
+                data-testid="visual-scroll-left"
+                onClick={() => handleScroll(-1)}
+                disabled={!scrollState.canScrollLeft}
+              >
+                <span aria-hidden="true">&#8592;</span>
+              </button>
+              <button
+                type="button"
+                className="visual-teaching-board__scroll-button"
+                aria-label="Scroll visual teaching board right"
+                data-testid="visual-scroll-right"
+                onClick={() => handleScroll(1)}
+                disabled={!scrollState.canScrollRight}
+              >
+                <span aria-hidden="true">&#8594;</span>
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div
         className="visual-teaching-board__scroll-shell"

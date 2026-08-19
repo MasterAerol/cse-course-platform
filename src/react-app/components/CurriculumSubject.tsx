@@ -1,4 +1,4 @@
-﻿import type { StudentCourseCurriculum } from '../lib/curriculum.types'
+import type { StudentCourseCurriculum } from '../lib/curriculum.types'
 import { CurriculumTopic } from './CurriculumTopic'
 
 interface SubjectRoadmap {
@@ -68,7 +68,7 @@ export function CurriculumSubject({
       <div className="topic-list">
         {subject.topics.map((topic) => (
           <CurriculumTopic
-            key={topic.slug}
+            key={`${topic.slug}-${currentLessonPublicId ?? 'roadmap'}`}
             courseSlug={courseSlug}
             topic={topic}
             currentLessonPublicId={currentLessonPublicId}

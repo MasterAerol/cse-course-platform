@@ -17,7 +17,6 @@ import {
   type LessonDetail,
   type StudentCourseCurriculum,
 } from '../lib/api'
-import { activateLessonDocumentViewport } from '../lib/lesson-document-viewport'
 
 type LessonPageState =
   | { status: 'loading' }
@@ -89,10 +88,6 @@ export function LessonPage({ initialData }: LessonPageProps = {}) {
     | { type: 'success'; message: string }
     | { type: 'error'; message: string }
   >({ type: 'idle' })
-
-  useEffect(() => {
-    return activateLessonDocumentViewport(document.documentElement.classList)
-  }, [])
 
   useEffect(() => {
     if (initialData !== undefined) {
@@ -234,11 +229,7 @@ export function LessonPage({ initialData }: LessonPageProps = {}) {
               />
             </aside>
 
-            <article
-              className="lesson-content"
-              data-testid="lesson-scroll-pane"
-              data-scroll-pane="lesson"
-            >
+            <article className="lesson-content" data-testid="lesson-scroll-pane">
               <nav className="lesson-breadcrumb" aria-label="Breadcrumb">
                 <Link to={`/courses/${state.lesson.course.slug}`}>
                   {state.lesson.course.title}
@@ -248,20 +239,24 @@ export function LessonPage({ initialData }: LessonPageProps = {}) {
               </nav>
 
               <header className="lesson-reader__header">
-                <p className="eyebrow">{state.lesson.lessonType}</p>
+                <div className="lesson-reader__meta">
+                  <span className="eyebrow">{state.lesson.lessonType}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>
+                    {state.lesson.estimatedMinutes !== null
+                      ? `${state.lesson.estimatedMinutes} min read`
+                      : 'Estimated time coming soon'}
+                  </span>
+                </div>
                 <h1>{state.lesson.title}</h1>
-                <p>
-                  {state.lesson.estimatedMinutes !== null
-                    ? `${state.lesson.estimatedMinutes} min read`
-                    : 'Estimated time coming soon'}
-                </p>
-                <p className="lesson-progress-status">
-                  Status:{' '}
+                <p
+                  className={`lesson-progress-status lesson-progress-status--${state.lesson.progress.status}`}
+                >
                   {state.lesson.progress.status === 'completed'
-                    ? 'completed'
+                    ? 'Completed'
                     : state.lesson.progress.status === 'in_progress'
-                      ? 'in progress'
-                      : 'not started'}
+                      ? 'In Progress'
+                      : 'Not Started'}
                 </p>
               </header>
 

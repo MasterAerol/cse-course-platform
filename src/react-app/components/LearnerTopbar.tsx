@@ -22,7 +22,9 @@ export function LearnerTopbar({
   showSignOut = false,
 }: LearnerTopbarProps) {
   const Root = as === 'header' ? 'header' : 'nav'
-  const mergedClassName = `topbar${className === undefined ? '' : ` ${className}`}`
+  const mergedClassName = `topbar${
+    mobileCollapsible ? ' topbar--mobile-collapsible' : ''
+  }${className === undefined ? '' : ` ${className}`}`
   const authContext = useContext(AuthContext)
   const user = authContext?.user ?? null
   const logout = authContext?.logout
