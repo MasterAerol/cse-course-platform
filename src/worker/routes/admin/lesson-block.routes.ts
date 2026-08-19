@@ -24,6 +24,7 @@ import {
   subjectVerbAgreementTeachingSystemReconcileSchema,
   pronounsModifiersTeachingSystemReconcileSchema,
   sentenceStructureErrorsTeachingSystemReconcileSchema,
+  paragraphOrganizationTeachingSystemReconcileSchema,
 } from '../../schemas/admin/content-admin.schemas'
 import {
   createAdminLessonBlock,
@@ -33,6 +34,7 @@ import {
   getSubjectVerbAgreementTeachingSystemCapability,
   getPronounsModifiersTeachingSystemCapability,
   getSentenceStructureErrorsTeachingSystemCapability,
+  getParagraphOrganizationTeachingSystemCapability,
   moveLessonBlock,
   repairPercentageGuidedTeaching,
   reconcileAgeProblemsTeachingSystemLesson,
@@ -53,6 +55,7 @@ import {
   reconcileSubjectVerbAgreementTeachingSystemLesson,
   reconcilePronounsModifiersTeachingSystemLesson,
   reconcileSentenceStructureErrorsTeachingSystemLesson,
+  reconcileParagraphOrganizationTeachingSystemLesson,
   updateAdminLessonBlock,
 } from '../../services/admin/admin-content.service'
 import type { AppEnv } from '../../types/app'
@@ -514,6 +517,37 @@ adminLessonBlockRoutes.put(
     return successResponse(
       context,
       await reconcileSentenceStructureErrorsTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+
+adminLessonBlockRoutes.get(
+  '/lessons/:lessonId/paragraph-organization-teaching-system-v1/capability',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    return successResponse(
+      context,
+      await getParagraphOrganizationTeachingSystemCapability(context.env.DB, params.lessonId),
+    )
+  },
+)
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/paragraph-organization-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    const input = await parseJsonBody(context, paragraphOrganizationTeachingSystemReconcileSchema)
+    return successResponse(
+      context,
+      await reconcileParagraphOrganizationTeachingSystemLesson(
         context.env.DB,
         context.get('authUser'),
         params.lessonId,

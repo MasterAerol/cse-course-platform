@@ -93,6 +93,8 @@ export const pronounsModifiersTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
 export const sentenceStructureErrorsTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
+export const paragraphOrganizationTeachingSystemReconcileSchema =
+  percentageTeachingSystemReconcileSchema
 export const simpleInterestTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
 
@@ -252,6 +254,7 @@ export type GrammarCorrectUsageTeachingSystemReconcileInput = z.infer<typeof gra
 export type SubjectVerbAgreementTeachingSystemReconcileInput = z.infer<typeof subjectVerbAgreementTeachingSystemReconcileSchema>
 export type PronounsModifiersTeachingSystemReconcileInput = z.infer<typeof pronounsModifiersTeachingSystemReconcileSchema>
 export type SentenceStructureErrorsTeachingSystemReconcileInput = z.infer<typeof sentenceStructureErrorsTeachingSystemReconcileSchema>
+export type ParagraphOrganizationTeachingSystemReconcileInput = z.infer<typeof paragraphOrganizationTeachingSystemReconcileSchema>
 export type PracticeSetInput = z.infer<typeof practiceSetInputSchema>
 export type FixedQuestionInput = z.infer<typeof fixedQuestionInputSchema>
 export type QuizInput = z.infer<typeof quizInputSchema>
