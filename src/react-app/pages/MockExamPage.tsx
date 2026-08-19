@@ -3,7 +3,67 @@ import { Link, useNavigate } from 'react-router'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
 import { PasaWisePageLoader } from '../components/PasaWiseLoader'
-import { createMockAttempt, fetchMockSummary, type MockExamSummary } from '../lib/mock-exam-api'
+import {
+  createMockAttempt,
+  fetchMockSummary,
+  type MockExamSummary,
+} from '../lib/mock-exam-api'
+import {
+  formatMockExamDescription,
+  formatMockExamSimulationLabel,
+} from '../lib/mock-exam-presentation'
+
+interface MockHistoryItem {
+  public_id: string
+  attempt_number: number
+  mode: string
+  status: string
+  earned_points: number | null
+  total_points: number | null
+  score_percent: number | null
+  passed: number | null
+  created_at: string
+  submitted_at: string | null
+}
+
+function MockExamTopbar() {
+  return (
+    <LearnerTopbar
+      as="header"
+      mobileCollapsible
+      showSignOut
+      ariaLabel="Main navigation"
+    >
+      <Link className="button-link button-link--secondary" to="/dashboard">
+        Dashboard
+      </Link>
+      <Link className="button-link button-link--secondary" to="/courses">
+        Courses
+      </Link>
+      <Link className="button-link button-link--secondary" to="/readiness">
+        Readiness
+      </Link>
+    </LearnerTopbar>
+  )
+}
+
+function formatAttemptDate(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
+function formatMode(mode: string): string {
+  return mode === 'timed' ? 'Timed Simulation' : 'Untimed Practice'
+}
+
+function isActiveStatus(status: string): boolean {
+  return status === 'instructions' || status === 'in_progress'
+}
 
 export function MockExamPage() {
   const navigate = useNavigate()
@@ -13,39 +73,43 @@ export function MockExamPage() {
   const [showEdq, setShowEdq] = useState(false)
 
   useEffect(() => {
-    const c = new AbortController()
-    fetchMockSummary(c.signal)
+    const controller = new AbortController()
+    fetchMockSummary(controller.signal)
       .then(setSummary)
-      .catch((e: unknown) => {
-        setError(e instanceof Error ? e.message : 'Mock could not be loaded.')
+      .catch((value: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(
+            value instanceof Error ? value.message : 'Mock could not be loaded.',
+          )
+        }
       })
-    return () => c.abort()
+    return () => controller.abort()
   }, [])
 
   async function begin(mode: 'timed' | 'untimed'): Promise<void> {
     setBusy(true)
+    setError(null)
     try {
       const data = await createMockAttempt(mode)
       await navigate(`/mock-exam-attempts/${data.attempt.publicId}`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Attempt could not be prepared.')
+    } catch (value) {
+      setError(
+        value instanceof Error
+          ? value.message
+          : 'Attempt could not be prepared.',
+      )
     } finally {
       setBusy(false)
     }
   }
 
-  if (error !== null) {
+  if (error !== null && summary === null) {
     return (
-      <main className="page-shell">
-        <LearnerTopbar as="header" showSignOut>
-          <Link className="button-link button-link--secondary" to="/dashboard">
-            Dashboard
-          </Link>
-          <Link className="button-link button-link--secondary" to="/courses">
-            Catalog
-          </Link>
-        </LearnerTopbar>
-        <p className="form-error">{error}</p>
+      <main className="page-shell mock-exam-overview-page">
+        <MockExamTopbar />
+        <p className="form-error" role="alert">
+          {error}
+        </p>
       </main>
     )
   }
@@ -54,92 +118,235 @@ export function MockExamPage() {
     return <PasaWisePageLoader label="Preparing the Full Mock Examinationâ€¦" />
   }
 
-  return (
-    <main className="page-shell">
-      <LearnerTopbar as="header" showSignOut>
-        <Link className="button-link button-link--secondary" to="/dashboard">
-          Dashboard
-        </Link>
-        <Link className="button-link button-link--secondary" to="/courses">
-          Catalog
-        </Link>
-      </LearnerTopbar>
+  const activeAttempt = summary.activeAttempt as unknown as
+    | MockHistoryItem
+    | null
+  const history = summary.history as unknown as MockHistoryItem[]
+  const hasPerformanceSummary =
+    summary.attemptCount > 0 &&
+    summary.latestScore !== null &&
+    summary.bestScore !== null
 
-      <section className="dashboard-card assessment-overview">
-        <p className="eyebrow">{summary.examination.simulationLabel}</p>
-        <h1>{summary.examination.title}</h1>
-        <p>{summary.examination.description}</p>
-        <div className="assessment-facts">
-          <span>150 scored questions</span>
-          <span>Four subject areas</span>
-          <span>Timed: 190 minutes</span>
-          <span>Pass: 120/150 (80%)</span>
+  return (
+    <main className="page-shell mock-exam-overview-page">
+      <MockExamTopbar />
+
+      <section
+        className="mock-overview-hero"
+        aria-labelledby="mock-overview-title"
+      >
+        <div className="mock-overview-hero__content">
+          <p className="eyebrow">
+            {formatMockExamSimulationLabel(summary.examination.simulationLabel)}
+          </p>
+          <h1 id="mock-overview-title">{summary.examination.title}</h1>
+          <p className="mock-overview-hero__description">
+            {formatMockExamDescription(summary.examination.description)}
+          </p>
+          <div className="mock-overview-facts" aria-label="Full Mock details">
+            <span>{summary.examination.questionCount} scored questions</span>
+            <span>{summary.examination.timedDurationMinutes} minutes</span>
+            <span>
+              Pass {summary.examination.passingTarget}/
+              {summary.examination.questionCount} (
+              {summary.examination.passingScore}%)
+            </span>
+            <span>Full exam simulation</span>
+          </div>
+          <p className="mock-overview-rule">
+            Unanswered questions score zero. Answers save automatically, the
+            timed clock continues if you leave, and submission is final.
+          </p>
+          <div className="mock-overview-actions">
+            {activeAttempt !== null ? (
+              <Link
+                className="button-link"
+                to={`/mock-exam-attempts/${activeAttempt.public_id}`}
+              >
+                Continue Full Mock
+              </Link>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void begin('timed')}
+                >
+                  {busy
+                    ? 'Preparingâ€¦'
+                    : summary.attemptCount > 0
+                      ? 'Retake Timed Mock'
+                      : 'Start Timed Mock'}
+                </button>
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void begin('untimed')}
+                >
+                  Start Untimed Practice
+                </button>
+              </>
+            )}
+          </div>
+          {error !== null ? (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          ) : null}
         </div>
-        <p>{summary.notice}</p>
-        <p>
-          Unanswered questions score zero. Progress saves automatically. A timed
-          clock continues if you leave. Submission is final. No calculator is
-          provided or required by this platform simulation.
-        </p>
-        <button className="button-secondary" type="button" onClick={() => setShowEdq((v) => !v)}>
-          {showEdq ? 'Hide optional EDQ' : 'Try optional EDQ practice'}
-        </button>
-        {showEdq && <Edq />}
-        <div className="quiz-step-row">
-          <button disabled={busy} onClick={() => void begin('timed')}>
-            Start Timed Mock
-          </button>
-          <button disabled={busy} onClick={() => void begin('untimed')}>
-            Start Untimed Practice
-          </button>
-        </div>
+
+        {hasPerformanceSummary ? (
+          <aside
+            className="mock-overview-performance"
+            aria-labelledby="mock-overview-performance-title"
+          >
+            <h2 id="mock-overview-performance-title">Your performance</h2>
+            <dl>
+              <div>
+                <dt>Latest score</dt>
+                <dd>{summary.latestScore}%</dd>
+              </div>
+              <div className="mock-overview-performance__best">
+                <dt>Best score</dt>
+                <dd>{summary.bestScore}%</dd>
+              </div>
+              <div>
+                <dt>Attempts</dt>
+                <dd>{summary.attemptCount}</dd>
+              </div>
+            </dl>
+          </aside>
+        ) : (
+          <aside className="mock-overview-readiness" aria-label="Before you begin">
+            <p className="eyebrow">Before you begin</p>
+            <h2>Set aside focused exam time</h2>
+            <p>
+              Choose the timed simulation for the closest exam experience, or
+              use untimed practice when you are still building endurance.
+            </p>
+          </aside>
+        )}
       </section>
 
-      <section className="dashboard-card">
-        <h2>Attempt history</h2>
-        {summary.history.length === 0 ? (
-          <p>No attempts yet.</p>
-        ) : (
-          summary.history.map((raw) => {
-            const item = raw as {
-              public_id: string
-              attempt_number: number
-              mode: string
-              score_percent: number | null
-              passed: number | null
-              status: string
-            }
-            return (
-              <article className="assessment-history" key={item.public_id}>
-                <strong>
-                  Attempt {item.attempt_number} · {item.mode}
-                </strong>
-                <span>
-                  {item.score_percent ?? '—'}% · {item.passed === 1 ? 'Passed' : item.status === 'instructions' || item.status === 'in_progress' ? 'Active' : 'Needs improvement'}
-                </span>
-                {item.score_percent !== null && (
-                  <Link to={`/mock-exam-attempts/${item.public_id}/results`}>Results</Link>
-                )}
-              </article>
-            )
-          })
-        )}
+      <p className="mock-overview-notice">{summary.notice}</p>
+
+      <MockAttemptHistory history={history} />
+
+      <section className="mock-edq-section" aria-labelledby="mock-edq-heading">
+        <div>
+          <p className="eyebrow">Optional preparation</p>
+          <h2 id="mock-edq-heading">Exam-day questionnaire practice</h2>
+          <p>
+            These selections stay only on this page and never affect your mock
+            score or saved progress.
+          </p>
+        </div>
+        <button
+          className="button-secondary"
+          type="button"
+          aria-expanded={showEdq}
+          onClick={() => setShowEdq((visible) => !visible)}
+        >
+          {showEdq ? 'Hide optional EDQ' : 'Try optional EDQ practice'}
+        </button>
+        {showEdq ? <Edq /> : null}
       </section>
     </main>
   )
 }
 
+function MockAttemptHistory({ history }: { history: MockHistoryItem[] }) {
+  return (
+    <section
+      className="mock-history-section"
+      aria-labelledby="mock-history-heading"
+    >
+      <div className="mock-history-section__heading">
+        <div>
+          <p className="eyebrow">Full Mock</p>
+          <h2 id="mock-history-heading">Attempt history</h2>
+          <p>Review completed simulations or continue an unfinished attempt.</p>
+        </div>
+        <span>
+          {history.length} {history.length === 1 ? 'attempt' : 'attempts'}
+        </span>
+      </div>
+
+      {history.length === 0 ? (
+        <div className="mock-history-empty">
+          <h3>No mock attempts yet</h3>
+          <p>Your completed Full Mock results will appear here.</p>
+        </div>
+      ) : (
+        <div className="mock-history-list">
+          {history.map((item) => {
+            const active = isActiveStatus(item.status)
+            const status = active
+              ? 'In Progress'
+              : item.passed === 1
+                ? 'Passed'
+                : 'Needs Improvement'
+            const date = item.submitted_at ?? item.created_at
+
+            return (
+              <article key={item.public_id}>
+                <div className="mock-history-identity">
+                  <p className="eyebrow">{formatMode(item.mode)}</p>
+                  <h3>Attempt {item.attempt_number}</h3>
+                  <time dateTime={date}>{formatAttemptDate(date)}</time>
+                </div>
+                <div className="mock-history-score">
+                  <span>Score</span>
+                  <strong>
+                    {item.earned_points === null || item.total_points === null
+                      ? 'â€”'
+                      : `${item.earned_points} / ${item.total_points}`}
+                  </strong>
+                  <small>
+                    {item.score_percent === null
+                      ? 'Not submitted'
+                      : `${item.score_percent}%`}
+                  </small>
+                </div>
+                <span
+                  className={`mock-status mock-status--${active ? 'progress' : item.passed === 1 ? 'passed' : 'improvement'}`}
+                >
+                  {status}
+                </span>
+                <Link
+                  className="button-link button-link--secondary"
+                  to={
+                    active
+                      ? `/mock-exam-attempts/${item.public_id}`
+                      : `/mock-exam-attempts/${item.public_id}/results`
+                  }
+                >
+                  {active ? 'Continue' : 'View Result'}
+                </Link>
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function Edq() {
   return (
-    <section className="message-card">
-      <h2>Optional, nonpersistent EDQ practice</h2>
-      <p>These safe practice selections stay only on this page and never affect your score.</p>
+    <section className="message-card mock-edq-form">
+      <h3>Optional, nonpersistent EDQ practice</h3>
+      <p>
+        These safe practice selections stay only on this page and never affect
+        your score.
+      </p>
       <label>
         Age bracket
         <select defaultValue="">
           <option value="">Prefer not to answer</option>
-          <option>18·24</option>
-          <option>25·34</option>
+          <option>18â€“24</option>
+          <option>25â€“34</option>
           <option>35 or older</option>
         </select>
       </label>

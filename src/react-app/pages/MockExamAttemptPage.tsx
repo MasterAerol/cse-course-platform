@@ -11,6 +11,7 @@ import {
   type MockAttempt,
   type MockQuestion,
 } from '../lib/mock-exam-api'
+import { formatMockReviewQuestionList } from '../lib/mock-exam-presentation'
 import { mockExamDistributionNotice } from '../../shared/mock-exam-copy'
 import { LearnerTopbar } from '../components/LearnerTopbar'
 import { PasaWisePageLoader } from '../components/PasaWiseLoader'
@@ -185,7 +186,13 @@ export function MockExamAttemptPage() {
   )
 
   const topbar = (
-    <LearnerTopbar showSignOut>
+    <LearnerTopbar
+      as="header"
+      className="mock-attempt-topbar"
+      mobileCollapsible
+      showSignOut
+      ariaLabel="Exam navigation"
+    >
       <Link className="button-link button-link--secondary" to="/dashboard">
         Dashboard
       </Link>
@@ -534,15 +541,18 @@ export function MockExamAttemptPage() {
 
   if (data.attempt.status === 'instructions') {
     return (
-      <main className="page-shell">
+      <main className="page-shell mock-instructions-page">
         {topbar}
-        <section className="dashboard-card">
+        <section className="mock-instructions-card">
           <p className="eyebrow">
             {getModeLabel(data.attempt.mode)}
-            {'\u00B7'}
+            {' \u00B7 '}
             Attempt {data.attempt.attemptNumber}
           </p>
           <h1 className="mock-attempt-title">Full CSE Professional Mock Examination</h1>
+          <p className="mock-instructions-lead">
+            Read the examination rules before starting the test proper.
+          </p>
           <ul>
             <li>150 scored questions across four subject areas</li>
             <li>
@@ -555,7 +565,11 @@ export function MockExamAttemptPage() {
             <li>Answers autosave; submission is final</li>
             <li>{mockExamDistributionNotice}</li>
           </ul>
-          <button type="button" onClick={() => void start()}>
+          <button
+            className="mock-instructions-start"
+            type="button"
+            onClick={() => void start()}
+          >
             Start Test Proper
           </button>
         </section>
@@ -575,38 +589,134 @@ export function MockExamAttemptPage() {
 
   if (reviewing && summary !== null) {
     return (
-      <main className="page-shell">
+      <main className="page-shell mock-submit-review-page">
         {topbar}
-        <section className="dashboard-card">
-          <h1>Review before submission</h1>
-          {QuestionStatusChips({
-            answered: summary.answeredCount,
-            unanswered: summary.unansweredCount,
-            marked: summary.markedForReviewCount,
-          })}
-          <p>
-            Unanswered:{' '}
-            {summary.unansweredQuestionNumbers.join(', ') || 'None'}
-          </p>
-          <p>Marked: {summary.markedQuestionNumbers.join(', ') || 'None'}</p>
-          <div className="assessment-facts">
+        <section
+          className="mock-submit-review-card"
+          aria-labelledby="mock-submit-review-heading"
+        >
+          <header className="mock-submit-review-heading">
+            <p className="eyebrow">Final Check</p>
+            <h1 id="mock-submit-review-heading">Review before submission</h1>
+            <p>
+              Check unanswered and marked questions before submitting your Full
+              Mock Examination.
+            </p>
+          </header>
+
+          <dl className="mock-submit-review-metrics" aria-label="Submission summary">
+            <div className="mock-submit-review-metric mock-submit-review-metric--answered">
+              <dt>Answered</dt>
+              <dd>{summary.answeredCount}</dd>
+            </div>
+            <div className="mock-submit-review-metric mock-submit-review-metric--unanswered">
+              <dt>Unanswered</dt>
+              <dd>{summary.unansweredCount}</dd>
+            </div>
+            <div className="mock-submit-review-metric mock-submit-review-metric--marked">
+              <dt>Marked</dt>
+              <dd>{summary.markedForReviewCount}</dd>
+            </div>
+            <div className="mock-submit-review-metric mock-submit-review-metric--total">
+              <dt>Total</dt>
+              <dd>{data.totalCount}</dd>
+            </div>
+          </dl>
+
+          {summary.unansweredCount > 0 ? (
+            <p className="mock-submit-review-warning">
+              {summary.unansweredCount}{' '}
+              {summary.unansweredCount === 1 ? 'question is' : 'questions are'}{' '}
+              unanswered. Unanswered questions will count as zero.
+            </p>
+          ) : (
+            <p className="mock-submit-review-ready">
+              All questions have an answer recorded.
+            </p>
+          )}
+          {summary.markedForReviewCount > 0 ? (
+            <p className="mock-submit-review-marked">
+              {summary.markedForReviewCount}{' '}
+              {summary.markedForReviewCount === 1 ? 'question remains' : 'questions remain'}{' '}
+              marked for review.
+            </p>
+          ) : null}
+
+          <div className="mock-submit-review-lists">
+            <div>
+              <h2>Unanswered questions</h2>
+              <p>
+                {formatMockReviewQuestionList(
+                  summary.unansweredQuestionNumbers,
+                  'unanswered',
+                )}
+              </p>
+            </div>
+            <div>
+              <h2>Marked questions</h2>
+              <p>
+                {formatMockReviewQuestionList(
+                  summary.markedQuestionNumbers,
+                  'marked',
+                )}
+              </p>
+            </div>
+          </div>
+
+          <section
+            className="mock-submit-review-navigator"
+            aria-labelledby="mock-review-navigator-heading"
+          >
+            <div>
+              <h2 id="mock-review-navigator-heading">Return to a question</h2>
+              <p>Select any question to review or change its answer.</p>
+            </div>
+            <QuestionRangeNavigator
+              totalQuestions={data.totalCount}
+              questions={data.questions}
+              currentIndex={index}
+              expandedRangeIndex={expandedRangeIndex}
+              onRangeExpand={handleRangeExpand}
+              onQuestionSelect={(questionIndex) => {
+                navigateToQuestion(questionIndex)
+                setReviewing(false)
+              }}
+              navigatorIdPrefix="mock-submit-review-range"
+            />
+            <div className="question-navigator__legend">
+              {getNavigatorLegend()}
+            </div>
+          </section>
+
+          <div className="mock-submit-review-allocation">
+            <h2>Exam coverage</h2>
             {summary.subjectAllocation.map((item) => (
               <span key={item.title}>
                 {item.title}: {item.count}
               </span>
             ))}
           </div>
-          <div className="quiz-step-row">
+
+          <div className="mock-submit-review-actions">
             <button
               className="button-secondary"
               type="button"
               onClick={() => setReviewing(false)}
             >
-              Return to Question
+              Continue Reviewing
             </button>
-            <button type="button" onClick={() => void finish()}>
-              Submit Examination
-            </button>
+            <div className="mock-submit-final-action">
+              <div>
+                <h2>Submit Full Mock?</h2>
+                <p>
+                  Submission is final. Once submitted, your answers cannot be
+                  changed.
+                </p>
+              </div>
+              <button type="button" onClick={() => void finish()}>
+                Submit Full Mock
+              </button>
+            </div>
           </div>
         </section>
       </main>
@@ -626,23 +736,47 @@ export function MockExamAttemptPage() {
       <div className="mock-exam-page">
         {topbar}
         <header className="mock-exam-header">
-          <div>
+          <div className="mock-exam-header__identity">
+            <p className="eyebrow">Full Mock Examination</p>
             <h1 className="mock-attempt-title">Full CSE Professional Mock Examination</h1>
             <div className="mock-attempt-badges">
               <span className="badge badge--muted">{getModeLabel(data.attempt.mode)}</span>
               <span className="badge badge--muted">
                 Attempt {data.attempt.attemptNumber}
               </span>
-              <span className="badge badge--muted">
-                Passing Score: {data.examination.passingScore}%
-              </span>
             </div>
           </div>
-          <p className="meta-copy mock-attempt-timer" aria-live="polite">
-            {data.attempt.mode === 'timed'
-              ? `Time remaining: ${formatTime(remaining)}`
-              : 'Untimed Practice'}
-          </p>
+          <div className="mock-attempt-timer" aria-live="polite">
+            <span>{data.attempt.mode === 'timed' ? 'Time Remaining' : 'Exam Mode'}</span>
+            <strong>
+              {data.attempt.mode === 'timed'
+                ? formatTime(remaining)
+                : 'Untimed Practice'}
+            </strong>
+            <small>
+              {data.attempt.mode === 'timed'
+                ? 'The clock continues if you leave.'
+                : 'No deadline'}
+            </small>
+          </div>
+          <div className="mock-attempt-progress">
+            <div>
+              <strong>
+                Question {index + 1} of {data.totalCount}
+              </strong>
+              <span>Passing score {data.examination.passingScore}%</span>
+            </div>
+            <progress
+              max={data.totalCount}
+              value={index + 1}
+              aria-label={`Full Mock progress: question ${index + 1} of ${data.totalCount}`}
+            />
+            {QuestionStatusChips({
+              answered: data.answeredCount,
+              unanswered: unansweredCount,
+              marked: data.markedForReviewCount,
+            })}
+          </div>
         </header>
 
         <main className="mock-exam-workspace">
@@ -758,12 +892,6 @@ export function MockExamAttemptPage() {
             </div>
 
             <section className="quiz-attempt-card">
-              {QuestionStatusChips({
-                answered: data.answeredCount,
-                unanswered: unansweredCount,
-                marked: data.markedForReviewCount,
-              })}
-
               <article className="mock-attempt-question-card">
                 <header className="mock-attempt-question-header">
                   <p className="mock-attempt-question-label">QUESTION {q.position}</p>
@@ -788,15 +916,26 @@ export function MockExamAttemptPage() {
                 </p>
 
                 <div className="quiz-choice-list">
-                  {q.choices.map((choice) => (
-                    <label className="quiz-choice" key={choice.publicId}>
+                  {q.choices.map((choice, choiceIndex) => (
+                    <label
+                      className="quiz-choice mock-exam-choice"
+                      key={choice.publicId}
+                    >
                       <input
                         type="radio"
                         name={q.publicId}
                         checked={q.selectedChoicePublicId === choice.publicId}
                         onChange={() => void choose(q.publicId, choice.publicId)}
                       />
-                      <span>{normalizeTextWithPeso(choice.text)}</span>
+                      <span className="assessment-choice-label" aria-hidden="true">
+                        {String.fromCharCode(65 + choiceIndex)}
+                      </span>
+                      <span className="mock-exam-choice__text">
+                        {normalizeTextWithPeso(choice.text)}
+                      </span>
+                      <span className="assessment-choice-selected" aria-hidden="true">
+                        ✓
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -818,7 +957,6 @@ export function MockExamAttemptPage() {
                   </button>
 
                   <button
-                    className="button-secondary"
                     type="button"
                     disabled={index >= data.questions.length - 1}
                     onClick={() =>
