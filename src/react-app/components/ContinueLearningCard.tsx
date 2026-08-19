@@ -17,8 +17,8 @@ export function ContinueLearningCard({
 }: ContinueLearningCardProps) {
   if (progress.continueLearning.courseCompleted) {
     return (
-      <section className="continue-card">
-        <p className="eyebrow">Continue Learning</p>
+      <section className="continue-card continue-card--course-complete">
+        <p className="eyebrow">Next action · Continue Learning</p>
         <h2>{progress.course.title}</h2>
         <p>Course completed. Nice work.</p>
       </section>
@@ -28,7 +28,7 @@ export function ContinueLearningCard({
   if (progress.continueLearning.lesson === null) {
     return (
       <section className="continue-card">
-        <p className="eyebrow">Continue Learning</p>
+        <p className="eyebrow">Next action · Continue Learning</p>
         <h2>{progress.course.title}</h2>
         <p>No available lesson is ready yet.</p>
       </section>
@@ -37,7 +37,7 @@ export function ContinueLearningCard({
 
   return (
     <section className="continue-card">
-      <p className="eyebrow">Continue Learning</p>
+      <p className="eyebrow">Next action · Continue Learning</p>
       <h2>{progress.continueLearning.lesson.title}</h2>
       <p>{progress.continueLearning.lesson.summary}</p>
       <p className="meta-copy">
@@ -48,7 +48,7 @@ export function ContinueLearningCard({
         className="button-link"
         to={`/courses/${progress.course.slug}/lessons/${progress.continueLearning.lesson.publicId}`}
       >
-        Open lesson
+        Continue lesson
       </Link>
     </section>
   )

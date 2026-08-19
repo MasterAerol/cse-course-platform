@@ -1,5 +1,6 @@
-﻿import { Link } from 'react-router'
+import { Link } from 'react-router'
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { useCseReadiness, type ReadinessViewState } from '../hooks/use-readiness'
 import { confidenceLabel, readinessBandLabel } from '../lib/readiness-copy'
 
@@ -7,9 +8,12 @@ function ScoreGauge({ score }: { score: number }) {
   return <div className="readiness-gauge" style={{ '--readiness-score': `${score * 3.6}deg` } as React.CSSProperties} role="img" aria-label={`CSE Readiness Score: ${score} out of 100`}><div><strong>{score}</strong><span>out of 100</span></div></div>
 }
 export function ReadinessPageView({ state }: { state: ReadinessViewState }) {
+  if (state.status === 'loading') {
+    return <PasaWisePageLoader label="Calculating your readiness…" />
+  }
+
   return <main className="page-shell readiness-page" data-testid="readiness-page">
     <LearnerTopbar as="header" showSignOut><Link className="button-link button-link--secondary" to="/dashboard">Dashboard</Link><Link className="button-link button-link--secondary" to="/mistake-notebook">Mistake Notebook</Link></LearnerTopbar>
-    {state.status === 'loading' && <section className="readiness-state" aria-live="polite" aria-busy="true"><p>Calculating your readiness...</p></section>}
     {state.status === 'error' && <section className="readiness-state" role="alert"><h1>CSE Readiness could not be loaded</h1><p>{state.error}</p><button type="button" onClick={state.reload}>Try again</button></section>}
     {state.status === 'loaded' && <>
       <header className="readiness-hero"><div><p className="eyebrow">CSE Readiness</p><h1>{state.data.hasSufficientEvidence ? readinessBandLabel(state.data.readinessBand) : 'Not enough evidence for a reliable readiness estimate yet.'}</h1><p>{state.data.confidenceExplanation}</p><p className="readiness-confidence"><strong>Confidence:</strong> {confidenceLabel(state.data.confidence)}</p></div><ScoreGauge score={state.data.score} /></header>

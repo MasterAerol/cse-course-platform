@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 
 import { CourseForm } from '../../components/admin/AdminForms'
 import { AdminPageHeader, StatusBadge } from '../../components/admin/AdminUi'
+import { PasaWiseLoader } from '../../components/PasaWiseLoader'
 import {
   createAdminCourse,
   fetchAdminCourses,
@@ -71,7 +72,7 @@ export function AdminCoursesPage() {
 
       <section className="admin-panel">
         <h2>All courses</h2>
-        {state.status === 'loading' && <p>Loading courses…</p>}
+        {state.status === 'loading' && <PasaWiseLoader label="Loading courses…" />}
         {state.status === 'error' && (
           <p className="form-error" role="alert">
             {state.message}

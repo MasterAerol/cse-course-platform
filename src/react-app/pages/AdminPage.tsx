@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
+import { PasaWiseLoader } from '../components/PasaWiseLoader'
 import { fetchAdminCheck } from '../lib/api'
 
 type AdminCheckState =
@@ -48,7 +49,7 @@ export function AdminPage() {
       <section className="message-card" aria-live="polite">
         <p className="eyebrow">Administration</p>
         <h1>Administrator access</h1>
-        {check.status === 'loading' && <p>Checking the protected API…</p>}
+        {check.status === 'loading' && <PasaWiseLoader label="Checking administrator access…" />}
         {check.status === 'authorized' && (
           <p>Access confirmed for this administrator account.</p>
         )}

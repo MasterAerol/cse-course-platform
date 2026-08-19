@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { PasaWiseLoader } from './PasaWiseLoader'
 
 import type { SmartRecoveryViewState } from '../hooks/use-smart-recovery'
 import { smartRecoveryUnavailableMessage } from '../lib/smart-recovery-copy'
@@ -103,7 +104,7 @@ function RecoveryHistorySection({
         <h2 id="recovery-history-heading">Recovery history</h2>
         <p>Submitted recovery sets are compared using evidence available at each submission boundary.</p>
       </div>
-      {state.status === 'loading' && <p aria-busy="true" aria-live="polite">Loading recovery history...</p>}
+      {state.status === 'loading' && <PasaWiseLoader compact label="Loading recovery history…" />}
       {state.status === 'error' && <div role="alert"><p>{state.error}</p><button type="button" className="button-secondary" onClick={state.reload}>Try again</button></div>}
       {state.status === 'loaded' && state.data.attempts.length === 0 && <p className="recovery-empty">No submitted recovery sets yet.</p>}
       {state.status === 'loaded' && state.data.attempts.length > 0 && (

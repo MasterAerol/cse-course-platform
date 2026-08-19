@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { createMockAttempt, fetchMockSummary, type MockExamSummary } from '../lib/mock-exam-api'
 
 export function MockExamPage() {
@@ -50,19 +51,7 @@ export function MockExamPage() {
   }
 
   if (summary === null) {
-    return (
-      <main className="page-shell">
-        <LearnerTopbar as="header" showSignOut>
-          <Link className="button-link button-link--secondary" to="/dashboard">
-            Dashboard
-          </Link>
-          <Link className="button-link button-link--secondary" to="/courses">
-            Catalog
-          </Link>
-        </LearnerTopbar>
-        <p>Loading full mock…</p>
-      </main>
-    )
+    return <PasaWisePageLoader label="Preparing the Full Mock Examinationâ€¦" />
   }
 
   return (
@@ -149,8 +138,8 @@ function Edq() {
         Age bracket
         <select defaultValue="">
           <option value="">Prefer not to answer</option>
-          <option>18–24</option>
-          <option>25–34</option>
+          <option>18·24</option>
+          <option>25·34</option>
           <option>35 or older</option>
         </select>
       </label>

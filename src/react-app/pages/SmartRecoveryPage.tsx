@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { SmartRecoveryOverview } from '../components/SmartRecoveryUi'
 import {
   createSmartRecoveryAttempt,
@@ -27,6 +28,10 @@ export function SmartRecoveryPageView({
   starting?: boolean
   startError?: string | null
 }) {
+  if (state.status === 'loading') {
+    return <PasaWisePageLoader label="Analyzing your skill signals…" />
+  }
+
   return (
     <main className="page-shell recovery-page">
       <LearnerTopbar as="header" showSignOut>
@@ -46,12 +51,6 @@ export function SmartRecoveryPageView({
           work.
         </p>
       </header>
-      {state.status === 'loading' && (
-        <section className="recovery-state-card" aria-busy="true" aria-live="polite">
-          <h2>Loading your skill signals</h2>
-          <p>This may take a moment.</p>
-        </section>
-      )}
       {state.status === 'error' && (
         <section className="recovery-state-card" role="alert">
           <h2>Smart Recovery could not be loaded</h2>

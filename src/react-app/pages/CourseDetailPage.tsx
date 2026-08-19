@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
@@ -7,6 +7,7 @@ import { EnrollmentBadge } from '../components/EnrollmentBadge'
 import { SubjectAssessmentCard } from '../components/SubjectAssessmentCard'
 import type { StudentCourseCurriculum } from '../lib/curriculum.types'
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { MockExamCard } from '../components/MockExamCard'
 import { fetchCourseDetail, type CourseDetail } from '../lib/api'
 
@@ -138,6 +139,10 @@ export function CourseDetailPage() {
     }
   }, [courseSlug])
 
+  if (state.status === 'loading') {
+    return <PasaWisePageLoader label="Loading course details…" />
+  }
+
   const nextLesson =
     state.status === 'loaded'
       ? getNextRecommendedLesson(state.course.curriculum)
@@ -159,8 +164,6 @@ export function CourseDetailPage() {
           </Link>
         )}
       </LearnerTopbar>
-
-      {state.status === 'loading' && <p>Loading course...</p>}
 
       {state.status === 'error' && (
         <p className="form-error" role="alert">

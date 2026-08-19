@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { AdminPageHeader } from '../../components/admin/AdminUi'
+import { PasaWiseLoader } from '../../components/PasaWiseLoader'
 import { fetchAdminDashboard, type AdminDashboard } from '../../lib/api'
 
 type DashboardState =
@@ -39,7 +40,7 @@ export function AdminDashboardPage() {
         description="Content counts, recent changes, and quick entry points."
         actions={<Link className="button-link" to="/admin/courses">Manage courses</Link>}
       />
-      {state.status === 'loading' && <p>Loading admin dashboard…</p>}
+      {state.status === 'loading' && <PasaWiseLoader label="Loading admin dashboard…" />}
       {state.status === 'error' && (
         <p className="form-error" role="alert">
           {state.message}

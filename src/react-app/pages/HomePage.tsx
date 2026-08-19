@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
+import { PasaWiseBrand } from '../components/PasaWiseBrand'
 import { fetchHealth } from '../lib/api'
 
 type ConnectionState =
@@ -45,11 +46,12 @@ export function HomePage() {
   return (
     <main className="app-shell">
       <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">CSE Course Platform</p>
-        <h1 id="page-title">A secure place to begin learning.</h1>
+        <PasaWiseBrand className="hero-brand" variant="primary" />
+        <p className="eyebrow">Aral nang wais. Pasa nang handa.</p>
+        <h1 id="page-title">Study smarter. Walk into the CSE ready.</h1>
         <p className="intro">
-          Browse published CSE preparation courses, then sign in to continue
-          learning from your student dashboard.
+          Build exam confidence with focused lessons, guided practice, and a
+          clear next step every time you return.
         </p>
 
         <div className="button-row">
@@ -88,14 +90,15 @@ export function HomePage() {
           />
           <div>
             <p className="status-label">
-              {connection.status === 'loading' && 'Checking connection'}
-              {connection.status === 'connected' && 'API connected'}
-              {connection.status === 'error' && 'Connection unavailable'}
+              {connection.status === 'loading' && 'Preparing your review space'}
+              {connection.status === 'connected' && 'PasaWise is ready'}
+              {connection.status === 'error' && 'PasaWise could not connect'}
             </p>
             <p className="status-copy">
-              {connection.status === 'loading' && 'Contacting the platform API…'}
+              {connection.status === 'loading' &&
+                'Checking that lessons and practice are available…'}
               {connection.status === 'connected' &&
-                'React, Hono, and Cloudflare Workers are communicating.'}
+                'Your lessons, practice, and progress tools are available.'}
               {connection.status === 'error' && connection.message}
             </p>
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { fetchMockReview } from '../lib/mock-exam-api'
 
 type Review = Awaited<ReturnType<typeof fetchMockReview>>
@@ -34,19 +35,7 @@ export function MockExamReviewPage() {
     )
 
   if (data === null) {
-    return (
-      <main className="page-shell">
-        <LearnerTopbar as="header" showSignOut>
-          <Link className="button-link button-link--secondary" to="/dashboard">
-            Dashboard
-          </Link>
-          <Link className="button-link button-link--secondary" to="/courses">
-            Catalog
-          </Link>
-        </LearnerTopbar>
-        <p>Loading stored answer review…</p>
-      </main>
-    )
+    return <PasaWisePageLoader label="Opening your Full Mock reviewâ€¦" />
   }
 
   return (
@@ -96,8 +85,8 @@ export function MockExamReviewPage() {
             {q.choices.map((choice) => (
               <li key={choice.publicId}>
                 {choice.text}
-                {choice.publicId === q.correctChoice.publicId ? ' — Correct answer' : ''}
-                {choice.publicId === q.selectedChoice?.publicId ? ' — Your answer' : ''}
+                {choice.publicId === q.correctChoice.publicId ? ' · Correct answer' : ''}
+                {choice.publicId === q.selectedChoice?.publicId ? ' · Your answer' : ''}
               </li>
             ))}
           </ul>

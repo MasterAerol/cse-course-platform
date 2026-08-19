@@ -7,6 +7,7 @@ import {
   type RecoveryResult,
 } from '../lib/smart-recovery-api'
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 
 
 export function SmartRecoveryResultPage() {
@@ -58,18 +59,7 @@ export function SmartRecoveryResultPage() {
       </main>
     )
   if (result === null)
-    return (
-      <main className="page-shell">
-        {topbar}
-        <section
-          className="recovery-state-card"
-          aria-busy="true"
-          aria-live="polite"
-        >
-          <h1>Loading recovery results</h1>
-        </section>
-      </main>
-    )
+    return <PasaWisePageLoader label="Checking your Recovery Set results…" />
 
   return (
     <main className="page-shell recovery-page" data-testid="recovery-result-page">

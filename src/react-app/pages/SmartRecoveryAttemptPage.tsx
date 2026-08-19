@@ -8,6 +8,7 @@ import {
   type RecoveryAttempt,
 } from '../lib/smart-recovery-api'
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -163,19 +164,7 @@ export function SmartRecoveryAttemptPage() {
     )
   }
   if (attempt === null) {
-    return (
-      <main className="page-shell">
-        {topbar}
-        <section
-          className="recovery-state-card"
-          aria-busy="true"
-          aria-live="polite"
-        >
-          <h1>Preparing your recovery set</h1>
-          <p>Loading your saved progress.</p>
-        </section>
-      </main>
-    )
+    return <PasaWisePageLoader label="Restoring your Recovery Setâ€¦" />
   }
   if (question === undefined) {
     return (
@@ -203,7 +192,7 @@ export function SmartRecoveryAttemptPage() {
         <h1 className="assessment-title">Recovery Set</h1>
         <div className="assessment-meta">
           <p aria-live="polite">
-            Question {currentPosition} of {attempt.totalCount} {'·'} {answeredCount} answered {'·'} {saveStateText}
+            Question {currentPosition} of {attempt.totalCount} {'—'} {answeredCount} answered {'—'} {saveStateText}
           </p>
         </div>
       </header>
@@ -291,7 +280,7 @@ export function SmartRecoveryAttemptPage() {
         <section className="quiz-attempt-card">
           <fieldset className="quiz-question" disabled={saveState === 'saving' || submitting}>
             <legend>
-              <span>Question {question.position} {'·'} {question.skill.title}</span>
+              <span>Question {question.position} {'—'} {question.skill.title}</span>
               {question.prompt}
             </legend>
             <div className="quiz-choice-list">

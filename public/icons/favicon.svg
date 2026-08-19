@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">PasaWise favicon</title>
+  <desc id="desc">Simplified open book and gold passing arrow.</desc>
+  <defs>
+    <linearGradient id="fb" x1="6" y1="5" x2="58" y2="61" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#071F43"/>
+      <stop offset="0.55" stop-color="#0B2F63"/>
+      <stop offset="1" stop-color="#1A73D9"/>
+    </linearGradient>
+    <linearGradient id="fg" x1="15" y1="39" x2="52" y2="10" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D89200"/>
+      <stop offset="0.55" stop-color="#F4B41A"/>
+      <stop offset="1" stop-color="#FFC94A"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#fb)"/>
+  <rect x="3" y="3" width="58" height="58" rx="14" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="2"/>
+  <path d="M8.5 42.5 C17 40 24.5 42.2 31 48.2 V55.5 C24.4 50.6 17.4 48.9 9.7 50.4 Z" fill="#DCEBFF"/>
+  <path d="M55.5 42.5 C47 40 39.5 42.2 33 48.2 V55.5 C39.6 50.6 46.6 48.9 54.3 50.4 Z" fill="#FFFFFF"/>
+  <path d="M31 48.2 C24.5 42.2 17 40 8.5 42.5 L10.1 35.3 C18.4 34.3 25.1 37.1 31 42.2 Z" fill="#FFFFFF" stroke="#7FB7F4" stroke-width="1.7" stroke-linejoin="round"/>
+  <path d="M33 48.2 C39.5 42.2 47 40 55.5 42.5 L53.9 35.3 C45.6 34.3 38.9 37.1 33 42.2 Z" fill="#FFFFFF" stroke="#7FB7F4" stroke-width="1.7" stroke-linejoin="round"/>
+  <path d="M15 26.8 L25.6 36.5 C31.4 26.9 37.9 19.7 46.4 13.1" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M15 26.8 L25.6 36.5 C31.4 26.9 37.9 19.7 46.4 13.1" fill="none" stroke="url(#fg)" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44.5 8.5 L55 8.8 L50.8 19.2 Z" fill="url(#fg)" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/>
+</svg>

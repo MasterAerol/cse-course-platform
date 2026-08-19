@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 
 import {
   ApiClientError,
@@ -197,6 +198,10 @@ export function QuizAttemptPage() {
     }
   }
 
+  if (state.status === 'loading') {
+    return <PasaWisePageLoader label="Preparing your quizâ€¦" />
+  }
+
   return (
     <main className="page-shell quiz-page">
       <LearnerTopbar as="header">
@@ -204,12 +209,6 @@ export function QuizAttemptPage() {
           Dashboard
         </Link>
       </LearnerTopbar>
-
-      {state.status === 'loading' && (
-        <section className="message-card" aria-live="polite">
-          <p>Loading quiz attempt...</p>
-        </section>
-      )}
 
       {state.status === 'error' && (
         <section className="message-card" role="alert">
@@ -226,7 +225,7 @@ export function QuizAttemptPage() {
           <p className="eyebrow">Attempt {state.attempt.attempt.attemptNumber}</p>
           <h1>{state.attempt.quiz.title}</h1>
           <p>
-            Passing score: {state.attempt.quiz.passingScore}% · Questions:{' '}
+            Passing score: {state.attempt.quiz.passingScore}% ï¿½ Questions:{' '}
             {state.attempt.quiz.questionCount}
           </p>
           <p className="meta-copy" aria-live="polite">

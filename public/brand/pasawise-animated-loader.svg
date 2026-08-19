@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320" role="img" aria-labelledby="title desc">
+  <title id="title">PasaWise animated loading icon</title>
+  <desc id="desc">An open blue book with a gold upward check-arrow, surrounded by a rotating progress ring and animated dots.</desc>
+
+  <defs>
+    <linearGradient id="ringGradient" x1="45" y1="45" x2="270" y2="275" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D7E8FF"/>
+      <stop offset="0.48" stop-color="#2585EA"/>
+      <stop offset="1" stop-color="#0B3F9C"/>
+    </linearGradient>
+
+    <linearGradient id="bookBlue" x1="85" y1="150" x2="238" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1D83EA"/>
+      <stop offset="0.52" stop-color="#0D5BC8"/>
+      <stop offset="1" stop-color="#082E78"/>
+    </linearGradient>
+
+    <linearGradient id="pageShade" x1="100" y1="145" x2="210" y2="218" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DCEBFF"/>
+    </linearGradient>
+
+    <linearGradient id="gold" x1="105" y1="175" x2="228" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D89209"/>
+      <stop offset="0.52" stop-color="#F5B51B"/>
+      <stop offset="1" stop-color="#FFC844"/>
+    </linearGradient>
+
+    <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0A2B64" flood-opacity="0.20"/>
+    </filter>
+
+    <filter id="goldGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feFlood flood-color="#FFC544" flood-opacity="0.72" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <style>
+      .ring {
+        transform-origin: 160px 160px;
+        animation: ring-spin 1.65s linear infinite;
+      }
+
+      .orbit-dot {
+        transform-origin: 160px 160px;
+        animation: dot-orbit 1.65s linear infinite;
+      }
+
+      .arrow-group {
+        transform-origin: 163px 170px;
+        animation: arrow-pulse 1.45s ease-in-out infinite;
+      }
+
+      .ray {
+        transform-origin: center;
+        animation: ray-pulse 1.45s ease-in-out infinite;
+      }
+      .ray:nth-of-type(2) { animation-delay: .12s; }
+      .ray:nth-of-type(3) { animation-delay: .24s; }
+
+      .loading-dot {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: dots 1.2s ease-in-out infinite;
+      }
+      .loading-dot:nth-child(2) { animation-delay: .15s; }
+      .loading-dot:nth-child(3) { animation-delay: .30s; }
+      .loading-dot:nth-child(4) { animation-delay: .45s; }
+
+      .book {
+        transform-origin: 160px 195px;
+        animation: book-breathe 2.1s ease-in-out infinite;
+      }
+
+      @keyframes ring-spin {
+        to { transform: rotate(360deg); }
+      }
+
+      @keyframes dot-orbit {
+        to { transform: rotate(360deg); }
+      }
+
+      @keyframes arrow-pulse {
+        0%, 100% { transform: translateY(1px) scale(.98); }
+        50% { transform: translateY(-5px) scale(1.025); }
+      }
+
+      @keyframes ray-pulse {
+        0%, 100% { opacity: .35; transform: scale(.84); }
+        50% { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes dots {
+        0%, 60%, 100% { opacity: .28; transform: translateY(0) scale(.82); }
+        30% { opacity: 1; transform: translateY(-7px) scale(1); }
+      }
+
+      @keyframes book-breathe {
+        0%, 100% { transform: translateY(1px); }
+        50% { transform: translateY(-2px); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .ring, .orbit-dot, .arrow-group, .ray, .loading-dot, .book {
+          animation: none !important;
+        }
+      }
+    </style>
+  </defs>
+
+  <!-- Faint base ring -->
+  <circle cx="160" cy="160" r="122" fill="none" stroke="#E7EFFB" stroke-width="8"/>
+
+  <!-- Rotating progress arc -->
+  <g class="ring">
+    <circle cx="160" cy="160" r="122" fill="none" stroke="url(#ringGradient)" stroke-width="8" stroke-linecap="round" stroke-dasharray="515 252"/>
+  </g>
+
+  <!-- Orbiting glowing lead dot -->
+  <g class="orbit-dot">
+    <circle cx="160" cy="38" r="10" fill="#F6B51B" stroke="#FFFFFF" stroke-width="4" filter="url(#goldGlow)"/>
+  </g>
+
+  <!-- Learning rays -->
+  <g fill="#F5B51B" filter="url(#goldGlow)">
+    <rect class="ray" x="155" y="74" width="10" height="30" rx="5"/>
+    <rect class="ray" x="119" y="86" width="10" height="29" rx="5" transform="rotate(-42 124 100.5)"/>
+    <rect class="ray" x="191" y="86" width="10" height="29" rx="5" transform="rotate(42 196 100.5)"/>
+  </g>
+
+  <!-- Open book -->
+  <g class="book" filter="url(#softShadow)">
+    <!-- blue outer cover -->
+    <path d="M63 165C88 151 115 151 158 179V232C126 210 98 204 67 215C63 216 59 213 60 208L63 165Z" fill="url(#bookBlue)"/>
+    <path d="M257 165C232 151 205 151 162 179V232C194 210 222 204 253 215C257 216 261 213 260 208L257 165Z" fill="url(#bookBlue)"/>
+
+    <!-- white pages -->
+    <path d="M74 157C102 146 129 151 158 174V216C132 197 105 191 77 199L74 157Z" fill="url(#pageShade)" stroke="#BFD8FA" stroke-width="3"/>
+    <path d="M246 157C218 146 191 151 162 174V216C188 197 215 191 243 199L246 157Z" fill="url(#pageShade)" stroke="#BFD8FA" stroke-width="3"/>
+
+    <!-- page folds -->
+    <path d="M158 174C139 160 117 155 93 158" fill="none" stroke="#D6E5FA" stroke-width="3" stroke-linecap="round"/>
+    <path d="M162 174C181 160 203 155 227 158" fill="none" stroke="#D6E5FA" stroke-width="3" stroke-linecap="round"/>
+    <path d="M160 176V220" stroke="#B8D2F5" stroke-width="4" stroke-linecap="round"/>
+
+    <!-- cover bottom accent -->
+    <path d="M65 216C98 205 128 211 158 232" fill="none" stroke="#062A70" stroke-width="7" stroke-linecap="round"/>
+    <path d="M255 216C222 205 192 211 162 232" fill="none" stroke="#062A70" stroke-width="7" stroke-linecap="round"/>
+  </g>
+
+  <!-- Upward check-arrow -->
+  <g class="arrow-group" filter="url(#goldGlow)">
+    <path d="M108 165L148 204L220 121" fill="none" stroke="url(#gold)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M203 122L232 109L223 140Z" fill="#F8B91E"/>
+  </g>
+
+  <!-- Sequential progress dots -->
+  <g transform="translate(0 13)">
+    <circle class="loading-dot" cx="127" cy="255" r="7" fill="#BCD8FA"/>
+    <circle class="loading-dot" cx="149" cy="255" r="7" fill="#67ACEF"/>
+    <circle class="loading-dot" cx="171" cy="255" r="7" fill="#1D80E5"/>
+    <circle class="loading-dot" cx="193" cy="255" r="7" fill="#0A459F"/>
+  </g>
+</svg>

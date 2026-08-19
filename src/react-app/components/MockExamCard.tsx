@@ -34,9 +34,20 @@ export function MockExamCard() {
         {` ${state.examination.timedDurationMinutes} minutes`}
         {` · Pass: ${state.examination.passingTarget}/${state.examination.questionCount} (${state.examination.passingScore}%)`}
       </p>
-      <p className="meta-copy">
-        Attempts: {state.attemptCount} · Latest: {state.latestScore ?? '—'}% · Best: {state.bestScore ?? '—'}%
-      </p>
+      <div className="mock-exam-card__metrics" aria-label="Mock exam results">
+        <div>
+          <span>Attempts</span>
+          <strong>{state.attemptCount}</strong>
+        </div>
+        <div>
+          <span>Latest</span>
+          <strong>{state.latestScore === null ? '—' : `${state.latestScore}%`}</strong>
+        </div>
+        <div>
+          <span>Best</span>
+          <strong>{state.bestScore === null ? '—' : `${state.bestScore}%`}</strong>
+        </div>
+      </div>
       <div className="topbar-actions">
         {active?.public_id !== undefined ? (
           <Link

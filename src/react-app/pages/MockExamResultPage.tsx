@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { fetchMockResult, type MockResult } from '../lib/mock-exam-api'
 
 export function MockExamResultPage() {
@@ -36,19 +37,7 @@ export function MockExamResultPage() {
   }
 
   if (data === null) {
-    return (
-      <main className="page-shell">
-        <LearnerTopbar as="header" showSignOut>
-          <Link className="button-link button-link--secondary" to="/dashboard">
-            Dashboard
-          </Link>
-          <Link className="button-link button-link--secondary" to="/courses">
-            Catalog
-          </Link>
-        </LearnerTopbar>
-        <p>Loading results…</p>
-      </main>
-    )
+    return <PasaWisePageLoader label="Checking your Full Mock resultsâ€¦" />
   }
 
   return (

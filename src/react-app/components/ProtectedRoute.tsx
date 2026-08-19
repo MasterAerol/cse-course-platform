@@ -1,17 +1,14 @@
 import { Navigate, Outlet, useLocation } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
+import { PasaWisePageLoader } from './PasaWiseLoader'
 
 export function ProtectedRoute() {
   const { user, loading, error } = useAuth()
   const location = useLocation()
 
   if (loading) {
-    return (
-      <main className="centered-page" aria-live="polite">
-        <p>Restoring your session…</p>
-      </main>
-    )
+    return <PasaWisePageLoader label="Restoring your session…" />
   }
 
   if (user === null) {

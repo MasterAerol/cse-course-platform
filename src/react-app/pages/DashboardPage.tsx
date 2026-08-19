@@ -5,6 +5,7 @@ import { useAuth } from '../auth/use-auth'
 import { ContinueLearningCard } from '../components/ContinueLearningCard'
 import { EnrollmentBadge } from '../components/EnrollmentBadge'
 import { ProgressBar } from '../components/ProgressBar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { SubjectAssessmentCard } from '../components/SubjectAssessmentCard'
 import { SmartRecoveryCard } from '../components/SmartRecoveryCard'
 import { MockExamCard } from '../components/MockExamCard'
@@ -68,11 +69,27 @@ export function DashboardPage() {
     return null
   }
 
+  if (dashboardState.status === 'loading') {
+    return <PasaWisePageLoader label="Preparing your dashboard…" />
+  }
+
   return (
     <main className="dashboard-page">
-      <LearnerTopbar showSignOut ariaLabel="Main navigation">
-        <Link className="button-link button-link--secondary" to="/courses">
-          Catalog
+      <LearnerTopbar
+        className="dashboard-topbar"
+        mobileCollapsible
+        showSignOut
+        ariaLabel="Main navigation"
+      >
+        <Link
+          aria-current="page"
+          className="dashboard-nav-link dashboard-nav-link--active"
+          to="/dashboard"
+        >
+          Dashboard
+        </Link>
+        <Link className="dashboard-nav-link" to="/courses">
+          Courses
         </Link>
       </LearnerTopbar>
 
@@ -81,10 +98,10 @@ export function DashboardPage() {
         <h1>
           Welcome, {user.firstName} {user.lastName}.
         </h1>
-        <p>
+        <p className="dashboard-header__intro">
           {user.role === 'admin'
             ? 'You are signed in with administrator access.'
-            : 'You are signed in with learner access.'}
+            : 'Your next lesson, progress, and focused review are ready in one place.'}
         </p>
 
         {user.role === 'admin' && (
@@ -93,12 +110,6 @@ export function DashboardPage() {
           </Link>
         )}
       </section>
-
-      {dashboardState.status === 'loading' && (
-        <section className="dashboard-card">
-          <p>Loading your courses...</p>
-        </section>
-      )}
 
       {dashboardState.status === 'error' && (
         <p className="form-error" role="alert">
@@ -125,33 +136,122 @@ export function DashboardPage() {
         dashboardState.dashboard.courses.length > 0 && (
           <section className="dashboard-grid" aria-label="Enrolled courses">
             {dashboardState.dashboard.courses.map((course) => (
-              <article className="dashboard-card" key={course.course.slug}>
-                <div className="card-heading-row">
-                  <p className="eyebrow">{course.course.level ?? 'Course'}</p>
-                  <EnrollmentBadge enrollment={course.enrollment} />
-                </div>
-                <h2>{course.course.title}</h2>
-                <ProgressBar value={course.progressPercentage} />
-                <p className="meta-copy">
-                  {course.progressPercentage}% complete. {course.completedRequiredLessons}{' '}
-                  of {course.totalRequiredLessons} required lessons complete.
-                </p>
-                <p className="meta-copy">
-                  Enrollment status: {course.enrollment.status}
-                  {course.enrollment.accessExpiresAt !== null
-                    ? `. Access expires ${formatDate(course.enrollment.accessExpiresAt)}.`
-                    : '. No access expiration is set.'}
-                </p>
+              <article
+                className="dashboard-card dashboard-course"
+                key={course.course.slug}
+              >
+                <header className="dashboard-course-summary">
+                  <div className="dashboard-course-summary__copy">
+                    <div className="card-heading-row">
+                      <p className="eyebrow">{course.course.level ?? 'Course'}</p>
+                      <EnrollmentBadge enrollment={course.enrollment} />
+                    </div>
+                    <div className="dashboard-course-title-row">
+                      <h2>{course.course.title}</h2>
+                      {course.progressPercentage === 100 && (
+                        <span className="dashboard-completion-status">Complete</span>
+                      )}
+                    </div>
+                    <p className="meta-copy dashboard-enrollment-copy">
+                      Enrollment status: {course.enrollment.status}
+                      {course.enrollment.accessExpiresAt !== null
+                        ? `. Access expires ${formatDate(course.enrollment.accessExpiresAt)}.`
+                        : '. No access expiration is set.'}
+                    </p>
+                  </div>
+                  <div
+                    className="dashboard-course-progress"
+                    aria-label={`${course.progressPercentage}% course progress`}
+                  >
+                    <div className="dashboard-course-progress__heading">
+                      <span>Course progress</span>
+                      <strong>{course.progressPercentage}%</strong>
+                    </div>
+                    <ProgressBar value={course.progressPercentage} />
+                    <p className="meta-copy">
+                      {course.completedRequiredLessons} of{' '}
+                      {course.totalRequiredLessons} required lessons complete
+                    </p>
+                  </div>
+                </header>
                 {course.enrollment.hasAccess ? (
                   <>
-                    <ContinueLearningCard progress={course} />
-                    {course.subjectAssessments.map((assessment) => (
-                      <SubjectAssessmentCard key={assessment.assessment.publicId} summary={assessment} />
-                    ))}
-                    {course.course.slug === 'cse-professional' && <MockExamCard />}
-                    {user.role === 'student' && course.course.slug === 'cse-professional' && <ReadinessCard />}
-                    {user.role === 'student' && course.course.slug === 'cse-professional' && <SmartRecoveryCard />}
-                    {user.role === 'student' && course.course.slug === 'cse-professional' && <MistakeNotebookCard />}
+                    <section
+                      className={`dashboard-section dashboard-next-section${
+                        course.continueLearning.courseCompleted
+                          ? ' dashboard-next-section--complete'
+                          : ''
+                      }`}
+                      aria-labelledby={`next-step-${course.course.slug}`}
+                    >
+                      <div className="dashboard-section-heading">
+                        <div>
+                          <p className="eyebrow">Pick up where you left off</p>
+                          <h2 id={`next-step-${course.course.slug}`}>Your next step</h2>
+                        </div>
+                        <p>One focused action to keep your study momentum moving.</p>
+                      </div>
+                      <div className="dashboard-priority-grid">
+                        <ContinueLearningCard progress={course} />
+                      </div>
+                    </section>
+
+                    {user.role === 'student' &&
+                      course.course.slug === 'cse-professional' && (
+                        <section
+                          className="dashboard-recovery-zone"
+                          aria-label="Recommended Smart Recovery"
+                        >
+                          <SmartRecoveryCard />
+                        </section>
+                      )}
+
+                    <div className="dashboard-tools-grid">
+                      <section
+                        className="dashboard-section dashboard-tool-section"
+                        aria-labelledby={`assessments-${course.course.slug}`}
+                      >
+                        <div className="dashboard-section-heading">
+                          <div>
+                            <p className="eyebrow">Measure your progress</p>
+                            <h2 id={`assessments-${course.course.slug}`}>
+                              Subject assessments
+                            </h2>
+                          </div>
+                          <p>Check readiness by subject when you are prepared.</p>
+                        </div>
+                        <div className="dashboard-subject-grid">
+                          {course.subjectAssessments.map((assessment) => (
+                            <SubjectAssessmentCard
+                              key={assessment.assessment.publicId}
+                              summary={assessment}
+                            />
+                          ))}
+                        </div>
+                      </section>
+
+                      {course.course.slug === 'cse-professional' && (
+                        <section
+                          className="dashboard-section dashboard-tool-section"
+                          aria-labelledby={`study-tools-${course.course.slug}`}
+                        >
+                          <div className="dashboard-section-heading">
+                            <div>
+                              <p className="eyebrow">Review and prepare</p>
+                              <h2 id={`study-tools-${course.course.slug}`}>
+                                Study insights and simulation
+                              </h2>
+                            </div>
+                            <p>Use these tools when they support your next goal.</p>
+                          </div>
+                          <div className="dashboard-support-grid">
+                            <MockExamCard />
+                            {user.role === 'student' && <ReadinessCard />}
+                            {user.role === 'student' && <MistakeNotebookCard />}
+                          </div>
+                        </section>
+                      )}
+                    </div>
                   </>
                 ) : (
                   <section className="continue-card continue-card--muted">

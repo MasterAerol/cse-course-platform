@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { PasaWiseLoader } from './PasaWiseLoader'
 
 import { useMistakeNotebookSummary, type MistakeNotebookViewState } from '../hooks/use-mistake-notebook'
 import type { MistakeNotebookSummary } from '../lib/mistake-notebook-api'
@@ -8,7 +9,7 @@ export function MistakeNotebookCardView({ summary }: { summary: MistakeNotebookS
   return (
     <section className="continue-card mistake-notebook-card" data-testid="mistake-notebook-card" aria-labelledby="mistake-notebook-card-title">
       <p className="eyebrow">Mistake Notebook</p>
-      <h3 id="mistake-notebook-card-title">
+      <h3 className="mistake-notebook-card__metric" id="mistake-notebook-card-title">
         {summary.totalMistakes === 0 ? 'No mistakes recorded yet' : `${summary.totalMistakes} mistakes to review`}
       </h3>
       <p>{common === undefined ? 'Submitted incorrect answers will appear here for review.' : <>Most common: <strong>{common.title}</strong> ({common.count})</>}</p>
@@ -17,7 +18,7 @@ export function MistakeNotebookCardView({ summary }: { summary: MistakeNotebookS
   )
 }
 export function MistakeNotebookCardContent({ state }: { state: MistakeNotebookViewState<MistakeNotebookSummary> }) {
-  if (state.status === 'loading') return <section className="continue-card mistake-notebook-card" aria-busy="true" aria-live="polite"><p>Loading Mistake Notebook...</p></section>
+  if (state.status === 'loading') return <section className="continue-card mistake-notebook-card" aria-busy="true" aria-live="polite"><PasaWiseLoader compact label="Checking your Mistake Notebook…" /></section>
   if (state.status === 'error') return <section className="continue-card mistake-notebook-card" role="alert"><h3>Mistake Notebook is unavailable</h3><p>{state.error}</p><button className="button-secondary" type="button" onClick={state.reload}>Try again</button></section>
   return <MistakeNotebookCardView summary={state.data} />
 }

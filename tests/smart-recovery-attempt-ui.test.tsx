@@ -145,7 +145,7 @@ describe('Smart Recovery Phase D/E UI contracts', () => {
       recoveryUnavailableReason: 'insufficient_fresh_questions',
     }
     const expected =
-      'You’ve recently trained your current priority skills. Complete more practice or assessments to unlock another fresh recovery set.'
+      'Youï¿½ve recently trained your current priority skills. Complete more practice or assessments to unlock another fresh recovery set.'
     const overview = render(<SmartRecoveryOverview summary={unavailable} />)
     const card = render(<SmartRecoveryCardView summary={unavailable} />)
 
@@ -199,7 +199,11 @@ describe('Smart Recovery Phase D/E UI contracts', () => {
         historyState={{ status: 'error', data: null, error: 'History unavailable.', reload: vi.fn() }}
       />,
     )
+    expect(loading).toContain('role="status"')
+    expect(loading).toContain('aria-live="polite"')
     expect(loading).toContain('aria-busy="true"')
+    expect(loading).toContain('/brand/pasawise-animated-loader.svg')
+    expect(loading).toContain('class="sr-only">Loading recovery history')
     expect(empty).toContain('No submitted recovery sets yet.')
     expect(failed).toContain('role="alert"')
     expect(failed).toContain('Try again')
@@ -377,9 +381,19 @@ describe('Smart Recovery Phase D/E UI contracts', () => {
         </Routes>
       </MemoryRouter>,
     )
-    expect(attempt).toContain('aria-busy="true"')
-    expect(attempt).toContain('aria-live="polite"')
-    expect(result).toContain('aria-busy="true"')
-    expect(result).toContain('Loading recovery results')
+    for (const loadingMarkup of [attempt, result]) {
+      expect(loadingMarkup).toContain('role="status"')
+      expect(loadingMarkup).toContain('aria-live="polite"')
+      expect(loadingMarkup).toContain('aria-busy="true"')
+      expect(loadingMarkup).toContain(
+        'src="/brand/pasawise-animated-loader.svg"',
+      )
+    }
+    expect(attempt).toContain(
+      'class="sr-only">Restoring your Recovery Set',
+    )
+    expect(result).toContain(
+      'class="sr-only">Checking your Recovery Set results',
+    )
   })
 })

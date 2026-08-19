@@ -8,6 +8,7 @@ import {
   SimpleEntityForm,
 } from '../../components/admin/AdminForms'
 import { AdminPageHeader, StatusBadge } from '../../components/admin/AdminUi'
+import { PasaWiseLoader } from '../../components/PasaWiseLoader'
 import {
   createAdminLesson,
   createAdminLessonBlock,
@@ -229,7 +230,7 @@ export function AdminCourseBuilderPage() {
   if (state.status === 'loading') {
     return (
       <main className="admin-page">
-        <p>Loading course builder…</p>
+        <PasaWiseLoader label="Loading course builder…" />
       </main>
     )
   }
@@ -587,7 +588,7 @@ function LessonInspector({
   }
 
   if (assessmentState.status === 'loading') {
-    return <p>Loading assessment editor…</p>
+    return <PasaWiseLoader label="Loading assessment editor…" />
   }
 
   if (assessmentState.status === 'error') {

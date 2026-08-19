@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { PasaWiseLoader } from './PasaWiseLoader'
 
 import {
   ApiClientError,
@@ -120,7 +121,7 @@ export function PracticeLessonPanel({
   if (state.status === 'loading') {
     return (
       <section className="quiz-panel" aria-live="polite">
-        <p>Loading practice activity...</p>
+        <PasaWiseLoader label="Preparing this practice activity…" />
       </section>
     )
   }

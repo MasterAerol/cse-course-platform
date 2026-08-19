@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { AdminPageHeader } from '../../components/admin/AdminUi'
+import { PasaWiseLoader } from '../../components/PasaWiseLoader'
 import { fetchAdminAuditLogs, type AdminAuditLog } from '../../lib/api'
 
 type AuditState =
@@ -38,7 +39,7 @@ export function AdminAuditLogPage() {
         description="Recent admin content changes with actor, entity, and safe metadata."
       />
       <section className="admin-panel">
-        {state.status === 'loading' && <p>Loading audit logs…</p>}
+        {state.status === 'loading' && <PasaWiseLoader label="Loading audit logs…" />}
         {state.status === 'error' && (
           <p className="form-error" role="alert">
             {state.message}

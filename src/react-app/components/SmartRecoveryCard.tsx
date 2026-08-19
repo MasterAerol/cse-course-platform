@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
 import { useSmartRecoverySummary } from '../hooks/use-smart-recovery'
+import { PasaWiseLoader } from './PasaWiseLoader'
 import type { SmartRecoveryViewState } from '../hooks/use-smart-recovery'
 import { smartRecoveryUnavailableMessage } from '../lib/smart-recovery-copy'
 import {
@@ -70,7 +71,7 @@ export function SmartRecoveryCardContent({
   startError?: string | null
 }) {
   if (state.status === 'loading') {
-    return <section className="continue-card smart-recovery-card" aria-busy="true" aria-live="polite"><p>Loading Smart Recovery...</p></section>
+    return <section className="continue-card smart-recovery-card" aria-busy="true"><PasaWiseLoader compact label="Checking your learning priorities…" /></section>
   }
   if (state.status === 'error') {
     return <section className="continue-card smart-recovery-card" role="alert"><h3>Smart Recovery is unavailable</h3><p>{state.error}</p><button className="button-secondary" type="button" onClick={state.reload}>Try again</button></section>

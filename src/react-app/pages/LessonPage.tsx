@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import { LearnerTopbar } from '../components/LearnerTopbar'
 import { CourseCurriculumSidebar } from '../components/CourseCurriculumSidebar'
 import { MobileCurriculumDrawer } from '../components/MobileCurriculumDrawer'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { LessonBlockRenderer } from '../components/LessonBlockRenderer'
 import { LessonNavigation } from '../components/LessonNavigation'
 import { PracticeLessonPanel } from '../components/PracticeLessonPanel'
@@ -180,6 +181,10 @@ export function LessonPage({ initialData }: LessonPageProps = {}) {
     }
   }
 
+  if (state.status === 'loading') {
+    return <PasaWisePageLoader label="Opening your lesson…" />
+  }
+
   return (
     <main className="lesson-page" data-testid="lesson-app-shell">
       <LearnerTopbar
@@ -194,12 +199,6 @@ export function LessonPage({ initialData }: LessonPageProps = {}) {
           Catalog
         </Link>
       </LearnerTopbar>
-
-      {state.status === 'loading' && (
-        <section className="lesson-loading" aria-live="polite">
-          <p>Loading lesson...</p>
-        </section>
-      )}
 
       {state.status === 'error' && (
         <section className="message-card lesson-error" role="alert">

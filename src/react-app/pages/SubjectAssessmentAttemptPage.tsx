@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { Link, useNavigate, useParams } from 'react-router'
 
 import {
@@ -95,7 +96,11 @@ export function SubjectAssessmentAttemptPage() {
 
     const unanswered = data.totalCount - data.answeredCount
     const confirmed = window.confirm(
-      `${unanswered > 0 ? `${unanswered} questions are unanswered. ` : ''}Submit this assessment? Answers cannot be changed afterward.`,
+      `${data.assessment.title}\n\nAnswered: ${data.answeredCount}\nUnanswered: ${unanswered}\nTotal: ${data.totalCount}\n\n${
+        unanswered > 0
+          ? 'Unanswered questions will count as zero. '
+          : 'All questions are answered. '
+      }Submit this assessment? Answers cannot be changed afterward. Select Cancel to continue reviewing.`,
     )
     if (!confirmed) return
 
@@ -110,6 +115,10 @@ export function SubjectAssessmentAttemptPage() {
       submitInFlight.current = false
       setError(getSubjectAssessmentSubmitError(value))
     }
+  }
+
+  if (data === null && error === null) {
+    return <PasaWisePageLoader label="Restoring your assessment attempt…" />
   }
 
   return (
@@ -130,48 +139,56 @@ export function SubjectAssessmentAttemptPage() {
         </section>
       )}
 
-      {data === null && error === null && (
-        <section className="message-card" aria-live="polite">
-          <p>Restoring your assessment attempt...</p>
-        </section>
-      )}
-
       {data !== null && (() => {
         const question = data.questions[currentQuestionIndex] ?? null
         const unansweredCount = data.totalCount - data.answeredCount
+        const currentQuestionNumber = question?.position ?? currentQuestionIndex + 1
+        const progressPercent = Math.round(
+          (currentQuestionNumber / data.totalCount) * 100,
+        )
 
         return (
-          <section className="quiz-attempt-card">
+          <section className="quiz-attempt-card subject-assessment-workspace">
             <header className="assessment-header">
-              <p className="eyebrow">Attempt {data.attempt.attemptNumber}</p>
-              <h1 className="assessment-title">{data.assessment.title}</h1>
-              <div className="assessment-meta">
-                <p>
-                  Passing score: {data.assessment.passingScore}% {'\u00B7'} Questions:{' '}
-                  {data.assessment.questionCount}
+              <div className="assessment-header__identity">
+                <p className="eyebrow">
+                  Subject assessment {'\u00B7'} Attempt {data.attempt.attemptNumber}
                 </p>
-                <p className="meta-copy" aria-live="polite">
-                  Answered {data.answeredCount} of {data.totalCount}
+                <h1 className="assessment-title">{data.assessment.title}</h1>
+                <p className="assessment-header__details">
+                  {data.assessment.questionCount} questions {'\u00B7'} Passing score{' '}
+                  {data.assessment.passingScore}%
                 </p>
+              </div>
+              <div className="assessment-progress" aria-live="polite">
+                <div className="assessment-progress__label">
+                  <strong>Question {currentQuestionNumber} of {data.totalCount}</strong>
+                  <span>{progressPercent}%</span>
+                </div>
+                <progress
+                  aria-label={`Assessment progress: question ${currentQuestionNumber} of ${data.totalCount}`}
+                  max={data.totalCount}
+                  value={currentQuestionNumber}
+                />
+                <p>Answered {data.answeredCount} of {data.totalCount}</p>
               </div>
             </header>
 
-            <nav className="quiz-question-nav" aria-label="Question navigation">
+            <nav
+              className="quiz-question-nav assessment-question-nav"
+              aria-label="Assessment question navigation"
+            >
               {data.questions.map((item, position) => {
                 const isAnswered = item.selectedChoicePublicId !== null
+                const isCurrent = position === currentQuestionIndex
                 return (
                   <button
-                    className={
-                      position === currentQuestionIndex
-                        ? 'quiz-question-nav__item quiz-question-nav__item--current'
-                        : isAnswered
-                          ? 'quiz-question-nav__item quiz-question-nav__item--answered'
-                          : 'quiz-question-nav__item'
-                    }
+                    className={`quiz-question-nav__item${
+                      isCurrent ? ' quiz-question-nav__item--current' : ''
+                    }${isAnswered ? ' quiz-question-nav__item--answered' : ''}`}
                     type="button"
-                    aria-current={
-                      position === currentQuestionIndex ? 'step' : undefined
-                    }
+                    aria-current={isCurrent ? 'step' : undefined}
+                    aria-label={`Question ${item.position}, ${isCurrent ? 'current, ' : ''}${isAnswered ? 'answered' : 'unanswered'}`}
                     key={item.publicId}
                     onClick={() => setCurrentQuestionIndex(position)}
                   >
@@ -190,13 +207,17 @@ export function SubjectAssessmentAttemptPage() {
               }}
             >
               {question !== null && (
-                <fieldset className="quiz-question">
+                <fieldset className="quiz-question assessment-question-card">
                   <legend>
-                    <span>Question {question.position}</span>
-                    {question.prompt}
+                    <span className="assessment-question-kicker">
+                      Question {question.position} of {data.totalCount}
+                    </span>
+                    <span className="assessment-question-prompt">
+                      {question.prompt}
+                    </span>
                   </legend>
                   <div className="quiz-choice-list">
-                    {question.choices.map((choice) => (
+                    {question.choices.map((choice, choiceIndex) => (
                       <label className="quiz-choice" key={choice.publicId}>
                         <input
                           type="radio"
@@ -209,7 +230,13 @@ export function SubjectAssessmentAttemptPage() {
                             void choose(question.publicId, choice.publicId)
                           }
                         />
-                        <span>{choice.text}</span>
+                        <span className="assessment-choice-label" aria-hidden="true">
+                          {String.fromCharCode(65 + choiceIndex)}
+                        </span>
+                        <span className="assessment-choice-text">{choice.text}</span>
+                        <span className="assessment-choice-selected" aria-hidden="true">
+                          ✓
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -219,7 +246,7 @@ export function SubjectAssessmentAttemptPage() {
                 </fieldset>
               )}
 
-              <div className="quiz-step-row">
+              <div className="quiz-step-row assessment-step-row">
                 <button
                   className="button-secondary"
                   type="button"
@@ -231,7 +258,6 @@ export function SubjectAssessmentAttemptPage() {
                   Previous
                 </button>
                 <button
-                  className="button-secondary"
                   type="button"
                   disabled={
                     currentQuestionIndex >= data.questions.length - 1 ||
@@ -245,15 +271,50 @@ export function SubjectAssessmentAttemptPage() {
                 >
                   Next
                 </button>
+                <p className="assessment-step-status" aria-live="polite">
+                  Question {currentQuestionNumber} of {data.totalCount}
+                </p>
               </div>
 
-              <div className="quiz-submit-row">
-                <button type="submit" disabled={submitting}>
+              <section
+                className="assessment-review-summary"
+                aria-labelledby="assessment-review-summary-title"
+              >
+                <div>
+                  <p className="eyebrow">Final check</p>
+                  <h2 id="assessment-review-summary-title">Review before submitting</h2>
+                  <p>
+                    Use the question navigator above to return to any question
+                    and change an answer before final submission.
+                  </p>
+                </div>
+                <dl className="assessment-review-metrics" aria-label="Answer summary">
+                  <div className="assessment-review-metric assessment-review-metric--answered">
+                    <dt>Answered</dt>
+                    <dd>{data.answeredCount}</dd>
+                  </div>
+                  <div className="assessment-review-metric assessment-review-metric--unanswered">
+                    <dt>Unanswered</dt>
+                    <dd>{unansweredCount}</dd>
+                  </div>
+                  <div className="assessment-review-metric assessment-review-metric--total">
+                    <dt>Total</dt>
+                    <dd>{data.totalCount}</dd>
+                  </div>
+                </dl>
+                <p className="assessment-review-warning">
+                  {unansweredCount > 0
+                    ? `${unansweredCount} unanswered ${unansweredCount === 1 ? 'question' : 'questions'} will count as zero.`
+                    : 'All questions have an answer. You can still review them before submitting.'}
+                </p>
+              </section>
+
+              <div className="quiz-submit-row assessment-submit-row">
+                <button className="assessment-submit-button" type="submit" disabled={submitting}>
                   {submitting ? 'Submitting...' : 'Submit Assessment'}
                 </button>
                 <p className="meta-copy">
-                  {unansweredCount} unanswered. You can submit with unanswered
-                  questions, but they count as zero.
+                  Submission is final. Answers cannot be changed afterward.
                 </p>
               </div>
             </form>

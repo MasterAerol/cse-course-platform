@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
+import { PasaWiseBrand } from '../components/PasaWiseBrand'
 import {
   ApiClientError,
   type ValidationFieldErrors,
@@ -105,9 +106,8 @@ export function RegistrationPage() {
     return (
       <main className="auth-page">
         <section className="auth-card" aria-labelledby="registration-title">
-          <Link className="brand-link" to="/">
-            CSE Course Platform
-          </Link>
+          <PasaWiseBrand linked variant="primary" />
+          <p className="brand-tagline">Aral nang wais. Pasa nang handa.</p>
           <p className="eyebrow">Private beta</p>
           <h1 id="registration-title">Registration is currently closed</h1>
           <p>
@@ -125,9 +125,8 @@ export function RegistrationPage() {
   return (
     <main className="auth-page">
       <section className="auth-card" aria-labelledby="registration-title">
-        <Link className="brand-link" to="/">
-          CSE Course Platform
-        </Link>
+        <PasaWiseBrand linked variant="primary" />
+        <p className="brand-tagline">Aral nang wais. Pasa nang handa.</p>
         <p className="eyebrow">Student registration</p>
         <h1 id="registration-title">Create your account</h1>
         <p>

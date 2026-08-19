@@ -1,15 +1,19 @@
 import { Link, useParams } from 'react-router'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { useMistakeNotebookEntry, type MistakeNotebookViewState } from '../hooks/use-mistake-notebook'
 import { formatNotebookDate, mistakeSourceLabel, skillStatusLabel } from '../lib/mistake-notebook-copy'
 import type { MistakeNotebookEntry } from '../lib/mistake-notebook-api'
 
 export function MistakeNotebookDetailPageView({ state }: { state: MistakeNotebookViewState<MistakeNotebookEntry> }) {
+  if (state.status === 'loading') {
+    return <PasaWisePageLoader label="Opening your mistake review…" />
+  }
+
   return (
     <main className="page-shell mistake-notebook-page mistake-detail-page" data-testid="mistake-notebook-detail">
       <LearnerTopbar as="header" showSignOut><Link className="button-link button-link--secondary" to="/mistake-notebook">Back to Mistake Notebook</Link><Link className="button-link button-link--secondary" to="/dashboard">Dashboard</Link></LearnerTopbar>
-      {state.status === 'loading' && <section className="notebook-state" aria-busy="true" aria-live="polite"><p>Loading mistake review...</p></section>}
       {state.status === 'error' && <section className="notebook-state" role="alert"><h1>Mistake review unavailable</h1><p>{state.error}</p><button type="button" onClick={state.reload}>Try again</button></section>}
       {state.status === 'loaded' && <article className="mistake-detail-card">
         <header><p className="eyebrow">Mistake review</p><h1>{state.data.skill?.title ?? state.data.topic?.title ?? 'Submitted question'}</h1><p>{mistakeSourceLabel(state.data.sourceType)} · <time dateTime={state.data.submittedAt}>{formatNotebookDate(state.data.submittedAt)}</time></p></header>

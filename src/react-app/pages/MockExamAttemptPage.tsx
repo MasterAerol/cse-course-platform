@@ -13,6 +13,7 @@ import {
 } from '../lib/mock-exam-api'
 import { mockExamDistributionNotice } from '../../shared/mock-exam-copy'
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { QuestionRangeNavigator } from '../components/QuestionRangeNavigator'
 
 const QUESTIONS_PER_RANGE = 25
@@ -528,12 +529,7 @@ export function MockExamAttemptPage() {
   }
 
   if (data === null) {
-    return (
-      <main className="page-shell">
-        {topbar}
-        <p>Preparing your immutable 150-question snapshot...</p>
-      </main>
-    )
+    return <PasaWisePageLoader label="Preparing your Full Mock examination…" />
   }
 
   if (data.attempt.status === 'instructions') {

@@ -1,13 +1,15 @@
-import { useContext, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 
 import { AuthContext } from '../auth/auth-context'
+import { PasaWiseBrand } from './PasaWiseBrand'
 
 interface LearnerTopbarProps {
   children?: ReactNode
   as?: 'header' | 'nav'
   className?: string
   ariaLabel?: string
+  mobileCollapsible?: boolean
   showSignOut?: boolean
 }
 
@@ -16,6 +18,7 @@ export function LearnerTopbar({
   as = 'nav',
   className,
   ariaLabel = 'Primary',
+  mobileCollapsible = false,
   showSignOut = false,
 }: LearnerTopbarProps) {
   const Root = as === 'header' ? 'header' : 'nav'
@@ -25,6 +28,25 @@ export function LearnerTopbar({
   const logout = authContext?.logout
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const mobileMenuId = useId()
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!mobileMenuOpen) {
+      return
+    }
+
+    function closeOnEscape(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false)
+        menuButtonRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [mobileMenuOpen])
 
   async function handleSignOut(): Promise<void> {
     if (logout === undefined) {
@@ -49,10 +71,38 @@ export function LearnerTopbar({
 
   return (
     <Root className={mergedClassName} aria-label={ariaLabel}>
-      <Link className="brand-link" to="/">
-        CSE Course Platform
-      </Link>
-      <div className="topbar-actions">
+      <PasaWiseBrand linked variant="header" />
+      {mobileCollapsible && (
+        <button
+          ref={menuButtonRef}
+          type="button"
+          className="topbar-menu-trigger button-secondary"
+          aria-controls={mobileMenuId}
+          aria-expanded={mobileMenuOpen}
+          aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          onClick={() => setMobileMenuOpen((open) => !open)}
+        >
+          <span aria-hidden="true">☰</span>
+          <span>Menu</span>
+        </button>
+      )}
+      <div
+        id={mobileCollapsible ? mobileMenuId : undefined}
+        className={`topbar-actions${
+          mobileCollapsible
+            ? ` topbar-actions--collapsible${mobileMenuOpen ? ' is-open' : ''}`
+            : ''
+        }`}
+        onClick={(event) => {
+          if (
+            mobileCollapsible &&
+            event.target instanceof Element &&
+            event.target.closest('a, button') !== null
+          ) {
+            setMobileMenuOpen(false)
+          }
+        }}
+      >
         {children}
         {showSignOut ? (
           user === null ? (

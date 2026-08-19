@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWiseLoader, PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { useMistakeNotebookList, useMistakeNotebookSummary, type MistakeNotebookViewState } from '../hooks/use-mistake-notebook'
 import { formatNotebookDate, mistakeSourceLabel, skillStatusLabel } from '../lib/mistake-notebook-copy'
 import type { MistakeNotebookFilters, MistakeNotebookList, MistakeNotebookSummary } from '../lib/mistake-notebook-api'
@@ -18,6 +19,11 @@ export function MistakeNotebookPageView({
 }) {
   const clearFilters = () => onFiltersChange({ page: 1, limit: filters.limit ?? 20 })
   const hasFilters = Boolean(filters.subject || filters.source || filters.skill || filters.unansweredOnly || filters.repeatedPatternOnly)
+
+  if (summaryState.status === 'loading' && listState.status === 'loading') {
+    return <PasaWisePageLoader label="Loading your Mistake Notebook…" />
+  }
+
   return (
     <main className="page-shell mistake-notebook-page" data-testid="mistake-notebook-page">
       <LearnerTopbar as="header" showSignOut>
@@ -29,7 +35,7 @@ export function MistakeNotebookPageView({
         <h1>Turn every mistake into a review plan.</h1>
         <p>Review submitted incorrect answers, reliable mistake patterns, and the lessons connected to them.</p>
       </header>
-      {summaryState.status === 'loading' && <section className="notebook-state" aria-busy="true" aria-live="polite"><p>Loading your notebook summary...</p></section>}
+      {summaryState.status === 'loading' && <section className="notebook-state" aria-busy="true" aria-live="polite"><PasaWiseLoader compact label="Loading your notebook summary…" /></section>}
       {summaryState.status === 'error' && <section className="notebook-state" role="alert"><h2>Summary unavailable</h2><p>{summaryState.error}</p><button type="button" onClick={summaryState.reload}>Try again</button></section>}
       {summaryState.status === 'loaded' && (
         <dl className="notebook-summary" aria-label="Mistake Notebook summary">
@@ -49,7 +55,7 @@ export function MistakeNotebookPageView({
           <label className="notebook-check"><input type="checkbox" checked={filters.repeatedPatternOnly ?? false} onChange={(event) => onFiltersChange({ ...filters, repeatedPatternOnly: event.target.checked, page: 1 })} />Repeated patterns only</label>
         </div>
       </section>
-      {listState.status === 'loading' && <section className="notebook-state" aria-busy="true" aria-live="polite"><p>Loading mistakes...</p></section>}
+      {listState.status === 'loading' && <section className="notebook-state" aria-busy="true" aria-live="polite"><PasaWiseLoader label="Loading your saved mistakes…" /></section>}
       {listState.status === 'error' && <section className="notebook-state" role="alert"><h2>Mistakes could not be loaded</h2><p>{listState.error}</p><button type="button" onClick={listState.reload}>Try again</button></section>}
       {listState.status === 'loaded' && listState.data.entries.length === 0 && (
         <section className="notebook-empty"><h2>{hasFilters ? 'No mistakes match these filters.' : 'No mistakes recorded yet'}</h2><p>{hasFilters ? 'Try clearing one or more filters.' : 'Submitted incorrect answers will appear here so you can review and improve them.'}</p>{hasFilters && <button type="button" onClick={clearFilters}>Clear filters</button>}</section>

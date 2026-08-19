@@ -31,26 +31,34 @@ export function SubjectAssessmentCard({ summary }: { summary: SubjectAssessmentC
 
   return (
     <section
-      className={`continue-card course-detail-assessment-card${
+      className={`continue-card course-detail-assessment-card assessment-card--${summary.state}${
         summary.availability.available ? '' : ' continue-card--muted'
       }`}
     >
-      <p className="eyebrow">Subject milestone</p>
+      <div className="assessment-card__heading">
+        <p className="eyebrow">Subject milestone</p>
+        <span className={`assessment-status assessment-status--${summary.state}`}>
+          {getSubjectAssessmentStatus(summary)}
+        </span>
+      </div>
       <h3>{summary.assessment.title}</h3>
       {summary.assessment.description !== null && <p>{summary.assessment.description}</p>}
-      <p className="meta-copy">
-        {summary.assessment.questionCount} questions ·
-        {summary.assessment.passingScore}% passing score ·
-        {summary.assessment.timeLimitMinutes === null
-          ? ' No time limit'
-          : ` ${summary.assessment.timeLimitMinutes} minutes`}
-      </p>
-      <p className="meta-copy">
-        Status: {getSubjectAssessmentStatus(summary)}
-        {summary.bestScore === null ? '' : ` · Best ${summary.bestScore}%`}
-      </p>
+      <div className="assessment-card__facts" aria-label="Assessment details">
+        <span>{summary.assessment.questionCount} questions</span>
+        <span>{summary.assessment.passingScore}% passing score</span>
+        <span>
+          {summary.assessment.timeLimitMinutes === null
+            ? 'No time limit'
+            : `${summary.assessment.timeLimitMinutes} minutes`}
+        </span>
+      </div>
+      {summary.bestScore !== null && (
+        <p className="meta-copy assessment-card__best">
+          Best score <strong>{summary.bestScore}%</strong>
+        </p>
+      )}
       {summary.availability.available ? (
-        <div className="topbar-actions">
+        <div className="topbar-actions assessment-card__actions">
           <Link className="button-link" to={href}>{action}</Link>
           {latestSubmitted !== undefined && summary.state !== 'passed' && (
             <Link

@@ -1,10 +1,11 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
 import { CourseCard } from '../components/CourseCard'
 
 import { LearnerTopbar } from '../components/LearnerTopbar'
+import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { fetchCourses, type CourseSummary } from '../lib/api'
 
 type CatalogState =
@@ -43,6 +44,10 @@ export function CourseCatalogPage() {
     }
   }, [])
 
+  if (state.status === 'loading') {
+    return <PasaWisePageLoader label="Loading published courses…" />
+  }
+
   return (
     <main className="page-shell">
       <LearnerTopbar showSignOut>
@@ -61,8 +66,6 @@ export function CourseCatalogPage() {
           archived courses stay hidden.
         </p>
       </section>
-
-      {state.status === 'loading' && <p>Loading courses...</p>}
 
       {state.status === 'error' && (
         <p className="form-error" role="alert">

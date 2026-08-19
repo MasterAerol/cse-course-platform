@@ -7,6 +7,7 @@ import {
 } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
+import { PasaWiseBrand } from '../components/PasaWiseBrand'
 
 interface LoginLocationState {
   from?: string
@@ -33,6 +34,7 @@ export function LoginPage() {
   const locationState = getLocationState(location)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(
     locationState.message ?? null,
@@ -60,9 +62,8 @@ export function LoginPage() {
   return (
     <main className="auth-page">
       <section className="auth-card" aria-labelledby="login-title">
-        <Link className="brand-link" to="/">
-          CSE Course Platform
-        </Link>
+        <PasaWiseBrand linked variant="primary" />
+        <p className="brand-tagline">Aral nang wais. Pasa nang handa.</p>
         <p className="eyebrow">Welcome back</p>
         <h1 id="login-title">Sign in</h1>
         <p>Use the email and password associated with your account.</p>
@@ -81,16 +82,27 @@ export function LoginPage() {
           />
 
           <label htmlFor="login-password">Password</label>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            maxLength={128}
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
+          <div className="password-input-group">
+            <input
+              id="login-password"
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              maxLength={128}
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+            <button
+              className="password-toggle"
+              type="button"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword((current) => !current)}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
 
           {error !== null && (
             <p className="form-error" role="alert">
