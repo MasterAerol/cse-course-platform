@@ -118,7 +118,10 @@ export function QuizLessonPanel({
 
   if (state.status === 'loading') {
     return (
-      <section className="quiz-panel" aria-live="polite">
+      <section
+        className="quiz-panel learning-activity-panel learning-activity-panel--quiz"
+        aria-live="polite"
+      >
         <PasaWiseLoader label="Preparing this topic quiz…" />
       </section>
     )
@@ -126,7 +129,10 @@ export function QuizLessonPanel({
 
   if (state.status === 'error') {
     return (
-      <section className="quiz-panel" role="alert">
+      <section
+        className="quiz-panel learning-activity-panel learning-activity-panel--quiz"
+        role="alert"
+      >
         <h2>Quiz unavailable</h2>
         <p>{state.message}</p>
       </section>
@@ -138,17 +144,25 @@ export function QuizLessonPanel({
   const cannotStart = attemptsRemaining !== null && attemptsRemaining <= 0
 
   return (
-    <section className="quiz-panel" aria-labelledby="quiz-panel-title">
-      <p className="eyebrow">Topic quiz</p>
-      <h2 id="quiz-panel-title">{summary.quiz.title}</h2>
-      {summary.quiz.description !== null && <p>{summary.quiz.description}</p>}
+    <section
+      className="quiz-panel learning-activity-panel learning-activity-panel--quiz"
+      aria-labelledby="quiz-panel-title"
+    >
+      <header className="learning-activity-panel__header">
+        <p className="eyebrow">Topic quiz</p>
+        <h2 id="quiz-panel-title">{summary.quiz.title}</h2>
+        <p>
+          {summary.quiz.description ??
+            'Check your understanding with this focused topic quiz.'}
+        </p>
+      </header>
       <dl className="quiz-meta">
         <div>
           <dt>Questions</dt>
           <dd>{summary.quiz.questionCount}</dd>
         </div>
         <div>
-          <dt>Passing score</dt>
+          <dt>Completion target</dt>
           <dd>{summary.quiz.passingScore}%</dd>
         </div>
         <div>
@@ -168,8 +182,12 @@ export function QuizLessonPanel({
           </dd>
         </div>
       </dl>
+      <p className="learning-activity-panel__note">
+        Work one question at a time. Your answers save as you go, and
+        explanations appear after submission.
+      </p>
 
-      <div className="button-row">
+      <div className="button-row learning-activity-panel__actions">
         {summary.inProgressAttempt === null ? (
           <button
             type="button"
@@ -185,7 +203,7 @@ export function QuizLessonPanel({
             className="button-link"
             to={`/quiz-attempts/${summary.inProgressAttempt.attemptPublicId}`}
           >
-            Resume quiz
+            Continue quiz
           </Link>
         )}
       </div>
@@ -197,7 +215,7 @@ export function QuizLessonPanel({
       )}
 
       {summary.attempts.length > 0 && (
-        <div className="attempt-history">
+        <div className="attempt-history learning-attempt-history">
           <h3>Attempt history</h3>
           <ol>
             {summary.attempts.map((attempt) => (

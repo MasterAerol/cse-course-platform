@@ -129,6 +129,13 @@ export function QuizAttemptPage() {
     state.status === 'loaded'
       ? state.attempt.questions.length - answeredCount
       : 0
+  const totalQuestions =
+    state.status === 'loaded' ? state.attempt.questions.length : 0
+  const currentPosition = currentQuestion?.position ?? 0
+  const progressPercent =
+    totalQuestions === 0
+      ? 0
+      : Math.round((currentPosition / totalQuestions) * 100)
 
   async function handleSelectChoice(
     questionId: number,
@@ -203,15 +210,20 @@ export function QuizAttemptPage() {
   }
 
   return (
-    <main className="page-shell quiz-page">
-      <LearnerTopbar as="header">
+    <main className="page-shell quiz-page learning-attempt-page topic-quiz-attempt-page">
+      <LearnerTopbar
+        as="header"
+        mobileCollapsible
+        showSignOut
+        ariaLabel="Topic quiz navigation"
+      >
         <Link className="button-link button-link--secondary" to="/dashboard">
           Dashboard
         </Link>
       </LearnerTopbar>
 
       {state.status === 'error' && (
-        <section className="message-card" role="alert">
+        <section className="message-card learning-activity-error" role="alert">
           <h1>Quiz unavailable</h1>
           <p>{state.message}</p>
           <Link className="button-link" to="/dashboard">
@@ -221,60 +233,109 @@ export function QuizAttemptPage() {
       )}
 
       {state.status === 'loaded' && (
-        <section className="quiz-attempt-card">
-          <p className="eyebrow">Attempt {state.attempt.attempt.attemptNumber}</p>
-          <h1>{state.attempt.quiz.title}</h1>
-          <p>
-            Passing score: {state.attempt.quiz.passingScore}% � Questions:{' '}
-            {state.attempt.quiz.questionCount}
-          </p>
-          <p className="meta-copy" aria-live="polite">
-            Answered {answeredCount} of {state.attempt.questions.length}
-          </p>
+        <section
+          className="quiz-attempt-card learning-attempt-card learning-attempt-card--quiz"
+          aria-labelledby="topic-quiz-attempt-title"
+        >
+          <header className="learning-attempt-header">
+            <div>
+              <p className="eyebrow">
+                Topic quiz · Attempt {state.attempt.attempt.attemptNumber}
+              </p>
+              <h1 id="topic-quiz-attempt-title">{state.attempt.quiz.title}</h1>
+              <p>Check your topic understanding</p>
+            </div>
+            <dl className="learning-attempt-facts" aria-label="Quiz details">
+              <div>
+                <dt>Questions</dt>
+                <dd>{state.attempt.quiz.questionCount}</dd>
+              </div>
+              <div>
+                <dt>Completion target</dt>
+                <dd>{state.attempt.quiz.passingScore}%</dd>
+              </div>
+            </dl>
+          </header>
 
-          <nav className="quiz-question-nav" aria-label="Question navigation">
+          <section
+            className="learning-attempt-progress"
+            aria-label="Topic quiz progress"
+          >
+            <div>
+              <strong>
+                Question {currentPosition} of {totalQuestions}
+              </strong>
+              <span>{progressPercent}%</span>
+            </div>
+            <progress
+              max={Math.max(totalQuestions, 1)}
+              value={currentPosition}
+              aria-label={`Topic quiz progress: question ${currentPosition} of ${totalQuestions}`}
+            />
+            <p className="meta-copy" aria-live="polite">
+              Answered {answeredCount} of {totalQuestions}
+            </p>
+          </section>
+
+          <nav
+            className="quiz-question-nav learning-question-nav"
+            aria-label="Topic quiz question navigation"
+          >
             {state.attempt.questions.map((question, index) => {
               const isAnswered = selectedChoices[question.id] !== null
+              const isCurrent = index === currentQuestionIndex
 
               return (
                 <button
-                  className={
-                    index === currentQuestionIndex
-                      ? 'quiz-question-nav__item quiz-question-nav__item--current'
-                      : isAnswered
-                        ? 'quiz-question-nav__item quiz-question-nav__item--answered'
-                        : 'quiz-question-nav__item'
-                  }
+                  className={`quiz-question-nav__item ${
+                    isCurrent ? 'quiz-question-nav__item--current' : ''
+                  } ${isAnswered ? 'quiz-question-nav__item--answered' : ''}`}
                   type="button"
-                  aria-current={
-                    index === currentQuestionIndex ? 'step' : undefined
-                  }
+                  aria-current={isCurrent ? 'step' : undefined}
+                  aria-label={`Question ${question.position}, ${
+                    isCurrent ? 'current, ' : ''
+                  }${isAnswered ? 'answered' : 'unanswered'}`}
                   key={question.id}
                   onClick={() => setCurrentQuestionIndex(index)}
                 >
                   <span>{question.position}</span>
-                  <small>{isAnswered ? 'Answered' : 'Unanswered'}</small>
+                  <small aria-hidden="true">
+                    <span className="learning-question-status learning-question-status--desktop">
+                      {isAnswered ? 'Answered' : 'Unanswered'}
+                    </span>
+                    <span className="learning-question-status learning-question-status--mobile">
+                      {isAnswered ? 'Done' : 'Open'}
+                    </span>
+                  </small>
                 </button>
               )
             })}
           </nav>
 
           <form
-            className="quiz-question-list"
+            className="quiz-question-list learning-question-form"
             onSubmit={(event) => {
               event.preventDefault()
               void handleSubmit()
             }}
           >
             {currentQuestion !== null && (
-              <fieldset className="quiz-question" key={currentQuestion.id}>
+              <fieldset
+                className="quiz-question learning-question-card"
+                key={currentQuestion.id}
+              >
                 <legend>
-                  <span>Question {currentQuestion.position}</span>
-                  {currentQuestion.prompt}
+                  <span>
+                    Question {currentQuestion.position} of {totalQuestions}
+                  </span>
+                  <strong>{currentQuestion.prompt}</strong>
                 </legend>
                 <div className="quiz-choice-list">
-                  {currentQuestion.choices.map((choice) => (
-                    <label className="quiz-choice" key={choice.id}>
+                  {currentQuestion.choices.map((choice, choiceIndex) => (
+                    <label
+                      className="quiz-choice learning-answer-choice"
+                      key={choice.id}
+                    >
                       <input
                         type="radio"
                         name={`question-${currentQuestion.id}`}
@@ -287,18 +348,26 @@ export function QuizAttemptPage() {
                           void handleSelectChoice(currentQuestion.id, choice.id)
                         }
                       />
-                      <span>{choice.text}</span>
+                      <span className="learning-answer-choice__label" aria-hidden="true">
+                        {String.fromCharCode(65 + choiceIndex)}
+                      </span>
+                      <span className="learning-answer-choice__text">
+                        {choice.text}
+                      </span>
+                      <span className="learning-answer-choice__selected" aria-hidden="true">
+                        ✓
+                      </span>
                     </label>
                   ))}
                 </div>
                 {saveStatus.type === 'saving' &&
                   saveStatus.questionId === currentQuestion.id && (
-                    <p className="meta-copy">Saving answer...</p>
+                    <p className="meta-copy learning-save-status">Saving answer...</p>
                   )}
               </fieldset>
             )}
 
-            <div className="quiz-step-row">
+            <div className="quiz-step-row learning-attempt-navigation">
               <button
                 className="button-secondary"
                 type="button"
@@ -310,7 +379,6 @@ export function QuizAttemptPage() {
                 Previous
               </button>
               <button
-                className="button-secondary"
                 type="button"
                 disabled={
                   state.attempt.questions.length === 0 ||
@@ -327,19 +395,28 @@ export function QuizAttemptPage() {
               </button>
             </div>
 
-            <div className="quiz-submit-row">
+            <div className="quiz-submit-row learning-submit-panel">
+              <div>
+                <h2>Finish this topic quiz?</h2>
+                <p className="meta-copy">
+                  {unansweredCount === 0
+                    ? 'All questions have an answer recorded.'
+                    : `${unansweredCount} ${
+                        unansweredCount === 1 ? 'question is' : 'questions are'
+                      } unanswered. You can review them before submitting; unanswered questions count as zero.`}
+                </p>
+              </div>
               <button type="submit" disabled={submitting}>
                 {submitting ? 'Submitting...' : 'Submit quiz'}
               </button>
-              <p className="meta-copy">
-                {unansweredCount} unanswered. You can submit with unanswered
-                questions, but they count as zero.
-              </p>
             </div>
           </form>
 
           {saveStatus.type === 'saved' && (
-            <p className="form-success" aria-live="polite">
+            <p
+              className="learning-save-status learning-save-status--saved"
+              aria-live="polite"
+            >
               {saveStatus.message}
             </p>
           )}

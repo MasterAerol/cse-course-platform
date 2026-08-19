@@ -120,7 +120,10 @@ export function PracticeLessonPanel({
 
   if (state.status === 'loading') {
     return (
-      <section className="quiz-panel" aria-live="polite">
+      <section
+        className="quiz-panel learning-activity-panel learning-activity-panel--practice"
+        aria-live="polite"
+      >
         <PasaWiseLoader label="Preparing this practice activity…" />
       </section>
     )
@@ -128,7 +131,10 @@ export function PracticeLessonPanel({
 
   if (state.status === 'error') {
     return (
-      <section className="quiz-panel" role="alert">
+      <section
+        className="quiz-panel learning-activity-panel learning-activity-panel--practice"
+        role="alert"
+      >
         <h2>Practice unavailable</h2>
         <p>{state.message}</p>
       </section>
@@ -143,14 +149,22 @@ export function PracticeLessonPanel({
   )
 
   return (
-    <section className="quiz-panel" aria-labelledby="practice-panel-title">
-      <p className="eyebrow">Practice activity</p>
-      <h2 id="practice-panel-title">{summary.practice.title}</h2>
-      {summary.practice.instructions !== null && (
-        <p>{summary.practice.instructions}</p>
-      )}
+    <section
+      className="quiz-panel learning-activity-panel learning-activity-panel--practice"
+      aria-labelledby="practice-panel-title"
+    >
+      <header className="learning-activity-panel__header">
+        <p className="eyebrow">Lesson practice</p>
+        <h2 id="practice-panel-title">{summary.practice.title}</h2>
+        <p>
+          {summary.practice.instructions ??
+            'Build confidence with a focused set from this lesson.'}
+        </p>
+      </header>
       {summary.lessonCompleted && (
-        <p className="form-success">This practice lesson is completed.</p>
+        <p className="learning-activity-complete">
+          This practice lesson is completed.
+        </p>
       )}
       <dl className="quiz-meta">
         <div>
@@ -158,7 +172,7 @@ export function PracticeLessonPanel({
           <dd>{summary.practice.questionCount}</dd>
         </div>
         <div>
-          <dt>Passing score</dt>
+          <dt>Completion target</dt>
           <dd>{summary.practice.passingScore}%</dd>
         </div>
         <div>
@@ -170,8 +184,12 @@ export function PracticeLessonPanel({
           </dd>
         </div>
       </dl>
+      <p className="learning-activity-panel__note">
+        Work one question at a time. Your answers save as you go, and
+        explanations appear after submission.
+      </p>
 
-      <div className="button-row">
+      <div className="button-row learning-activity-panel__actions">
         {summary.inProgressAttempt === null ? (
           <button
             type="button"
@@ -189,7 +207,7 @@ export function PracticeLessonPanel({
             className="button-link"
             to={`/practice-attempts/${summary.inProgressAttempt.attemptPublicId}`}
           >
-            Resume practice
+            Continue practice
           </Link>
         )}
       </div>
@@ -201,7 +219,7 @@ export function PracticeLessonPanel({
       )}
 
       {summary.attempts.length > 0 && (
-        <div className="attempt-history">
+        <div className="attempt-history learning-attempt-history">
           <h3>Attempt history</h3>
           <ol>
             {summary.attempts.map((attempt) => (

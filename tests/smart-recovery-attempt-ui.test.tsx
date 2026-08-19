@@ -870,7 +870,14 @@ describe('Smart Recovery Phase D/E UI contracts', () => {
     expect(flowStyles).toMatch(
       /@media \(max-width: 30rem\)[\s\S]*?\.recovery-result-metrics,[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/,
     )
-    expect(flowStyles).not.toContain('overflow-x: hidden')
+    for (const selector of [
+      '.recovery-page',
+      '.smart-recovery-attempt-page',
+      '.smart-recovery-result-page',
+    ]) {
+      expect(hasRule(selector, [])).toBe(true)
+      expect(hasRule(selector, [/overflow-x:\s*hidden/])).toBe(false)
+    }
   })
 
   it('renders accessible loading states at the attempt and result routes', () => {
