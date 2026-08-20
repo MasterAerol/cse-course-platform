@@ -99,6 +99,8 @@ export const readingComprehensionTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
 export const analyticalTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
+export const generalInformationTeachingSystemReconcileSchema =
+  percentageTeachingSystemReconcileSchema
 export const simpleInterestTeachingSystemReconcileSchema =
   percentageTeachingSystemReconcileSchema
 
@@ -261,6 +263,8 @@ export type SentenceStructureErrorsTeachingSystemReconcileInput = z.infer<typeof
 export type ParagraphOrganizationTeachingSystemReconcileInput = z.infer<typeof paragraphOrganizationTeachingSystemReconcileSchema>
 export type ReadingComprehensionTeachingSystemReconcileInput = z.infer<typeof readingComprehensionTeachingSystemReconcileSchema>
 export type AnalyticalTeachingSystemReconcileInput = z.infer<typeof analyticalTeachingSystemReconcileSchema>
+export type GeneralInformationTeachingSystemReconcileInput =
+  z.infer<typeof generalInformationTeachingSystemReconcileSchema>
 export type PracticeSetInput = z.infer<typeof practiceSetInputSchema>
 export type FixedQuestionInput = z.infer<typeof fixedQuestionInputSchema>
 export type QuizInput = z.infer<typeof quizInputSchema>

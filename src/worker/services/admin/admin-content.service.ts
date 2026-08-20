@@ -95,6 +95,7 @@ import type {
   ParagraphOrganizationTeachingSystemReconcileInput,
   ReadingComprehensionTeachingSystemReconcileInput,
   AnalyticalTeachingSystemReconcileInput,
+  GeneralInformationTeachingSystemReconcileInput,
 } from '../../schemas/admin/content-admin.schemas'
 import type {
   AdminCourseRow,
@@ -3879,6 +3880,126 @@ export async function reconcileAnalyticalTeachingSystemLesson(
     ...guided.map((block) => block.id),
     ...allowed.slice(desired.length).map((block) => block.id),
   ]
+  const creates = desired.slice(allowed.length)
+  const updatedCount = retained.filter((block) => block.contentChanged || block.positionChanged).length
+  const writeRequired = updatedCount > 0 || deleteIds.length > 0 || creates.length > 0
+
+  if (writeRequired) {
+    await reconcileTeachingSystemLessonBlocksWithAudit(database, {
+      lessonId,
+      actorUserId: actor.internalUserId,
+      retained,
+      deleteIds,
+      creates,
+      metadataJson: JSON.stringify({
+        lessonId,
+        operation: topic.slug + '-teaching-system-v1-reconcile',
+        createdCount: creates.length,
+        updatedCount,
+        deletedCount: deleteIds.length,
+      }),
+    })
+  }
+  return {
+    blocks: (await listLessonBlocksForLesson(database, lessonId)).map(mapBlock),
+    writeRequired,
+    createdCount: creates.length,
+    updatedCount,
+    deletedCount: deleteIds.length,
+  }
+}
+
+const generalInformationTeachingSystemTopicSlugs = new Set([
+  'philippine-constitution-fundamentals',
+  'ra-6713-code-of-conduct',
+  'peace-and-human-rights',
+  'environment-management-and-protection',
+])
+
+export async function getGeneralInformationTeachingSystemCapability(
+  database: D1Database,
+  lessonId: number,
+): Promise<{ supported: true; operation: string; topicSlug: string }> {
+  const lesson = await findLessonById(database, lessonId)
+  if (lesson === null) throw notFound('Lesson')
+  const topic = await findTopicById(database, lesson.topic_id)
+  const subject = topic === null ? null : await findSubjectById(database, topic.subject_id)
+  const course = subject === null ? null : await findCourseById(database, subject.course_id)
+  if (
+    topic === null ||
+    !generalInformationTeachingSystemTopicSlugs.has(topic.slug) ||
+    subject?.slug !== 'general-information' ||
+    course?.slug !== 'cse-professional'
+  ) {
+    throw new AppError(
+      409,
+      'GENERAL_INFORMATION_TEACHING_SYSTEM_TARGET_MISMATCH',
+      'General Information Teaching System capability is restricted to authoritative CSE General Information topics.',
+    )
+  }
+  return { supported: true, operation: topic.slug + '-teaching-system-v1', topicSlug: topic.slug }
+}
+
+export async function reconcileGeneralInformationTeachingSystemLesson(
+  database: D1Database,
+  actor: AuthenticatedPrincipal,
+  lessonId: number,
+  input: GeneralInformationTeachingSystemReconcileInput,
+): Promise<{
+  blocks: AdminLessonBlock[]
+  writeRequired: boolean
+  createdCount: number
+  updatedCount: number
+  deletedCount: number
+}> {
+  const lesson = await findLessonById(database, lessonId)
+  if (lesson === null) throw notFound('Lesson')
+  const topic = await findTopicById(database, lesson.topic_id)
+  const subject = topic === null ? null : await findSubjectById(database, topic.subject_id)
+  const course = subject === null ? null : await findCourseById(database, subject.course_id)
+  if (
+    topic === null ||
+    !generalInformationTeachingSystemTopicSlugs.has(topic.slug) ||
+    subject?.slug !== 'general-information' ||
+    course?.slug !== 'cse-professional'
+  ) {
+    throw new AppError(
+      409,
+      'GENERAL_INFORMATION_TEACHING_SYSTEM_TARGET_MISMATCH',
+      'General Information Teaching System reconciliation is restricted to authoritative CSE General Information topics.',
+    )
+  }
+
+  const desired = input.blocks.map((block) => {
+    assertNoRawHtmlContent(block.content)
+    const content = validateAdminLessonBlockContent(block.blockType, block.content)
+    return { blockType: block.blockType, contentJson: JSON.stringify(content), position: block.position }
+  })
+  if (desired.some((block) => block.blockType === 'illustrated-guided-teaching')) {
+    throw new AppError(
+      409,
+      'GENERAL_INFORMATION_GUIDED_TEACHING_NOT_ALLOWED',
+      'General Information Teaching System v1 uses text-first VisualTeachingBoard scenarios rather than illustrated guided teaching.',
+    )
+  }
+
+  const existing = await listLessonBlocksForLesson(database, lessonId)
+  const guided = existing.filter((block) => block.block_type === 'illustrated-guided-teaching')
+  const allowed = existing.filter((block) => block.block_type !== 'illustrated-guided-teaching')
+  const retainedCount = Math.min(allowed.length, desired.length)
+  const retained = allowed.slice(0, retainedCount).map((block, index) => {
+    const target = desired[index]
+    if (target === undefined) throw new Error('General Information Teaching System reconciliation target is missing.')
+    return {
+      id: block.id,
+      blockType: target.blockType,
+      contentJson: target.contentJson,
+      position: target.position,
+      contentChanged: block.block_type !== target.blockType || !lessonBlockContentJsonEquals(block.content_json, target.contentJson),
+      positionChanged: block.position !== target.position,
+    }
+  })
+  const deleteIds = [...guided.map((block) => block.id), ...allowed.slice(desired.length).map((block) => block.id)]
   const creates = desired.slice(allowed.length)
   const updatedCount = retained.filter((block) => block.contentChanged || block.positionChanged).length
   const writeRequired = updatedCount > 0 || deleteIds.length > 0 || creates.length > 0

@@ -25,6 +25,7 @@ import {
   pronounsModifiersTeachingSystemReconcileSchema,
   sentenceStructureErrorsTeachingSystemReconcileSchema,
   paragraphOrganizationTeachingSystemReconcileSchema,
+  generalInformationTeachingSystemReconcileSchema,
   readingComprehensionTeachingSystemReconcileSchema,
   analyticalTeachingSystemReconcileSchema,
 } from '../../schemas/admin/content-admin.schemas'
@@ -41,6 +42,7 @@ import {
   getAnalyticalTeachingSystemCapability,
   moveLessonBlock,
   repairPercentageGuidedTeaching,
+  getGeneralInformationTeachingSystemCapability,
   reconcileAgeProblemsTeachingSystemLesson,
   reconcileAverageTeachingSystemLesson,
   reconcileNumberProblemsTeachingSystemLesson,
@@ -60,6 +62,7 @@ import {
   reconcilePronounsModifiersTeachingSystemLesson,
   reconcileSentenceStructureErrorsTeachingSystemLesson,
   reconcileParagraphOrganizationTeachingSystemLesson,
+  reconcileGeneralInformationTeachingSystemLesson,
   reconcileReadingComprehensionTeachingSystemLesson,
   reconcileAnalyticalTeachingSystemLesson,
   updateAdminLessonBlock,
@@ -616,6 +619,37 @@ adminLessonBlockRoutes.put(
     return successResponse(
       context,
       await reconcileAnalyticalTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+
+adminLessonBlockRoutes.get(
+  '/lessons/:lessonId/general-information-teaching-system-v1/capability',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    return successResponse(
+      context,
+      await getGeneralInformationTeachingSystemCapability(context.env.DB, params.lessonId),
+    )
+  },
+)
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/general-information-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    const input = await parseJsonBody(context, generalInformationTeachingSystemReconcileSchema)
+    return successResponse(
+      context,
+      await reconcileGeneralInformationTeachingSystemLesson(
         context.env.DB,
         context.get('authUser'),
         params.lessonId,

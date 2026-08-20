@@ -10,6 +10,8 @@ interface ContractConfig {
   topicTitle:string
   confirmation:string
   scriptName:string
+  subjectSlug?:string
+  endpointSlug?:string
   lessonSpecs:AnalyticalTeachingLessonSpec[]
   legacyBlockCounts:number[]
 }
@@ -23,6 +25,8 @@ export function defineAnalyticalPublisherContract(config:ContractConfig) {
   const lessons = config.lessonSpecs.map((spec, index) => ({...spec,id:601+index,position:index+1,status:'published' as const}))
   const blocksByLesson = new Map<number,StoredBlock[]>()
   let nextBlockId = 6_000
+  const subjectSlug = config.subjectSlug ?? 'analytical-ability'
+  const endpointSlug = config.endpointSlug ?? 'analytical-teaching-system-v1'
   let mutationCalls = 0
   let capabilityCalls = 0
   let baseUrl = ''
@@ -39,10 +43,10 @@ export function defineAnalyticalPublisherContract(config:ContractConfig) {
   async function handle(request:IncomingMessage,response:ServerResponse){
     const url=request.url??''
     if(url==='/api/admin/dashboard'){send(response,{cseProfessional:{id:1}});return}
-    if(url==='/api/admin/courses/1'){send(response,{subjects:[{slug:'analytical-ability',topics:[{slug:config.topicSlug,lessons:lessons.map(({id,slug,title,lessonType,estimatedMinutes,status,position})=>({id,slug,title,lessonType,estimatedMinutes,status,position}))}]}]});return}
-    const capability=url.match(/^\/api\/admin\/lessons\/(\d+)\/analytical-teaching-system-v1\/capability$/u)
+    if(url==='/api/admin/courses/1'){send(response,{subjects:[{slug:subjectSlug,topics:[{slug:config.topicSlug,lessons:lessons.map(({id,slug,title,lessonType,estimatedMinutes,status,position})=>({id,slug,title,lessonType,estimatedMinutes,status,position}))}]}]});return}
+    const capability=url.match(new RegExp('^/api/admin/lessons/(\\d+)/'+endpointSlug+'/capability$','u'))
     if(capability?.[1]!==undefined&&request.method==='GET'){capabilityCalls+=1;send(response,{supported:true,operation,topicSlug:config.topicSlug});return}
-    const reconcile=url.match(/^\/api\/admin\/lessons\/(\d+)\/analytical-teaching-system-v1$/u)
+    const reconcile=url.match(new RegExp('^/api/admin/lessons/(\\d+)/'+endpointSlug+'$','u'))
     if(reconcile?.[1]!==undefined&&request.method==='PUT'){
       mutationCalls+=1
       const lessonId=Number(reconcile[1])

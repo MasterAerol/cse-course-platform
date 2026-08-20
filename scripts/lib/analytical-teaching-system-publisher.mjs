@@ -63,6 +63,8 @@ function lessonMismatch(blocks, spec) {
 
 export async function runAnalyticalTeachingPublisher(config, argv = process.argv) {
   const args = parseArgs(argv)
+  const subjectSlug = config.subjectSlug ?? 'analytical-ability'
+  const endpointSlug = config.endpointSlug ?? 'analytical-teaching-system-v1'
   const operation = config.topicSlug + '-teaching-system-v1'
   const validateOnly = args.get('validate-only') === 'true'
   const capabilityCheck = args.get('capability-check') === 'true'
@@ -92,12 +94,12 @@ export async function runAnalyticalTeachingPublisher(config, argv = process.argv
   const courseId = dashboard.cseProfessional?.id
   if (courseId === undefined) throw new Error('CSE Professional course was not found.')
   const course = await request('/api/admin/courses/' + courseId)
-  const subject = course.subjects.find((item) => item.slug === 'analytical-ability')
+  const subject = course.subjects.find((item) => item.slug === subjectSlug)
   const topic = subject?.topics.find((item) => item.slug === config.topicSlug)
   if (topic === undefined || topic.lessons.length !== config.lessonSpecs.length) throw new Error(config.topicTitle + ' must contain exactly the expected lessons.')
   const capabilityLesson = topic.lessons.find((item) => item.slug === config.lessonSpecs[0]?.slug)
   if (capabilityLesson === undefined) throw new Error(config.topicTitle + ' capability lesson was not found.')
-  const capability = await request('/api/admin/lessons/' + capabilityLesson.id + '/analytical-teaching-system-v1/capability')
+  const capability = await request('/api/admin/lessons/' + capabilityLesson.id + '/' + endpointSlug + '/capability')
   if (capability?.supported !== true || capability.operation !== operation || capability.topicSlug !== config.topicSlug) throw new Error('Production Worker does not report the ' + config.topicTitle + ' reconciliation capability.')
   if (capabilityCheck) { console.log(JSON.stringify({ supported: true, operation: capability.operation, topicSlug: capability.topicSlug })); return }
   const states = []
@@ -133,7 +135,7 @@ export async function runAnalyticalTeachingPublisher(config, argv = process.argv
   if (deletionReviewRequired && args.get('approve-deletions') !== deletionPlanFingerprint) throw new Error('Deletion approval fingerprint is missing or changed; publication refused.')
   for (const state of states) {
     if (!state.plan.writesRequired) continue
-    await request('/api/admin/lessons/' + state.lesson.id + '/analytical-teaching-system-v1', { method: 'PUT', body: JSON.stringify({ blocks: state.spec.blocks.map((block, index) => ({ ...block, position: index + 1 })) }) })
+    await request('/api/admin/lessons/' + state.lesson.id + '/' + endpointSlug, { method: 'PUT', body: JSON.stringify({ blocks: state.spec.blocks.map((block, index) => ({ ...block, position: index + 1 })) }) })
   }
   const verifiedLessons = []
   for (const state of states) {
