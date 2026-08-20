@@ -128,7 +128,9 @@ describe('Lesson Practice and Topic Quiz UI', () => {
       expect(source).toContain('learning-question-status--mobile')
       expect(source).toContain("isAnswered ? 'Done' : 'Open'")
       expect(source).toContain('learning-answer-choice__label')
-      expect(source).toContain('learning-answer-choice__selected')
+      expect(source).toContain('answer-choice-control')
+      expect(source).toContain('answer-choice-marker')
+      expect(source).not.toContain('learning-answer-choice__selected')
     }
 
     expect(
@@ -146,6 +148,29 @@ describe('Lesson Practice and Topic Quiz UI', () => {
     expect(
       hasRule('.learning-answer-choice:has(input:focus-visible)', [
         /outline:\s*3px\s+solid\s+var\(--focus-ring\)/,
+      ]),
+    ).toBe(true)
+    expect(
+      hasRule('.quiz-choice > .answer-choice-control', [
+        /position:\s*absolute/,
+        /clip-path:\s*inset\(50%\)/,
+        /inline-size:\s*1px/,
+        /block-size:\s*1px/,
+      ]),
+    ).toBe(true)
+    expect(
+      hasRule(
+        '.quiz-choice:has(.answer-choice-control:checked) .answer-choice-marker',
+        [
+          /background:\s*var\(--brand-blue\)/,
+          /border-color:\s*var\(--brand-blue\)/,
+          /color:\s*#fff/,
+        ],
+      ),
+    ).toBe(true)
+    expect(
+      hasRule('.learning-answer-choice', [
+        /grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)/,
       ]),
     ).toBe(true)
     expect(

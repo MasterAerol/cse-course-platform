@@ -239,6 +239,7 @@ export function SmartRecoveryAttemptView({
               {question.choices.map((choice, choiceIndex) => (
                 <label className="quiz-choice" key={choice.publicId}>
                   <input
+                    className="answer-choice-control"
                     type="radio"
                     name={`recovery-${question.publicId}`}
                     value={choice.publicId}
@@ -247,16 +248,10 @@ export function SmartRecoveryAttemptView({
                     }
                     onChange={() => onChoose(choice.publicId)}
                   />
-                  <span className="assessment-choice-label" aria-hidden="true">
+                  <span className="answer-choice-marker assessment-choice-label" aria-hidden="true">
                     {String.fromCharCode(65 + choiceIndex)}
                   </span>
                   <span className="assessment-choice-text">{choice.text}</span>
-                  <span
-                    className="assessment-choice-selected"
-                    aria-hidden="true"
-                  >
-                    ✓
-                  </span>
                 </label>
               ))}
             </div>

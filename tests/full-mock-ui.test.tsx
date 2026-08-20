@@ -165,7 +165,9 @@ describe('Full Mock Examination UI', () => {
     expect(attemptSource).toContain('role="dialog"')
     expect(attemptSource).toContain('aria-modal="true"')
     expect(attemptSource).toContain('assessment-choice-label')
-    expect(attemptSource).toContain('assessment-choice-selected')
+    expect(attemptSource).toContain('answer-choice-control')
+    expect(attemptSource).toContain('answer-choice-marker')
+    expect(attemptSource).not.toContain('assessment-choice-selected')
     expect(attemptSource).toContain('String.fromCharCode(65 + choiceIndex)')
     expect(attemptSource).toContain("? 'Saving...'")
     expect(attemptSource).toContain(": 'Saved'")
@@ -376,6 +378,17 @@ describe('Full Mock Examination UI', () => {
       hasRule('.mock-exam-choice:has(input:checked)', [
         /background:\s*var\(--brand-selection\)/,
         /border-color:\s*var\(--brand-blue\)/,
+      ]),
+    ).toBe(true)
+    expect(
+      hasRule('.quiz-choice > .answer-choice-control', [
+        /position:\s*absolute/,
+        /clip-path:\s*inset\(50%\)/,
+      ]),
+    ).toBe(true)
+    expect(
+      hasRule('.mock-exam-choice', [
+        /grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)/,
       ]),
     ).toBe(true)
     expect(

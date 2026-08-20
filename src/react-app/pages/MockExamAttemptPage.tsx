@@ -922,19 +922,17 @@ export function MockExamAttemptPage() {
                       key={choice.publicId}
                     >
                       <input
+                        className="answer-choice-control"
                         type="radio"
                         name={q.publicId}
                         checked={q.selectedChoicePublicId === choice.publicId}
                         onChange={() => void choose(q.publicId, choice.publicId)}
                       />
-                      <span className="assessment-choice-label" aria-hidden="true">
+                      <span className="answer-choice-marker assessment-choice-label" aria-hidden="true">
                         {String.fromCharCode(65 + choiceIndex)}
                       </span>
                       <span className="mock-exam-choice__text">
                         {normalizeTextWithPeso(choice.text)}
-                      </span>
-                      <span className="assessment-choice-selected" aria-hidden="true">
-                        ✓
                       </span>
                     </label>
                   ))}

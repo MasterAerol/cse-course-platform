@@ -84,8 +84,10 @@ describe('Subject Assessment attempt UI', () => {
     expect(attemptSource).toContain('assessment-question-kicker')
     expect(attemptSource).toContain('assessment-question-prompt')
     expect(attemptSource).toContain('assessment-choice-label')
+    expect(attemptSource).toContain('answer-choice-control')
+    expect(attemptSource).toContain('answer-choice-marker')
     expect(attemptSource).toContain('String.fromCharCode(65 + choiceIndex)')
-    expect(attemptSource).toContain('assessment-choice-selected')
+    expect(attemptSource).not.toContain('assessment-choice-selected')
     expect(attemptSource).toContain('checked={')
     expect(attemptSource).toContain('disabled={submitting}')
 
@@ -103,6 +105,15 @@ describe('Subject Assessment attempt UI', () => {
     expect(stylesSource).toMatch(
       /\.quiz-choice:has\(input:disabled\)\s*\{(?=[^}]*background:\s*var\(--color-locked-bg\))(?=[^}]*cursor:\s*not-allowed)[^}]*\}/s,
     )
+    expect(stylesSource).toMatch(
+      /\.quiz-choice\s*>\s*\.answer-choice-control\s*\{(?=[^}]*position:\s*absolute)(?=[^}]*clip-path:\s*inset\(50%\))(?=[^}]*inline-size:\s*1px)(?=[^}]*block-size:\s*1px)[^}]*\}/s,
+    )
+    expect(
+      cssRuleBodies(stylesSource, '.assessment-attempt-page .quiz-choice').some(
+        (body) =>
+          /grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)/.test(body),
+      ),
+    ).toBe(true)
   })
 
   it('keeps the shared subject page responsive and bounded', () => {

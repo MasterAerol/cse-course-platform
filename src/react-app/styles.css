@@ -6326,7 +6326,7 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   border-radius: var(--radius-medium);
   display: grid;
   gap: var(--space-12);
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   min-height: 3.25rem;
   padding: var(--space-12) var(--space-16);
   transition: background-color 150ms ease, border-color 150ms ease;
@@ -6359,13 +6359,6 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   overflow-wrap: anywhere;
 }
 
-.assessment-choice-selected {
-  color: var(--brand-blue);
-  font-size: 1.1rem;
-  font-weight: 900;
-  opacity: 0;
-}
-
 .assessment-attempt-page .quiz-choice:has(input:checked) {
   background: var(--brand-selection);
   border-color: var(--brand-blue);
@@ -6381,10 +6374,6 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   background: var(--brand-blue);
   border-color: var(--brand-blue);
   color: #fff;
-}
-
-.assessment-attempt-page .quiz-choice:has(input:checked) .assessment-choice-selected {
-  opacity: 1;
 }
 
 .assessment-attempt-page .quiz-choice:has(input:disabled) {
@@ -10413,7 +10402,7 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   border-radius: var(--radius-medium);
   display: grid;
   gap: var(--space-12);
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   min-height: 3.25rem;
   padding: var(--space-12) var(--space-16);
 }
@@ -10443,10 +10432,6 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   background: var(--brand-blue);
   border-color: var(--brand-blue);
   color: #fff;
-}
-
-.mock-exam-choice:has(input:checked) .assessment-choice-selected {
-  opacity: 1;
 }
 
 .mock-exam-choice:has(input:disabled) {
@@ -11154,12 +11139,7 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   }
 
   .mock-exam-choice {
-    grid-template-columns: auto auto minmax(0, 1fr);
-  }
-
-  .mock-exam-choice .assessment-choice-selected {
-    grid-column: 3;
-    justify-self: end;
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .mock-navigation__buttons {
@@ -11474,7 +11454,7 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   align-items: center;
   display: grid;
   gap: var(--space-12);
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   min-height: 3.25rem;
   padding: var(--space-12) var(--space-16);
 }
@@ -11500,12 +11480,6 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   white-space: pre-line;
 }
 
-.learning-answer-choice__selected {
-  color: var(--brand-blue);
-  font-weight: 900;
-  opacity: 0;
-}
-
 .learning-answer-choice:has(input:checked) {
   background: var(--brand-selection);
   border-color: var(--brand-blue);
@@ -11515,10 +11489,6 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   background: var(--brand-blue);
   border-color: var(--brand-blue);
   color: #fff;
-}
-
-.learning-answer-choice:has(input:checked) .learning-answer-choice__selected {
-  opacity: 1;
 }
 
 .learning-answer-choice:has(input:focus-visible) {
@@ -11933,12 +11903,7 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   }
 
   .learning-answer-choice {
-    grid-template-columns: auto auto minmax(0, 1fr);
-  }
-
-  .learning-answer-choice__selected {
-    grid-column: 3;
-    justify-self: end;
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .learning-question-nav {
@@ -11968,5 +11933,41 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
 @media (prefers-reduced-motion: reduce) {
   .learning-answer-choice {
     transition: none;
+  }
+}
+
+/* Unified single-marker answer choices */
+.quiz-choice > .answer-choice-control {
+  block-size: 1px;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  inline-size: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.quiz-choice:has(.answer-choice-control:checked) .answer-choice-marker {
+  background: var(--brand-blue);
+  border-color: var(--brand-blue);
+  color: #fff;
+}
+
+.quiz-choice:has(.answer-choice-control:disabled) .answer-choice-marker {
+  background: var(--color-locked-bg);
+  border-color: var(--color-border);
+  color: var(--color-locked);
+}
+
+@media (hover: hover) {
+  .quiz-choice:not(:has(.answer-choice-control:disabled)):not(:has(.answer-choice-control:checked)):hover .answer-choice-marker {
+    background: var(--color-info-bg);
+    border-color: var(--brand-blue);
+    color: var(--brand-blue);
   }
 }

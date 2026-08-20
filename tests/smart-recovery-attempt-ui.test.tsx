@@ -252,8 +252,9 @@ describe('Smart Recovery Phase D/E UI contracts', () => {
     expect(markup).not.toContain('Convert 0.25 to a percentage.')
     expect(markup).toContain('assessment-choice-label')
     expect(markup).toContain('>A</span>')
-    expect(markup).toContain('assessment-choice-selected')
-    expect(markup).toContain('✓')
+    expect(markup).toContain('answer-choice-control')
+    expect(markup).toContain('answer-choice-marker')
+    expect(markup).not.toContain('assessment-choice-selected')
     expect(markup).toContain('>Previous</button>')
     expect(markup).toContain('>Next</button>')
     expect(markup).not.toContain('Submit Recovery Set')
@@ -353,8 +354,15 @@ describe('Smart Recovery Phase D/E UI contracts', () => {
       ]),
     ).toBe(true)
     expect(
+      hasRule('.quiz-choice > .answer-choice-control', [
+        /position:\s*absolute/,
+        /clip-path:\s*inset\(50%\)/,
+      ]),
+    ).toBe(true)
+    expect(
       hasRule('.assessment-attempt-page .quiz-choice', [
         /min-height:\s*3\.25rem/,
+        /grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)/,
       ]),
     ).toBe(true)
     expect(

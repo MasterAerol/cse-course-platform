@@ -336,6 +336,7 @@ export function PracticeAttemptPage() {
                       key={choice.id}
                     >
                       <input
+                        className="answer-choice-control"
                         type="radio"
                         name={`question-${currentQuestion.id}`}
                         value={choice.id}
@@ -347,14 +348,11 @@ export function PracticeAttemptPage() {
                           void handleSelectChoice(currentQuestion.id, choice.id)
                         }
                       />
-                      <span className="learning-answer-choice__label" aria-hidden="true">
+                      <span className="answer-choice-marker learning-answer-choice__label" aria-hidden="true">
                         {String.fromCharCode(65 + choiceIndex)}
                       </span>
                       <span className="learning-answer-choice__text">
                         {choice.text}
-                      </span>
-                      <span className="learning-answer-choice__selected" aria-hidden="true">
-                        ✓
                       </span>
                     </label>
                   ))}
