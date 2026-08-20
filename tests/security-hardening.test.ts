@@ -353,6 +353,30 @@ describe('production security hardening', () => {
     })
   })
 
+  it('rejects a declared oversized JSON body before authentication work', async () => {
+    const response = await app.request(
+      '/api/auth/login',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'content-length': String(MAXIMUM_JSON_BODY_BYTES + 1),
+        },
+        body: JSON.stringify({
+          email: 'declared-oversized@example.test',
+          password: 'ValidPassword123',
+        }),
+      },
+      bindings,
+    )
+
+    expect(response.status).toBe(413)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: 'REQUEST_BODY_TOO_LARGE' },
+    })
+  })
+
   it('returns safe JSON without internal exception details on a 500', async () => {
     const consoleError = vi
       .spyOn(console, 'error')

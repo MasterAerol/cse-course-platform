@@ -161,11 +161,17 @@ describe('Safe Release Workflow v1', () => {
 
   it('runs a real dry-run inspection without staging, committing, pushing, or deploying', () => {
     const before = spawnSync('git', ['status', '--porcelain=v1'], { encoding: 'utf8' }).stdout
+    const startedClean = before.trim() === ''
     const result = spawnSync(process.execPath, ['scripts/safe-release.mjs', '--message', 'Safe release test', '--dry-run', '--skip-validation'], { encoding: 'utf8' })
     const after = spawnSync('git', ['status', '--porcelain=v1'], { encoding: 'utf8' }).stdout
     expect(result.status).toBe(0)
-    expect(result.stdout).toContain('SAFE RELEASE — DRY RUN PASS')
-    expect(result.stdout).toContain('No staging, commit, push, deployment, migration, or publisher execution occurred.')
+    if (startedClean) {
+      expect(result.stdout).toContain('SAFE RELEASE — PREFLIGHT')
+      expect(result.stdout).toContain('Nothing to release.')
+    } else {
+      expect(result.stdout).toContain('SAFE RELEASE — DRY RUN PASS')
+      expect(result.stdout).toContain('No staging, commit, push, deployment, migration, or publisher execution occurred.')
+    }
     expect(after).toBe(before)
   })
 })

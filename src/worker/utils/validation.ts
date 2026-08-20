@@ -10,6 +10,56 @@ import {
 
 export const MAXIMUM_JSON_BODY_BYTES = 256 * 1024
 
+function requestBodyTooLarge(): AppError {
+  return new AppError(
+    413,
+    'REQUEST_BODY_TOO_LARGE',
+    'The request body is too large.',
+  )
+}
+
+async function readBoundedJsonBody(request: Request): Promise<string> {
+  const contentLength = request.headers.get('content-length')
+
+  if (contentLength !== null) {
+    const declaredBytes = Number(contentLength)
+
+    if (Number.isFinite(declaredBytes) && declaredBytes > MAXIMUM_JSON_BODY_BYTES) {
+      throw requestBodyTooLarge()
+    }
+  }
+
+  if (request.body === null) {
+    return ''
+  }
+
+  const bodyStream = request.body as ReadableStream<Uint8Array>
+  const reader = bodyStream.getReader()
+  const decoder = new TextDecoder()
+  const chunks: string[] = []
+  let receivedBytes = 0
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+
+      if (done) {
+        chunks.push(decoder.decode())
+        return chunks.join('')
+      }
+
+      receivedBytes += value.byteLength
+      if (receivedBytes > MAXIMUM_JSON_BODY_BYTES) {
+        await reader.cancel().catch(() => undefined)
+        throw requestBodyTooLarge()
+      }
+      chunks.push(decoder.decode(value, { stream: true }))
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 const validationFields = new Set<ValidationField>([
   'accessExpiresAt',
   'accessDurationDays',
@@ -90,15 +140,7 @@ export async function parseJsonBody<T>(
   let body: unknown
 
   try {
-    const text = await context.req.text()
-
-    if (new TextEncoder().encode(text).byteLength > MAXIMUM_JSON_BODY_BYTES) {
-      throw new AppError(
-        413,
-        'REQUEST_BODY_TOO_LARGE',
-        'The request body is too large.',
-      )
-    }
+    const text = await readBoundedJsonBody(context.req.raw)
 
     body = JSON.parse(text) as unknown
   } catch (error: unknown) {
