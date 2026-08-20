@@ -14,6 +14,18 @@ import { RegistrationPage } from '../src/react-app/pages/RegistrationPage'
 import type { User } from '../src/react-app/lib/api'
 import accountMenuSource from '../src/react-app/components/AccountMenu.tsx?raw'
 
+declare global {
+  var __PASAWISE_DESIGN_SYSTEM_SOURCE__: unknown
+}
+
+const injectedStyles: unknown = globalThis.__PASAWISE_DESIGN_SYSTEM_SOURCE__
+
+if (typeof injectedStyles !== 'string') {
+  throw new Error('Vitest did not inject the PasaWise design-system source.')
+}
+
+const stylesSource = injectedStyles
+
 const student: User = {
   id: '123e4567-e89b-12d3-a456-426614174000',
   email: 'learner@example.test',
@@ -74,6 +86,21 @@ describe('global account navigation and registration UI', () => {
     expect(markup).toContain('Sign out')
     expect(markup).not.toContain('Open navigation menu')
     expect(markup).not.toContain('Admin</a>')
+  })
+
+  it('uses the page gutter as the true mobile header edge', () => {
+    expect(stylesSource).toMatch(
+      /\.page-shell > \.topbar\.topbar--authenticated,\s*\.dashboard-page > \.topbar\.topbar--authenticated\s*\{[^}]*padding-inline:\s*0;/u,
+    )
+    expect(stylesSource).toMatch(
+      /\.topbar--authenticated \.topbar-actions\s*\{[^}]*margin-left:\s*auto;/u,
+    )
+    expect(stylesSource).toMatch(
+      /\.account-menu__panel\s*\{[^}]*right:\s*0;[^}]*width:\s*min\(20rem, calc\(100vw - 2rem\)\);/u,
+    )
+    expect(stylesSource).toContain(
+      ".account-menu__trigger:focus-visible",
+    )
   })
 
   it('exposes Admin only from an actually authorized admin identity', () => {

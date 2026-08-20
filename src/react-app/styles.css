@@ -12885,6 +12885,10 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
     align-items: center;
     padding-block: var(--space-8);
   }
+  .page-shell > .topbar.topbar--authenticated,
+  .dashboard-page > .topbar.topbar--authenticated {
+    padding-inline: 0;
+  }
   .topbar--authenticated .topbar-actions {
     width: auto;
     flex: 0 0 auto;
