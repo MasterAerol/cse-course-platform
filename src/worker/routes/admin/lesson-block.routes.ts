@@ -26,6 +26,7 @@ import {
   sentenceStructureErrorsTeachingSystemReconcileSchema,
   paragraphOrganizationTeachingSystemReconcileSchema,
   readingComprehensionTeachingSystemReconcileSchema,
+  analyticalTeachingSystemReconcileSchema,
 } from '../../schemas/admin/content-admin.schemas'
 import {
   createAdminLessonBlock,
@@ -37,6 +38,7 @@ import {
   getSentenceStructureErrorsTeachingSystemCapability,
   getParagraphOrganizationTeachingSystemCapability,
   getReadingComprehensionTeachingSystemCapability,
+  getAnalyticalTeachingSystemCapability,
   moveLessonBlock,
   repairPercentageGuidedTeaching,
   reconcileAgeProblemsTeachingSystemLesson,
@@ -59,6 +61,7 @@ import {
   reconcileSentenceStructureErrorsTeachingSystemLesson,
   reconcileParagraphOrganizationTeachingSystemLesson,
   reconcileReadingComprehensionTeachingSystemLesson,
+  reconcileAnalyticalTeachingSystemLesson,
   updateAdminLessonBlock,
 } from '../../services/admin/admin-content.service'
 import type { AppEnv } from '../../types/app'
@@ -582,6 +585,37 @@ adminLessonBlockRoutes.put(
     return successResponse(
       context,
       await reconcileReadingComprehensionTeachingSystemLesson(
+        context.env.DB,
+        context.get('authUser'),
+        params.lessonId,
+        input,
+      ),
+    )
+  },
+)
+
+adminLessonBlockRoutes.get(
+  '/lessons/:lessonId/analytical-teaching-system-v1/capability',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    return successResponse(
+      context,
+      await getAnalyticalTeachingSystemCapability(context.env.DB, params.lessonId),
+    )
+  },
+)
+adminLessonBlockRoutes.put(
+  '/lessons/:lessonId/analytical-teaching-system-v1',
+  async (context) => {
+    const params = parseValidatedInput(
+      lessonIdParamsSchema.safeParse({ lessonId: context.req.param('lessonId') }),
+    )
+    const input = await parseJsonBody(context, analyticalTeachingSystemReconcileSchema)
+    return successResponse(
+      context,
+      await reconcileAnalyticalTeachingSystemLesson(
         context.env.DB,
         context.get('authUser'),
         params.lessonId,
