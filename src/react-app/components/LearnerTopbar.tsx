@@ -71,6 +71,8 @@ export function LearnerTopbar({
     }
   }
 
+  const initials = user === null ? '' : `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase()
+
   return (
     <Root className={mergedClassName} aria-label={ariaLabel}>
       <PasaWiseBrand linked variant="header" />
@@ -112,14 +114,22 @@ export function LearnerTopbar({
               Sign in
             </Link>
           ) : (
-            <button
-              type="button"
-              className="button-secondary"
-              disabled={submitting}
-              onClick={() => void handleSignOut()}
-            >
-              {submitting ? 'Signing out...' : 'Sign out'}
-            </button>
+            <details className="account-menu">
+              <summary aria-label={`Account menu for ${user.firstName} ${user.lastName}`}>
+                <span className="account-menu__avatar" aria-hidden="true">{initials}</span>
+                <span>Account</span>
+              </summary>
+              <div className="account-menu__panel">
+                <p><strong>{user.firstName} {user.lastName}</strong><span>{user.email}</span></p>
+                <Link to="/dashboard">Dashboard</Link>
+                <Link to="/account">Profile &amp; account</Link>
+                <Link to="/exam-calendar">Exam calendar</Link>
+                {user.role === 'admin' && <Link to="/admin">Admin workspace</Link>}
+                <button type="button" disabled={submitting} onClick={() => void handleSignOut()}>
+                  {submitting ? 'Signing out...' : 'Sign out'}
+                </button>
+              </div>
+            </details>
           )
         ) : null}
       </div>

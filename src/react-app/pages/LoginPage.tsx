@@ -61,70 +61,61 @@ export function LoginPage() {
 
   return (
     <main className="auth-page">
-      <section className="auth-card" aria-labelledby="login-title">
-        <PasaWiseBrand linked variant="primary" />
-        <p className="brand-tagline">Aral nang wais. Pasa nang handa.</p>
-        <p className="eyebrow">Welcome back</p>
-        <h1 id="login-title">Sign in</h1>
-        <p>Use the email and password associated with your account.</p>
+      <div className="auth-experience">
+        <section className="auth-story" aria-labelledby="auth-story-title">
+          <PasaWiseBrand linked variant="primary" />
+          <p className="eyebrow">Aral nang wais. Pasa nang handa.</p>
+          <h1 id="auth-story-title">Continue preparing with purpose.</h1>
+          <p>Return to your next lesson, targeted practice, recovery plan, and readiness evidence.</p>
+          <ul>
+            <li><span aria-hidden="true">✓</span> One clear next study action</li>
+            <li><span aria-hidden="true">✓</span> Smart Recovery for weak skills</li>
+            <li><span aria-hidden="true">✓</span> Realistic CSE assessments</li>
+          </ul>
+        </section>
 
-        <form onSubmit={(event) => void handleSubmit(event)}>
-          <label htmlFor="login-email">Email address</label>
-          <input
-            id="login-email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            maxLength={254}
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
+        <section className="auth-card" aria-labelledby="login-title">
+          <p className="eyebrow">Welcome back</p>
+          <h2 id="login-title">Sign in to PasaWise</h2>
+          <p>Use the email and password associated with your account.</p>
 
-          <label htmlFor="login-password">Password</label>
-          <div className="password-input-group">
+          <form onSubmit={(event) => void handleSubmit(event)} aria-busy={submitting}>
+            <label htmlFor="login-email">Email address</label>
             <input
-              id="login-password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              maxLength={128}
+              id="login-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              maxLength={254}
               required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
             />
-            <button
-              className="password-toggle"
-              type="button"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              aria-pressed={showPassword}
-              onClick={() => setShowPassword((current) => !current)}
-            >
-              {showPassword ? 'Hide' : 'Show'}
+
+            <label htmlFor="login-password">Password</label>
+            <div className="password-input-group">
+              <input id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" maxLength={128} required value={password} onChange={(event) => setPassword(event.target.value)} />
+              <button className="password-toggle" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword((current) => !current)}>
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+
+            {error !== null && <p className="form-error" role="alert">{error}</p>}
+
+            <button type="submit" disabled={submitting}>
+              {submitting ? 'Signing in…' : 'Sign in'}
             </button>
-          </div>
+          </form>
 
-          {error !== null && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
+          {registrationMode === 'open' ? (
+            <p className="auth-switch">Need an account? <Link to="/register">Register as a student</Link></p>
+          ) : (
+            <p className="auth-switch">Private-beta access is provided by an administrator.</p>
           )}
-
-          <button type="submit" disabled={submitting}>
-            {submitting ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-
-        {registrationMode === 'open' ? (
-          <p className="auth-switch">
-            Need an account? <Link to="/register">Register as a student</Link>
-          </p>
-        ) : (
-          <p className="auth-switch">
-            Private-beta access is provided by an administrator.
-          </p>
-        )}
-      </section>
+          <Link className="auth-home-link" to="/">Return to PasaWise home</Link>
+        </section>
+      </div>
     </main>
   )
 }

@@ -86,6 +86,13 @@ describe('Safe Release Workflow v1', () => {
     expect(detectSecrets('src/config.ts', `token = '${value}'`)).toContain('GitHub token')
     expect(detectSecrets('tests/config.test.ts', `token = '${value}'`)).toEqual([])
     expect(detectSecrets('scripts/release.mjs', 'const password = environment.CSE_CONTENT_ADMIN_PASSWORD')).toEqual([])
+    expect(detectSecrets('src/schema.ts', 'password: z.string().min(12).max(128)')).toEqual([])
+    expect(detectSecrets('src/generated.d.ts', 'password: PasswordCredentialData;')).toEqual([])
+    expect(detectSecrets('src/login.tsx', "showPassword ? 'Hide password' : 'Show password'")).toEqual([])
+    expect(detectSecrets('src/config.ts', `password = '${'a'.repeat(16)}'`)).toContain('password')
+    expect(
+      detectSecrets('src/config.json', `{"password": "${'b'.repeat(16)}"}`),
+    ).toContain('password')
   })
 
   it('recognizes content-release as controlled release tooling', () => {

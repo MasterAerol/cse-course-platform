@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
 import { ContinueLearningCard } from '../components/ContinueLearningCard'
+import { CseExamTargetCard } from '../components/CseExamTarget'
 import { EnrollmentBadge } from '../components/EnrollmentBadge'
 import { ProgressBar } from '../components/ProgressBar'
 import { PasaWisePageLoader } from '../components/PasaWiseLoader'
@@ -36,7 +37,7 @@ function formatDate(value: string): string {
 }
 
 export function DashboardPage() {
-  const { user } = useAuth()
+  const { user, cseExamDates } = useAuth()
   const [dashboardState, setDashboardState] = useState<DashboardState>({
     status: 'loading',
   })
@@ -248,6 +249,7 @@ export function DashboardPage() {
                             <MockExamCard />
                             {user.role === 'student' && <ReadinessCard />}
                             {user.role === 'student' && <MistakeNotebookCard />}
+                            <CseExamTargetCard configuredDates={cseExamDates} compact linkToCalendar titleAs="h3" />
                           </div>
                         </section>
                       )}

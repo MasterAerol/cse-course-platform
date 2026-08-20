@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router'
 
 import { useAuth } from '../../auth/use-auth'
+import { PasaWiseBrand } from '../PasaWiseBrand'
 
 export function AdminLayout() {
   const { user } = useAuth()
@@ -8,27 +9,37 @@ export function AdminLayout() {
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar" aria-label="Admin navigation">
-        <NavLink className="admin-brand" to="/admin">
-          CSE Admin
-        </NavLink>
+        <div className="admin-brand-wrap">
+          <PasaWiseBrand variant="mark" />
+          <div><strong>PasaWise</strong><span>Admin workspace</span></div>
+        </div>
         <nav>
-          <NavLink to="/admin">Dashboard</NavLink>
-          <NavLink to="/admin/courses">Courses</NavLink>
-          <NavLink to="/admin/students">Beta Students</NavLink>
-          <NavLink to="/admin/audit-log">Audit Log</NavLink>
+          <p>Overview</p>
+          <NavLink end to="/admin">Dashboard</NavLink>
+          <p>Content</p>
+          <NavLink to="/admin/courses">Courses &amp; curriculum</NavLink>
+          <p>Operations</p>
+          <NavLink to="/admin/students">Learner accounts</NavLink>
+          <NavLink to="/admin/audit-log">Audit log</NavLink>
         </nav>
       </aside>
       <div className="admin-main">
         <header className="admin-header">
           <div>
-            <p className="eyebrow">Admin Content Builder Lite</p>
+            <p className="eyebrow">PasaWise operations</p>
             <p>
               Signed in as <strong>{user?.email}</strong>
             </p>
           </div>
-          <NavLink className="button-link button-link--secondary" to="/dashboard">
-            Student dashboard
-          </NavLink>
+          <div className="admin-header__actions">
+            <span className="admin-status admin-status--active">Authorized admin</span>
+            <NavLink className="button-link button-link--secondary" to="/dashboard">
+              Learner view
+            </NavLink>
+            <NavLink className="button-link button-link--secondary" to="/account">
+              Account
+            </NavLink>
+          </div>
         </header>
         <Outlet />
       </div>

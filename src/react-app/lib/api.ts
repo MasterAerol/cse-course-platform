@@ -21,6 +21,7 @@ const platformConfigResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     registrationMode: z.enum(['open', 'closed']),
+    cseExamDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/u)),
   }),
 })
 
@@ -683,6 +684,7 @@ export type User = z.infer<typeof userSchema>
 export type HealthResponse = z.infer<typeof healthResponseSchema>
 export type PlatformConfigResponse = z.infer<typeof platformConfigResponseSchema>
 export type RegistrationMode = PlatformConfigResponse['data']['registrationMode']
+export type CseExamDates = PlatformConfigResponse['data']['cseExamDates']
 export type AdminCheckResponse = z.infer<typeof adminCheckResponseSchema>
 export type CourseSummary = z.infer<typeof courseSummarySchema>
 export type CourseDetail = z.infer<typeof courseDetailSchema>

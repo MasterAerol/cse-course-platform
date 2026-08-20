@@ -1,6 +1,7 @@
 import { createContext } from 'react'
 
 import type {
+  CseExamDates,
   LoginRequest,
   RegistrationRequest,
   RegistrationMode,
@@ -12,6 +13,7 @@ export interface AuthContextValue {
   loading: boolean
   error: string | null
   registrationMode: RegistrationMode
+  cseExamDates: CseExamDates
   login: (input: LoginRequest) => Promise<void>
   register: (input: RegistrationRequest) => Promise<void>
   logout: () => Promise<void>

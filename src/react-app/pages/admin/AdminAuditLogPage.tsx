@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 
-import { AdminPageHeader } from '../../components/admin/AdminUi'
+import { AdminMetadata, AdminPageHeader } from '../../components/admin/AdminUi'
 import { PasaWiseLoader } from '../../components/PasaWiseLoader'
+import { adminLabel } from '../../lib/admin-copy'
 import { fetchAdminAuditLogs, type AdminAuditLog } from '../../lib/api'
 
 type AuditState =
@@ -50,18 +51,18 @@ export function AdminAuditLogPage() {
         )}
         {state.status === 'loaded' &&
           state.logs.map((log) => (
-            <article className="admin-row" key={log.id}>
+            <article className="admin-row admin-audit-row" key={log.id}>
               <div>
                 <strong>
-                  {log.action} {log.entityType}
+                  {adminLabel(log.action)} {adminLabel(log.entityType)}
                 </strong>
                 <p>
                   {log.actorEmail ?? 'Unknown admin'} ·{' '}
                   {new Date(log.createdAt).toLocaleString()}
                 </p>
-                <pre>{JSON.stringify(log.metadata, null, 2)}</pre>
+                <AdminMetadata metadata={log.metadata} />
               </div>
-              <span>{log.entityId ?? '—'}</span>
+              <div className="admin-audit-row__entity"><span>Entity</span><strong>{log.entityId ?? '—'}</strong></div>
             </article>
           ))}
       </section>

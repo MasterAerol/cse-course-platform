@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { adminLabel } from '../../lib/admin-copy'
+
 export function AdminPageHeader({
   title,
   description,
@@ -21,10 +23,41 @@ export function AdminPageHeader({
 }
 
 export function StatusBadge({ status }: { status: string }) {
+  const classSuffix = status.toLowerCase().replace(/[^a-z0-9_-]/gu, '')
   return (
-    <span className={`admin-status admin-status--${status}`}>
-      {status}
+    <span className={`admin-status admin-status--${classSuffix}`}>
+      {adminLabel(status)}
     </span>
+  )
+}
+
+function metadataValue(value: unknown): string {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  if (value === null) return 'None'
+  if (Array.isArray(value)) return `${value.length} ${value.length === 1 ? 'item' : 'items'}`
+  if (typeof value === 'object') return `${Object.keys(value).length} structured fields`
+  return 'Not available'
+}
+
+export function AdminMetadata({ metadata }: { metadata: unknown }) {
+  if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
+    return metadata === null ? null : <p className="admin-metadata-summary">{metadataValue(metadata)}</p>
+  }
+
+  const entries = Object.entries(metadata)
+  if (entries.length === 0) return null
+
+  return (
+    <details className="admin-metadata">
+      <summary>View change details</summary>
+      <dl>
+        {entries.map(([key, value]) => (
+          <div key={key}><dt>{adminLabel(key)}</dt><dd>{metadataValue(value)}</dd></div>
+        ))}
+      </dl>
+    </details>
   )
 }
 

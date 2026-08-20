@@ -12,11 +12,13 @@ import { AdminStudentsPage } from './pages/admin/AdminStudentsPage'
 import { CourseCatalogPage } from './pages/CourseCatalogPage'
 import { CourseDetailPage } from './pages/CourseDetailPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { ExamCalendarPage } from './pages/ExamCalendarPage'
 import { HomePage } from './pages/HomePage'
 import { LessonPage } from './pages/LessonPage'
 import { LoginPage } from './pages/LoginPage'
 import { MistakeNotebookDetailPage } from './pages/MistakeNotebookDetailPage'
 import { MistakeNotebookPage } from './pages/MistakeNotebookPage'
+import { AccountPage } from './pages/AccountPage'
 import { ReadinessPage } from './pages/ReadinessPage'
 import { PracticeAttemptPage } from './pages/PracticeAttemptPage'
 import { PracticeResultPage } from './pages/PracticeResultPage'
@@ -50,6 +52,8 @@ export function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="account" element={<AccountPage />} />
+        <Route path="exam-calendar" element={<ExamCalendarPage />} />
         <Route path="mistake-notebook" element={<MistakeNotebookPage />} />
         <Route path="readiness" element={<ReadinessPage />} />
         <Route path="mistake-notebook/:entryId" element={<MistakeNotebookDetailPage />} />

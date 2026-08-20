@@ -13,6 +13,7 @@ import {
   login as loginRequest,
   logout as logoutRequest,
   registerStudent,
+  type CseExamDates,
   type LoginRequest,
   type RegistrationRequest,
   type RegistrationMode,
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [error, setError] = useState<string | null>(null)
   const [registrationMode, setRegistrationMode] =
     useState<RegistrationMode>('closed')
+  const [cseExamDates, setCseExamDates] = useState<CseExamDates>([])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -71,9 +73,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const config = await fetchPlatformConfig(controller.signal)
         setRegistrationMode(config.data.registrationMode)
+        setCseExamDates(config.data.cseExamDates)
       } catch {
         if (!controller.signal.aborted) {
           setRegistrationMode('closed')
+          setCseExamDates([])
         }
       }
     }
@@ -113,11 +117,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       loading,
       error,
       registrationMode,
+      cseExamDates,
       login,
       register,
       logout,
     }),
-    [error, loading, login, logout, register, registrationMode, user],
+    [cseExamDates, error, loading, login, logout, register, registrationMode, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -20,6 +20,7 @@ function renderWithRegistrationMode(
     loading: false,
     error: null,
     registrationMode,
+    cseExamDates: [],
     login: vi.fn(() => Promise.resolve()),
     register: vi.fn(() => Promise.resolve()),
     logout: vi.fn(() => Promise.resolve()),
@@ -61,7 +62,7 @@ describe('private-beta registration UI', () => {
       <RegistrationPage />,
     )
 
-    expect(home).toContain('Create account')
+    expect(home).toContain('Start reviewing')
     expect(registration).toContain('Create your account')
     expect(registration).toContain('<form')
   })

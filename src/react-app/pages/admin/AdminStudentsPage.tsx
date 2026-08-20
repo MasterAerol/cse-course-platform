@@ -67,8 +67,8 @@ export function AdminStudentsPage() {
   return (
     <main className="admin-page">
       <AdminPageHeader
-        title="Beta Students"
-        description="Create individual private-beta learner accounts and control CSE Professional enrollment."
+        title="Learner accounts"
+        description="Create invited learner accounts and control CSE Professional enrollment."
       />
 
       <section className="admin-panel">
