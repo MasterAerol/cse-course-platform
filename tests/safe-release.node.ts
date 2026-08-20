@@ -12,6 +12,7 @@ import {
   parseReleaseArgs,
   runReleasePhases,
   validateDeploymentPolicy,
+  validateCleanDeploymentSync,
   validateHealthResponse,
   validatePreflightSnapshot,
   validateReleaseOptions,
@@ -114,6 +115,18 @@ describe('Safe Release Workflow v1', () => {
     ]))).toMatchObject({ dryRun: false, skipDeploy: true, message: 'Release tooling' })
   })
 
+
+  it('allows only an explicitly requested synchronized clean-tree deployment', () => {
+    const options = validateReleaseOptions(parseReleaseArgs([
+      '--message', 'Redeploy current capability', '--confirm', 'release-production', '--deploy-current',
+    ]))
+    expect(options).toMatchObject({ deployCurrent: true, skipDeploy: false })
+    expect(validateCleanDeploymentSync('abc123\n', 'abc123\n')).toEqual({ head: 'abc123', upstream: 'abc123' })
+    expect(() => validateCleanDeploymentSync('abc123', 'def456')).toThrow('match its upstream')
+    expect(() => validateReleaseOptions(parseReleaseArgs([
+      '--message', 'Invalid', '--confirm', 'release-production', '--deploy-current', '--skip-deploy',
+    ]))).toThrow('cannot be combined')
+  })
 
   it('blocks Codex mode when explicit production confirmation is missing', () => {
     expect(() => validateReleaseOptions(parseReleaseArgs(['--codex', '--message', 'Release']))).toThrow('Production release requires')

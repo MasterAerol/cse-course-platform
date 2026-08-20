@@ -3,7 +3,7 @@ import {spawnSync} from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
 import {resolveTeachingPublisher} from './lib/teaching-publisher-registry.mjs'
-import {analyzeTeachingPlan,DEFAULT_CONTENT_BASE_URL,normalizePublisherPlan,resolveContentReleasePreflight,runTeachingReleasePipeline,verifyCapabilityWithRetry} from './lib/safe-teaching-release.mjs'
+import {analyzeTeachingPlan,buildTeachingSafeReleaseArgs,DEFAULT_CONTENT_BASE_URL,normalizePublisherPlan,resolveContentReleasePreflight,runTeachingReleasePipeline,verifyCapabilityWithRetry} from './lib/safe-teaching-release.mjs'
 const LIVE=DEFAULT_CONTENT_BASE_URL
 const bools=new Set(['codex','dry-run','allow-production-read','help']),values=new Set(['topic','message','confirm'])
 function parse(argv){const out=new Map();for(let i=0;i<argv.length;i++){const raw=argv[i];if(!raw?.startsWith('--'))throw new Error(`Invalid argument near ${raw??'(end)'}.`);const key=raw.slice(2);if(!bools.has(key)&&!values.has(key))throw new Error(`Unknown option --${key}.`);if(out.has(key))throw new Error(`Duplicate --${key}.`);if(bools.has(key)){out.set(key,'true');continue}const value=argv[++i];if(!value||value.startsWith('--'))throw new Error(`Missing value for --${key}.`);out.set(key,value)}return out}
@@ -17,7 +17,7 @@ async function main(){const args=parse(process.argv.slice(2));if(args.has('help'
  let auth
  const getAuth=()=>auth??=credentials(meta)
  const result=await runTeachingReleasePipeline({
-  safeRelease:()=>npm(['run','release:safe','--',...(args.has('codex')?['--codex']:[]),'--message',message,'--confirm','release-production']),
+  safeRelease:()=>npm(buildTeachingSafeReleaseArgs({codex:args.has('codex'),message,capabilityCheck:meta.capabilityCheck})),
   verifyCapability:meta.capabilityCheck?()=>verifyCapabilityWithRetry(()=>{const current=getAuth();const result=publisher(meta,['--base-url',current.baseUrl,'--email',current.email,'--capability-check'],current.env);if(result.supported!==true)throw new Error('Production reconciliation capability check failed.');return result},{attempts:5,delayMs:3000}):undefined,
   validate:()=>{const current=getAuth();return publisher(meta,['--base-url',current.baseUrl,'--email',current.email,'--validate-only'],current.env)},
   publish:(fingerprint)=>{const current=getAuth();const writeArgs=['--base-url',current.baseUrl,'--email',current.email,'--confirm',meta.confirmation];if(fingerprint)writeArgs.push('--approve-deletions',fingerprint);return publisher(meta,writeArgs,current.env)},

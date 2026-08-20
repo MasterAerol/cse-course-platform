@@ -2,7 +2,7 @@ export const RELEASE_CONFIRMATION: string
 export const DEFAULT_HEALTH_URL: string
 export const DEFAULT_LIVE_URL: string
 export const MAX_CHANGED_FILE_BYTES: number
-export type ReleaseOptions = { message: string; dryRun: boolean; codex: boolean; skipValidation: boolean; skipDeploy: boolean }
+export type ReleaseOptions = { message: string; dryRun: boolean; codex: boolean; skipValidation: boolean; skipDeploy: boolean; deployCurrent: boolean }
 export type RiskBlocker = { code: string; reason: string; files: string[] }
 export function parseReleaseArgs(argv?: string[]): Map<string, string>
 export function validateReleaseOptions(args: Map<string, string>): ReleaseOptions
@@ -24,4 +24,5 @@ export function validateHealthResponse(status: number, body: string): unknown
 export function formatBytes(bytes: number): string
 export type PreflightSnapshot = { root: string; cwd: string; branch: string; detached: boolean; operation: string | null; conflicts: string[]; remote: string; files: string[] }
 export function validatePreflightSnapshot(snapshot: PreflightSnapshot): 'clean' | 'changed'
+export function validateCleanDeploymentSync(head: string, upstream: string): { head: string; upstream: string }
 export function runReleasePhases(phases: Array<{ name: string; run: () => unknown | Promise<unknown> }>): Promise<string[]>

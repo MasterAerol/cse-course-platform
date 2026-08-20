@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { DEFAULT_HEALTH_URL, DEFAULT_LIVE_URL, buildScopedStageArgs, classifyChangedFiles, formatBytes, inspectChangedFiles, parseReleaseArgs, parseStatusPorcelainZDetailed, selectPreflightReleaseScope, validateConcurrentReleaseScope, validateDeploymentPolicy, validateHealthResponse, validateReleaseOptions, validateStagedScope } from './lib/safe-release.mjs'
+import { DEFAULT_HEALTH_URL, DEFAULT_LIVE_URL, buildScopedStageArgs, classifyChangedFiles, formatBytes, inspectChangedFiles, parseReleaseArgs, parseStatusPorcelainZDetailed, selectPreflightReleaseScope, validateCleanDeploymentSync, validateConcurrentReleaseScope, validateDeploymentPolicy, validateHealthResponse, validateReleaseOptions, validateStagedScope } from './lib/safe-release.mjs'
 
 const HELP = `Safe Release Workflow v1
 
@@ -16,6 +16,7 @@ Options:
   --message <text>       Required single-line commit message (maximum 120 characters)
   --confirm <phrase>    Required for release: release-production
   --dry-run             Inspect, classify, and validate without Git or production writes
+  --deploy-current      On a clean tree, deploy only when HEAD exactly matches its upstream
   --codex               Noninteractive mode; missing approval or review risk blocks
   --skip-deploy         Commit and push validated tooling without a Worker deploy
   --skip-validation     Dry-run only: classify without the full validation suite
@@ -70,6 +71,16 @@ function runValidation() {
   return passed
 }
 
+async function deployWorker(repository, options, passed, gitSummary, publisherSummary) {
+  try { console.log('\nCLOUDFLARE — AUTHENTICATION'); run(process.execPath, [path.join(repository.root, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), 'whoami'], { env: options.codex ? { CI: 'true' } : {} }) } catch { fail('Cloudflare authentication unavailable.', `${gitSummary}\nDeployment not performed.`); return false }
+  let deployOutput
+  try { console.log('\nCLOUDFLARE — DEPLOY'); deployOutput = run(NPM_COMMAND, [...NPM_PREFIX, 'run', 'deploy']).stdout } catch { fail('Cloudflare Worker deployment failed.', `${gitSummary}\nDeployment did not complete.`); return false }
+  try { console.log('\nPOST-DEPLOY — HEALTH'); const response = await fetch(DEFAULT_HEALTH_URL, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15_000) }); validateHealthResponse(response.status, await response.text()) } catch (error) { console.error(`\nDEPLOYED BUT HEALTH CHECK FAILED\n${error.message}\nNo automatic rollback was attempted.`); process.exitCode = 1; return false }
+  const version = deployOutput.match(/(?:Version ID|Current Version ID):\s*([\w-]+)/iu)?.[1] ?? 'reported by Wrangler output above'
+  console.log(`\nSAFE RELEASE — APPLICATION DEPLOYED\nValidation: ${passed.join(', ')}\nGit: ${gitSummary}\nWorker: deployed; version ${version}\nHealth: ${DEFAULT_HEALTH_URL} → 200, status ok\nMigration: None\nPublisher: ${publisherSummary}\nLive: ${DEFAULT_LIVE_URL}`)
+  return true
+}
+
 async function main() {
   let args
   try { args = parseReleaseArgs() } catch (error) { fail(error.message); return }
@@ -80,7 +91,21 @@ async function main() {
   console.log('SAFE RELEASE — PREFLIGHT')
   let repository
   try { repository = validateRepository() } catch (error) { fail(error.message); return }
-  if (!repository.files.length) { console.log('\nNothing to release.'); return }
+  if (!repository.files.length) {
+    if (!options.deployCurrent) { console.log('\nNothing to release.'); return }
+    let synchronized
+    try {
+      synchronized = validateCleanDeploymentSync(
+        git(['rev-parse', 'HEAD'], { print: false }).stdout,
+        git(['rev-parse', '@{upstream}'], { print: false }).stdout,
+      )
+    } catch (error) { fail(error.message); return }
+    let passed = []
+    if (!options.skipValidation) try { passed = runValidation() } catch (error) { fail(error.message); return }
+    if (options.dryRun) { console.log(`\nSAFE RELEASE — CLEAN DEPLOY DRY RUN PASS\nWould deploy synchronized commit ${synchronized.head}.\nNo commit, push, deployment, migration, or publisher execution occurred.`); return }
+    await deployWorker(repository, options, passed, `current synchronized commit ${synchronized.head}; no commit or push required`, 'controlled separately after capability verification')
+    return
+  }
   console.log('\ngit status --short'); git(['status', '--short'])
   console.log('\ngit diff --stat'); git(['diff', '--stat'])
   console.log('\ngit diff --name-only'); git(['diff', '--name-only'])
@@ -129,11 +154,6 @@ async function main() {
     console.log(`\nSAFE RELEASE — TOOLING RELEASED\nValidation: ${passed.join(', ')}\nGit: ${commit}; pushed main → origin/main\nWorker: not deployed (--skip-deploy)\nMigration: None\nPublisher: ${risk.publisherRequired ? 'NOT PUBLISHED — separate validate/review/confirmation workflow required' : 'None'}`)
     return
   }
-  try { console.log('\nCLOUDFLARE — AUTHENTICATION'); run(process.execPath, [path.join(repository.root, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), 'whoami'], { env: options.codex ? { CI: 'true' } : {} }) } catch { fail('Cloudflare authentication unavailable.', `Push succeeded for ${commit}; deployment not performed.`); return }
-  let deployOutput
-  try { console.log('\nCLOUDFLARE — DEPLOY'); deployOutput = run(NPM_COMMAND, [...NPM_PREFIX, 'run', 'deploy']).stdout } catch { fail('Cloudflare Worker deployment failed.', `Push succeeded for ${commit}; deployment did not complete.`); return }
-  try { console.log('\nPOST-DEPLOY — HEALTH'); const response = await fetch(DEFAULT_HEALTH_URL, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15_000) }); validateHealthResponse(response.status, await response.text()) } catch (error) { console.error(`\nDEPLOYED BUT HEALTH CHECK FAILED\n${error.message}\nNo automatic rollback was attempted.`); process.exitCode = 1; return }
-  const version = deployOutput.match(/(?:Version ID|Current Version ID):\s*([\w-]+)/iu)?.[1] ?? 'reported by Wrangler output above'
-  console.log(`\nSAFE RELEASE — APPLICATION DEPLOYED\nValidation: ${passed.join(', ')}\nGit: ${commit}; pushed main → origin/main\nWorker: deployed; version ${version}\nHealth: ${DEFAULT_HEALTH_URL} → 200, status ok\nMigration: None\nPublisher: ${risk.publisherRequired ? 'NOT PUBLISHED — separate validate/review/confirmation workflow required' : 'None'}\nLive: ${DEFAULT_LIVE_URL}`)
+  await deployWorker(repository, options, passed, `${commit}; pushed main → origin/main`, risk.publisherRequired ? 'NOT PUBLISHED — separate validate/review/confirmation workflow required' : 'None')
 }
 await main()

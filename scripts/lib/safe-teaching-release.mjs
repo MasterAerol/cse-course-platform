@@ -40,6 +40,14 @@ export async function verifyCapabilityWithRetry(verify, options = {}) {
   throw lastError
 }
 
+export function buildTeachingSafeReleaseArgs({ codex = false, message, capabilityCheck = false }) {
+  const args = ['run', 'release:safe', '--']
+  if (codex) args.push('--codex')
+  args.push('--message', message, '--confirm', 'release-production')
+  if (capabilityCheck) args.push('--deploy-current')
+  return args
+}
+
 export function validateContentInspection(value) {
   if (value === null || typeof value !== 'object') throw new Error('Content inspector did not return a JSON object.')
   if (value.allMatch !== true) throw new Error('Production content inspection did not match the canonical teaching manifest.')

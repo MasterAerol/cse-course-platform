@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run typecheck && vite build",
+    "build": "npm run typecheck && vite build && node scripts/verify-worker-route-bundle.mjs",
     "deploy": "npm run build && wrangler deploy",
     "release:safe": "node scripts/safe-release.mjs",
     "content:release": "node scripts/content-release.mjs",

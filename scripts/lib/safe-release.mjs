@@ -6,7 +6,7 @@ export const DEFAULT_HEALTH_URL = 'https://cse-course-platform.master-course.wor
 export const DEFAULT_LIVE_URL = 'https://cse-course-platform.master-course.workers.dev'
 export const MAX_CHANGED_FILE_BYTES = 15 * 1024 * 1024
 
-const booleanFlags = new Set(['help', 'dry-run', 'codex', 'skip-validation', 'skip-deploy'])
+const booleanFlags = new Set(['help', 'dry-run', 'codex', 'skip-validation', 'skip-deploy', 'deploy-current'])
 const valueOptions = new Set(['message', 'confirm'])
 
 export function parseReleaseArgs(argv = process.argv.slice(2)) {
@@ -33,7 +33,8 @@ export function validateReleaseOptions(args) {
   if (message.length > 120) throw new Error('Commit message must be 120 characters or fewer.')
   if (/\r|\n/u.test(message)) throw new Error('Commit message must be a single line.')
   if (!dryRun && args.get('confirm') !== RELEASE_CONFIRMATION) throw new Error(`Production release requires --confirm ${RELEASE_CONFIRMATION}.`)
-  return { message, dryRun, codex: args.has('codex'), skipValidation: args.has('skip-validation'), skipDeploy: args.has('skip-deploy') }
+  if (args.has('deploy-current') && args.has('skip-deploy')) throw new Error('--deploy-current cannot be combined with --skip-deploy.')
+  return { message, dryRun, codex: args.has('codex'), skipValidation: args.has('skip-validation'), skipDeploy: args.has('skip-deploy'), deployCurrent: args.has('deploy-current') }
 }
 
 export function normalizeGitPath(file) { return file.replaceAll('\\', '/').replace(/^\.\//u, '') }
@@ -172,6 +173,14 @@ export function validatePreflightSnapshot(snapshot) {
   if (snapshot.conflicts.length) throw new Error(`Unresolved Git conflicts detected: ${snapshot.conflicts.join(', ')}`)
   if (!snapshot.remote) throw new Error('Git remote origin is missing.')
   return snapshot.files.length === 0 ? 'clean' : 'changed'
+}
+
+export function validateCleanDeploymentSync(head, upstream) {
+  const current = String(head ?? '').trim()
+  const tracked = String(upstream ?? '').trim()
+  if (current.length === 0 || tracked.length === 0) throw new Error('Clean-tree deployment requires HEAD and its upstream commit.')
+  if (current !== tracked) throw new Error('Clean-tree deployment requires HEAD to match its upstream commit exactly.')
+  return { head: current, upstream: tracked }
 }
 
 export async function runReleasePhases(phases) {
