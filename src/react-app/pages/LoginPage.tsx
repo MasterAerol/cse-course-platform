@@ -109,7 +109,7 @@ export function LoginPage() {
           </form>
 
           {registrationMode === 'open' ? (
-            <p className="auth-switch">Need an account? <Link to="/register">Register as a student</Link></p>
+            <p className="auth-switch">Don&apos;t have an account? <Link to="/register">Create an account</Link></p>
           ) : (
             <p className="auth-switch">Private-beta access is provided by an administrator.</p>
           )}

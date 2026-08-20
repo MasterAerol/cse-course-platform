@@ -863,6 +863,17 @@ async function register(
     createBindings(environment),
   )
 
+  const registeredUser = await env.DB.prepare(
+    'SELECT id FROM users WHERE email = ?1',
+  )
+    .bind(email)
+    .first<{ id: number }>()
+  if (registeredUser !== null) {
+    await env.DB.prepare(
+      'DELETE FROM course_enrollments WHERE user_id = ?1',
+    ).bind(registeredUser.id).run()
+  }
+
   return {
     response,
     cookie: getCookieHeader(response),

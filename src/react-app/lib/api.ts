@@ -39,6 +39,14 @@ const logoutResponseSchema = z.object({
   }),
 })
 
+const changePasswordResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    passwordUpdated: z.literal(true),
+    otherSessionsRevoked: z.literal(true),
+  }),
+})
+
 const adminCheckResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
@@ -655,6 +663,10 @@ const validationFieldErrorsSchema = z
     email: z.array(z.string()).optional(),
     lessonPublicId: z.array(z.string()).optional(),
     password: z.array(z.string()).optional(),
+    confirmPassword: z.array(z.string()).optional(),
+    currentPassword: z.array(z.string()).optional(),
+    newPassword: z.array(z.string()).optional(),
+    confirmNewPassword: z.array(z.string()).optional(),
     attemptPublicId: z.array(z.string()).optional(),
     questionId: z.array(z.string()).optional(),
     quizId: z.array(z.string()).optional(),
@@ -741,8 +753,15 @@ export type ValidationFieldErrors = z.infer<
 export interface RegistrationRequest {
   email: string
   password: string
+  confirmPassword: string
   firstName: string
   lastName: string
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+  confirmNewPassword: string
 }
 
 export interface LoginRequest {
@@ -914,6 +933,15 @@ export async function fetchCurrentUser(
 export async function logout(): Promise<void> {
   await request('/api/auth/logout', logoutResponseSchema, {
     method: 'POST',
+  })
+}
+
+export async function changePassword(
+  input: ChangePasswordRequest,
+): Promise<void> {
+  await request('/api/auth/change-password', changePasswordResponseSchema, {
+    method: 'POST',
+    body: JSON.stringify(input),
   })
 }
 

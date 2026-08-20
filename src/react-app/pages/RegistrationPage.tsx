@@ -1,6 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_REQUIREMENTS,
+} from '../../shared/password-policy'
 import { useAuth } from '../auth/use-auth'
 import { PasaWiseBrand } from '../components/PasaWiseBrand'
 import {
@@ -34,34 +39,17 @@ export function RegistrationPage() {
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [fieldErrors, setFieldErrors] =
     useState<ValidationFieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
 
-  const passwordRequirements = [
-    {
-      id: 'password-length',
-      label: '12 to 128 characters',
-      satisfied: password.length >= 12 && password.length <= 128,
-    },
-    {
-      id: 'password-uppercase',
-      label: 'At least one uppercase letter',
-      satisfied: /[A-Z]/u.test(password),
-    },
-    {
-      id: 'password-lowercase',
-      label: 'At least one lowercase letter',
-      satisfied: /[a-z]/u.test(password),
-    },
-    {
-      id: 'password-number',
-      label: 'At least one number',
-      satisfied: /[0-9]/u.test(password),
-    },
-  ]
+  const passwordRequirements = PASSWORD_REQUIREMENTS.map((requirement) => ({
+    ...requirement,
+    satisfied: requirement.test(password),
+  }))
 
   function clearFieldError(field: keyof ValidationFieldErrors): void {
     setFieldErrors((currentErrors) => {
@@ -82,7 +70,7 @@ export function RegistrationPage() {
     setFormError(null)
 
     try {
-      await register({ firstName, lastName, email, password })
+      await register({ firstName, lastName, email, password, confirmPassword })
       await navigate('/dashboard', { replace: true })
     } catch (registrationError: unknown) {
       if (
@@ -124,14 +112,22 @@ export function RegistrationPage() {
 
   return (
     <main className="auth-page">
-      <section className="auth-card" aria-labelledby="registration-title">
-        <PasaWiseBrand linked variant="primary" />
-        <p className="brand-tagline">Aral nang wais. Pasa nang handa.</p>
+      <div className="auth-experience registration-experience">
+        <section className="auth-story" aria-labelledby="registration-story-title">
+          <PasaWiseBrand linked variant="primary" />
+          <p className="eyebrow">Aral nang wais. Pasa nang handa.</p>
+          <h1 id="registration-story-title">Start with a clear CSE study path.</h1>
+          <p>Your learner account includes the full CSE Professional curriculum, guided practice, Smart Recovery, and readiness evidence.</p>
+          <ul>
+            <li><span aria-hidden="true">✓</span> Fresh learner progress</li>
+            <li><span aria-hidden="true">✓</span> Normal curriculum prerequisites</li>
+            <li><span aria-hidden="true">✓</span> Secure personal account</li>
+          </ul>
+        </section>
+        <section className="auth-card" aria-labelledby="registration-title">
         <p className="eyebrow">Student registration</p>
         <h1 id="registration-title">Create your account</h1>
-        <p>
-          Enter your details below. Your email is normalized automatically.
-        </p>
+        <p>Register as a learner and continue directly to your dashboard.</p>
 
         <form
           noValidate
@@ -196,6 +192,7 @@ export function RegistrationPage() {
             name="email"
             type="email"
             autoComplete="email"
+            inputMode="email"
             maxLength={254}
             required
             aria-invalid={fieldErrors.email !== undefined}
@@ -222,8 +219,8 @@ export function RegistrationPage() {
               name="password"
               type={showPassword ? 'text' : 'password'}
               autoComplete="new-password"
-              minLength={12}
-              maxLength={128}
+              minLength={PASSWORD_MIN_LENGTH}
+              maxLength={PASSWORD_MAX_LENGTH}
               required
               aria-invalid={fieldErrors.password !== undefined}
               aria-describedby={[
@@ -243,7 +240,7 @@ export function RegistrationPage() {
             <button
               className="password-toggle"
               type="button"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={showPassword ? 'Hide passwords' : 'Show passwords'}
               aria-pressed={showPassword}
               onClick={() => setShowPassword((current) => !current)}
             >
@@ -253,6 +250,31 @@ export function RegistrationPage() {
           <FieldErrorList
             errors={fieldErrors.password}
             id="registration-password-errors"
+          />
+
+          <label htmlFor="registration-confirm-password">Confirm password</label>
+          <input
+            id="registration-confirm-password"
+            name="confirmPassword"
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
+            maxLength={PASSWORD_MAX_LENGTH}
+            required
+            aria-invalid={fieldErrors.confirmPassword !== undefined}
+            aria-describedby={
+              fieldErrors.confirmPassword === undefined
+                ? undefined
+                : 'registration-confirm-password-errors'
+            }
+            value={confirmPassword}
+            onChange={(event) => {
+              setConfirmPassword(event.target.value)
+              clearFieldError('confirmPassword')
+            }}
+          />
+          <FieldErrorList
+            errors={fieldErrors.confirmPassword}
+            id="registration-confirm-password-errors"
           />
 
           <div className="password-guidance">
@@ -288,9 +310,10 @@ export function RegistrationPage() {
         </form>
 
         <p className="auth-switch">
-          Already registered? <Link to="/login">Sign in</Link>
+          Already have an account? <Link to="/login">Log in</Link>
         </p>
-      </section>
+        </section>
+      </div>
     </main>
   )
 }

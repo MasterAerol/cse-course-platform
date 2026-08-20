@@ -5,10 +5,14 @@ import {
   createUserWithSession,
   findActiveSessionPrincipal,
   findUserByEmail,
+  findUserById,
   revokeSessionByTokenHash,
   revokeSessionsForUser,
+  updatePasswordAndRevokeOtherSessions,
 } from '../repositories/auth.repository'
+import { findCourseIdBySlug } from '../repositories/course.repository'
 import type {
+  ChangePasswordInput,
   LoginInput,
   RegistrationInput,
 } from '../schemas/auth.schemas'
@@ -19,6 +23,8 @@ import type {
   UserRecord,
 } from '../types/auth'
 import { AppError } from '../utils/app-error'
+
+const CSE_PROFESSIONAL_SLUG = 'cse-professional'
 
 export interface AuthenticatedSessionResult {
   user: PublicUser
@@ -71,6 +77,15 @@ export async function registerStudent(
     )
   }
 
+  const courseId = await findCourseIdBySlug(database, CSE_PROFESSIONAL_SLUG)
+  if (courseId === null) {
+    throw new AppError(
+      409,
+      'REGISTRATION_COURSE_UNAVAILABLE',
+      'Student registration is temporarily unavailable.',
+    )
+  }
+
   const [passwordHash, session] = await Promise.all([
     hashPassword(input.password),
     createSessionCredentials(),
@@ -89,6 +104,7 @@ export async function registerStudent(
       tokenHash: session.tokenHash,
       expiresAt: session.expiresAt.toISOString(),
       metadata,
+      courseId: courseId.id,
     })
   } catch (error: unknown) {
     const duplicateUser = await findUserByEmail(database, input.email)
@@ -193,6 +209,45 @@ export async function authenticateSession(
     lastName: principal.lastName,
     role: principal.role,
   }
+}
+
+export async function changePassword(
+  database: D1Database,
+  principal: AuthenticatedPrincipal,
+  currentSessionToken: string,
+  input: ChangePasswordInput,
+): Promise<void> {
+  const user = await findUserById(database, principal.internalUserId)
+  if (user === null || user.publicId !== principal.id) {
+    throw new AppError(
+      401,
+      'UNAUTHENTICATED',
+      'Authentication is required.',
+    )
+  }
+
+  const currentPasswordMatches = await verifyPassword(
+    input.currentPassword,
+    user.passwordHash,
+  )
+  if (!currentPasswordMatches) {
+    throw new AppError(
+      400,
+      'CURRENT_PASSWORD_INCORRECT',
+      'The current password is incorrect.',
+    )
+  }
+
+  const [passwordHash, currentTokenHash] = await Promise.all([
+    hashPassword(input.newPassword),
+    hashSessionToken(currentSessionToken),
+  ])
+
+  await updatePasswordAndRevokeOtherSessions(database, {
+    userId: user.id,
+    passwordHash,
+    currentTokenHash,
+  })
 }
 
 export async function logoutSession(

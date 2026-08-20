@@ -34,6 +34,8 @@ async function register(email: string) {
   expect(response.status).toBe(201)
   const user = await env.DB.prepare('SELECT id FROM users WHERE email=?1').bind(email).first<{ id: number }>()
   if (user === null) throw new Error('Registered user missing.')
+  await env.DB.prepare('DELETE FROM course_enrollments WHERE user_id=?1')
+    .bind(user.id).run()
   return { cookie: cookieFrom(response), userId: user.id }
 }
 async function enroll(userId: number) {

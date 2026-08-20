@@ -36,6 +36,7 @@ export interface CreateUserWithSessionInput {
   tokenHash: string
   expiresAt: string
   metadata: SessionMetadata
+  courseId: number
 }
 
 export interface CreateSessionInput {
@@ -78,6 +79,31 @@ export async function findUserByEmail(
       LIMIT 1`,
     )
     .bind(email)
+    .first<UserRow>()
+
+  return row === null ? null : mapUser(row)
+}
+
+export async function findUserById(
+  database: D1Database,
+  userId: number,
+): Promise<UserRecord | null> {
+  const row = await database
+    .prepare(
+      `SELECT
+        id,
+        public_id,
+        email,
+        password_hash,
+        first_name,
+        last_name,
+        role,
+        status
+      FROM users
+      WHERE id = ?1
+      LIMIT 1`,
+    )
+    .bind(userId)
     .first<UserRow>()
 
   return row === null ? null : mapUser(row)
@@ -126,10 +152,49 @@ export async function createUserWithSession(
       input.metadata.ipAddress,
       input.publicId,
     )
+  const createEnrollment = database
+    .prepare(
+      `INSERT INTO course_enrollments (
+        user_id,
+        course_id,
+        enrollment_status,
+        enrollment_source
+      ) VALUES (
+        (SELECT id FROM users WHERE public_id = ?1),
+        ?2,
+        'active',
+        'free'
+      )`,
+    )
+    .bind(input.publicId, input.courseId)
 
-  await database.batch([createUser, createSession])
+  await database.batch([createUser, createSession, createEnrollment])
 
   return findUserByEmail(database, input.email)
+}
+
+export async function updatePasswordAndRevokeOtherSessions(
+  database: D1Database,
+  input: { userId: number; passwordHash: string; currentTokenHash: string },
+): Promise<void> {
+  await database.batch([
+    database
+      .prepare(
+        `UPDATE users
+        SET password_hash = ?1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?2`,
+      )
+      .bind(input.passwordHash, input.userId),
+    database
+      .prepare(
+        `UPDATE user_sessions
+        SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+        WHERE user_id = ?1
+          AND token_hash <> ?2
+          AND revoked_at IS NULL`,
+      )
+      .bind(input.userId, input.currentTokenHash),
+  ])
 }
 
 export async function createSession(

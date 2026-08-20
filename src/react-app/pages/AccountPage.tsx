@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
+import { ChangePasswordForm } from '../components/ChangePasswordForm'
 import { CseExamTargetCard } from '../components/CseExamTarget'
 import { LearnerTopbar } from '../components/LearnerTopbar'
 import { PasaWisePageLoader } from '../components/PasaWiseLoader'
@@ -79,7 +80,7 @@ export function AccountPageView({
             <dl className="account-details">
               <div><dt>Name</dt><dd>{user.firstName} {user.lastName}</dd></div>
               <div><dt>Email</dt><dd>{user.email}</dd></div>
-              <div><dt>Role</dt><dd>{user.role === 'admin' ? 'Administrator' : 'Learner'}</dd></div>
+              <div><dt>Course</dt><dd>{course?.course.title ?? 'CSE Professional'}</dd></div>
               <div><dt>Enrollment</dt><dd>{course?.enrollment.status ?? 'Not enrolled'}</dd></div>
             </dl>
           </section>
@@ -123,9 +124,9 @@ export function AccountPageView({
         <aside className="account-side-column">
           <CseExamTargetCard configuredDates={cseExamDates} compact linkToCalendar />
           <section className="account-panel" aria-labelledby="account-security-title">
-            <div className="account-panel__heading"><p className="eyebrow">Security</p><h2 id="account-security-title">Account access</h2></div>
-            <p>Your password and signed-in session continue to use PasaWise's existing secure authentication controls.</p>
-            <p className="meta-copy">No internal account identifiers are shown here.</p>
+            <div className="account-panel__heading"><p className="eyebrow">Account security</p><h2 id="account-security-title">Change password</h2></div>
+            <p>Confirm your current password before choosing a new one.</p>
+            <ChangePasswordForm />
           </section>
         </aside>
       </div>

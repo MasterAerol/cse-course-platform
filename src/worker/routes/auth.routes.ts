@@ -15,10 +15,12 @@ import {
   hashRateLimitKey,
 } from '../middleware/rate-limit.middleware'
 import {
+  changePasswordSchema,
   loginSchema,
   registrationSchema,
 } from '../schemas/auth.schemas'
 import {
+  changePassword,
   getPublicUser,
   loginUser,
   logoutSession,
@@ -134,6 +136,53 @@ authRoutes.post('/logout', async (context) => {
   clearAuthenticationCookie(context)
 
   return successResponse(context, { loggedOut: true })
+})
+
+authRoutes.post('/change-password', requireAuthentication, async (context) => {
+  const principal = context.get('authUser')
+  const currentSessionToken = getCookie(context, AUTH_COOKIE_NAME)
+  if (
+    currentSessionToken === undefined ||
+    currentSessionToken.length === 0
+  ) {
+    throw new AppError(
+      401,
+      'UNAUTHENTICATED',
+      'Authentication is required.',
+    )
+  }
+
+  const accountKey = await hashRateLimitKey(
+    'password-change-account',
+    principal.id,
+  )
+  await Promise.all([
+    enforceRateLimit(
+      context,
+      'LOGIN_IP_RATE_LIMITER',
+      `password-change:${getClientAddress(context)}`,
+      'password-change-ip',
+    ),
+    enforceRateLimit(
+      context,
+      'LOGIN_ACCOUNT_RATE_LIMITER',
+      accountKey,
+      'password-change-account',
+    ),
+  ])
+
+  const input = await parseJsonBody(context, changePasswordSchema)
+  await changePassword(
+    context.env.DB,
+    principal,
+    currentSessionToken,
+    input,
+  )
+
+  return successResponse(context, {
+    passwordUpdated: true,
+    otherSessionsRevoked: true,
+  })
 })
 
 authRoutes.get('/me', requireAuthentication, (context) =>

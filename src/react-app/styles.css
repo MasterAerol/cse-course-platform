@@ -12718,3 +12718,190 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   .public-product-preview__focus i,
   .account-menu__panel { transition: none; }
 }
+
+/* Global authenticated account navigation */
+.topbar-context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+}
+
+.account-menu {
+  position: relative;
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.account-menu__trigger {
+  display: grid;
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--surface-card);
+  box-shadow: none;
+  color: #fff;
+}
+
+.account-menu__trigger:hover {
+  border-color: var(--brand-blue);
+  background: var(--color-info-bg);
+}
+
+.account-menu__trigger:focus-visible {
+  border-color: var(--brand-blue);
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem var(--focus-ring);
+}
+
+.account-menu__avatar {
+  display: grid;
+  width: 2.1rem;
+  height: 2.1rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--brand-navy);
+  color: #fff;
+  font-size: var(--type-label);
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+
+.account-menu__panel {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + var(--space-8));
+  right: 0;
+  display: grid;
+  width: min(20rem, calc(100vw - 2rem));
+  gap: var(--space-8);
+  padding: var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-modal);
+}
+
+.account-menu__panel[hidden] { display: none; }
+
+.account-menu__identity {
+  display: grid;
+  align-items: center;
+  gap: var(--space-12);
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: var(--space-8) var(--space-8) var(--space-12);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.account-menu__identity p {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.account-menu__identity strong,
+.account-menu__identity span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.account-menu__identity strong { color: var(--brand-navy); }
+.account-menu__identity p span {
+  color: var(--color-text-muted);
+  font-size: var(--type-label);
+  font-weight: 500;
+}
+
+.account-menu__panel nav {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.account-menu__panel nav a,
+.account-menu__sign-out {
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: flex-start;
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text-body);
+  font-size: var(--type-small);
+  font-weight: 750;
+  text-align: left;
+  text-decoration: none;
+}
+
+.account-menu__panel nav a:hover,
+.account-menu__panel nav a:focus-visible {
+  background: var(--color-info-bg);
+  color: var(--brand-navy);
+}
+
+.account-menu__sign-out {
+  border-top: 1px solid var(--color-border);
+  border-radius: 0;
+  color: var(--color-danger);
+}
+
+.account-menu__sign-out:hover {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.change-password-form {
+  display: grid;
+  gap: var(--space-16);
+  margin-top: var(--space-20);
+}
+.change-password-form > div { min-width: 0; }
+.change-password-form .password-guidance { margin: 0; }
+.change-password-form > button[type='submit'] {
+  width: 100%;
+  min-height: 2.75rem;
+}
+.registration-experience .auth-card { overflow-y: auto; }
+
+@media (max-width: 48rem) {
+  .topbar.topbar--authenticated {
+    position: relative;
+    z-index: 30;
+    min-height: 3.5rem;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    padding-block: var(--space-8);
+  }
+  .topbar--authenticated .topbar-actions {
+    width: auto;
+    flex: 0 0 auto;
+    margin-left: auto;
+    justify-content: flex-end;
+  }
+  .topbar--authenticated .topbar-context-actions { display: none; }
+  .topbar--authenticated .account-menu { width: auto; }
+  .topbar--authenticated .account-menu__panel {
+    position: absolute;
+    width: min(20rem, calc(100vw - 1.5rem));
+    margin-top: 0;
+    box-shadow: var(--shadow-modal);
+  }
+}
+
+@media (max-width: 30rem) {
+  .registration-experience .auth-card { padding-inline: var(--space-16); }
+  .account-menu__panel { right: -0.25rem; }
+}

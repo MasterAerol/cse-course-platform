@@ -53,6 +53,10 @@ async function register(email: string): Promise<{ cookie: string; userId: number
     .bind(email)
     .first<{ id: number }>()
   if (row === null) throw new Error('Registered user missing.')
+  await env.DB.prepare(
+    'DELETE FROM course_enrollments WHERE user_id=?1',
+  )
+    .bind(row.id).run()
   return { cookie: cookieFrom(response), userId: row.id }
 }
 

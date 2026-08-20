@@ -27,7 +27,22 @@ describe('CSE Readiness formula v1', () => {
 
 const allowAllRateLimiter = { limit: (): Promise<RateLimitOutcome> => Promise.resolve({ success: true }) }
 function bindings(): Bindings { return { DB: env.DB, ENVIRONMENT: 'production', REGISTRATION_MODE: 'open', LOGIN_IP_RATE_LIMITER: allowAllRateLimiter, LOGIN_ACCOUNT_RATE_LIMITER: allowAllRateLimiter, REGISTRATION_RATE_LIMITER: allowAllRateLimiter, ATTEMPT_RATE_LIMITER: allowAllRateLimiter, AUTOSAVE_RATE_LIMITER: allowAllRateLimiter, ADMIN_RATE_LIMITER: allowAllRateLimiter } }
-async function register(email: string) { const response = await app.request('/api/auth/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password: 'SecurePassword123', firstName: 'Ready', lastName: 'Learner' }) }, bindings()); const cookie = response.headers.get('set-cookie')?.split(';', 1)[0]; const user = await env.DB.prepare('SELECT id FROM users WHERE email=?1').bind(email).first<{ id: number }>(); if (cookie === undefined || user === null) throw new Error('Readiness test registration failed.'); return { cookie, userId: user.id } }
+async function register(email: string) {
+  const response = await app.request('/api/auth/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password: 'SecurePassword123', firstName: 'Ready', lastName: 'Learner' }),
+  }, bindings())
+  const cookie = response.headers.get('set-cookie')?.split(';', 1)[0]
+  const user = await env.DB.prepare('SELECT id FROM users WHERE email=?1')
+    .bind(email).first<{ id: number }>()
+  if (cookie === undefined || user === null) {
+    throw new Error('Readiness test registration failed.')
+  }
+  await env.DB.prepare('DELETE FROM course_enrollments WHERE user_id=?1')
+    .bind(user.id).run()
+  return { cookie, userId: user.id }
+}
 async function enroll(userId: number) { await env.DB.prepare(`INSERT INTO course_enrollments(user_id,course_id,enrollment_status,access_starts_at,enrollment_source) SELECT ?1,id,'active','2000-01-01T00:00:00.000Z','admin' FROM courses WHERE slug='cse-professional'`).bind(userId).run() }
 
 describe('CSE Readiness learner API', () => {

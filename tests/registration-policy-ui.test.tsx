@@ -40,7 +40,7 @@ describe('private-beta registration UI', () => {
 
     expect(home).not.toContain('Create account')
     expect(home).not.toContain('href="/register"')
-    expect(login).not.toContain('Register as a student')
+    expect(login).not.toContain('Create an account')
     expect(login).toContain('Private-beta access is provided by an administrator.')
   })
 

@@ -563,7 +563,7 @@ describe('Smart Recovery Phase C UI', () => {
     expect(detailError).toContain('Try again')
   })
 
-  it('uses the shared collapsible learner navigation across Smart Recovery routes', () => {
+  it('uses the shared account-centered learner navigation across Smart Recovery routes', () => {
     const recoveryRouteSources = [
       recoveryOverviewPageSource,
       recoverySkillPageSource,
@@ -581,12 +581,13 @@ describe('Smart Recovery Phase C UI', () => {
       expect(source).not.toContain('to="/catalog"')
     }
 
-    expect(learnerTopbarSource).toContain("' topbar--mobile-collapsible'")
-    expect(learnerTopbarSource).toContain('aria-expanded={mobileMenuOpen}')
-    expect(learnerTopbarSource).toContain("'Open navigation menu'")
+    expect(learnerTopbarSource).toContain("'topbar--authenticated'")
+    expect(learnerTopbarSource).toContain('<AccountMenu')
+    expect(learnerTopbarSource).toContain(
+      'useMobileCollapsible = mobileCollapsible && user === null',
+    )
     expect(learnerTopbarSource).toContain("event.key === 'Escape'")
-    expect(learnerTopbarSource).toContain("event.target.closest('a, button')")
-    expect(learnerTopbarSource).toContain("'Sign out'")
+    expect(learnerTopbarSource).not.toContain('<details className="account-menu">')
 
     expect(dashboardPageSource).toContain('className="dashboard-topbar"')
     expect(dashboardPageSource).toContain('mobileCollapsible')

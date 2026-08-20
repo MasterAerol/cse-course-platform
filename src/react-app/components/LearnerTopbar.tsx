@@ -2,6 +2,7 @@ import { useContext, useEffect, useId, useRef, useState, type ReactNode } from '
 import { Link } from 'react-router'
 
 import { AuthContext } from '../auth/auth-context'
+import { AccountMenu } from './AccountMenu'
 import { PasaWiseBrand } from './PasaWiseBrand'
 
 interface LearnerTopbarProps {
@@ -21,13 +22,17 @@ export function LearnerTopbar({
   mobileCollapsible = false,
   showSignOut = false,
 }: LearnerTopbarProps) {
-  const Root = as === 'header' ? 'header' : 'nav'
-  const mergedClassName = `topbar${
-    mobileCollapsible ? ' topbar--mobile-collapsible' : ''
-  }${className === undefined ? '' : ` ${className}`}`
   const authContext = useContext(AuthContext)
   const user = authContext?.user ?? null
   const logout = authContext?.logout
+  const useMobileCollapsible = mobileCollapsible && user === null
+  const Root = as === 'header' ? 'header' : 'nav'
+  const mergedClassName = [
+    'topbar',
+    useMobileCollapsible ? 'topbar--mobile-collapsible' : null,
+    user === null ? null : 'topbar--authenticated',
+    className,
+  ].filter((value) => value !== null && value !== undefined).join(' ')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -71,12 +76,10 @@ export function LearnerTopbar({
     }
   }
 
-  const initials = user === null ? '' : `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase()
-
   return (
     <Root className={mergedClassName} aria-label={ariaLabel}>
       <PasaWiseBrand linked variant="header" />
-      {mobileCollapsible && (
+      {useMobileCollapsible && (
         <button
           ref={menuButtonRef}
           type="button"
@@ -91,15 +94,15 @@ export function LearnerTopbar({
         </button>
       )}
       <div
-        id={mobileCollapsible ? mobileMenuId : undefined}
+        id={useMobileCollapsible ? mobileMenuId : undefined}
         className={`topbar-actions${
-          mobileCollapsible
+          useMobileCollapsible
             ? ` topbar-actions--collapsible${mobileMenuOpen ? ' is-open' : ''}`
             : ''
         }`}
         onClick={(event) => {
           if (
-            mobileCollapsible &&
+            useMobileCollapsible &&
             event.target instanceof Element &&
             event.target.closest('a, button') !== null
           ) {
@@ -107,30 +110,19 @@ export function LearnerTopbar({
           }
         }}
       >
-        {children}
-        {showSignOut ? (
-          user === null ? (
-            <Link className="button-link button-link--secondary" to="/login">
-              Sign in
-            </Link>
-          ) : (
-            <details className="account-menu">
-              <summary aria-label={`Account menu for ${user.firstName} ${user.lastName}`}>
-                <span className="account-menu__avatar" aria-hidden="true">{initials}</span>
-                <span>Account</span>
-              </summary>
-              <div className="account-menu__panel">
-                <p><strong>{user.firstName} {user.lastName}</strong><span>{user.email}</span></p>
-                <Link to="/dashboard">Dashboard</Link>
-                <Link to="/account">Profile &amp; account</Link>
-                <Link to="/exam-calendar">Exam calendar</Link>
-                {user.role === 'admin' && <Link to="/admin">Admin workspace</Link>}
-                <button type="button" disabled={submitting} onClick={() => void handleSignOut()}>
-                  {submitting ? 'Signing out...' : 'Sign out'}
-                </button>
-              </div>
-            </details>
-          )
+        {children !== undefined && (
+          <div className="topbar-context-actions">{children}</div>
+        )}
+        {user !== null ? (
+          <AccountMenu
+            user={user}
+            submitting={submitting}
+            onSignOut={() => void handleSignOut()}
+          />
+        ) : showSignOut ? (
+          <Link className="button-link button-link--secondary" to="/login">
+            Sign in
+          </Link>
         ) : null}
       </div>
       {error !== null && (
