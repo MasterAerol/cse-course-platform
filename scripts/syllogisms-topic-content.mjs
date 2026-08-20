@@ -82,13 +82,13 @@ const teaching = {
   'either-or-conclusions': {
     rule: 'A valid either-or pair consists of exact logical complements about the same relationship.',
     interpretation: 'Neither option may follow alone, but one must be true and they cannot both be true.',
-    first: ['Premise: All clerks are employees. Pair: Some clerks are artists / No clerks are artists.', ['The premise does not settle clerks-artists overlap.', 'The pair uses the same two categories.', 'Some overlap and no overlap are exact complements.'], 'The pair is valid either-or.'],
+    first: ['All clerks are employees. Pair: Some clerks are artists / No clerks are artists.', ['The premise does not settle clerks-artists overlap.', 'The pair uses the same two categories.', 'Some overlap and no overlap are exact complements.'], 'The pair is valid either-or.'],
     second: ['Some students are artists / No teachers are musicians.', ['The category pairs differ.', 'The statements can both be true.', 'They can also both be false.'], 'The pair is not valid either-or.'],
   },
   'mixed-syllogism-problems': {
     rule: 'Mixed questions may combine All, No, Some, and Some-not premises with modal or paired conclusions.',
     interpretation: 'Translate each premise into a region constraint, preserve witnesses, then classify the conclusion.',
-    first: ['Some clerks are employees. All employees are supervisors. No supervisors are artists.', ['Carry the clerk-employee witness into supervisors.', 'Keep supervisors outside artists.', 'The witness is a clerk outside artists.'], 'Some clerks are not artists.'],
+    first: ['Some clerks are staff. All staff are supervisors. No supervisor is an artist.', ['Carry the clerk-staff witness into supervisors.', 'Keep supervisors outside artists.', 'The witness is a clerk outside artists.'], 'Some clerks are not artists.'],
     second: ['All books are folders. Some folders are reports.', ['Books are contained in folders.', 'The report marker is somewhere in folders.', 'It need not be inside books.'], 'Some books are reports is possible but not definite.'],
   },
 }
@@ -104,7 +104,7 @@ function introductionBlocks() {
     formula('I-form: Some A are B', 'At least one witnessed member belongs to both A and B. The overlap also proves that both categories exist.'),
     formula('O-form: Some A are not B', 'At least one witnessed A lies outside B. This proves that A exists but does not describe every A.'),
     paragraph('Set-language guide: “All analysts are employees” means analysts sit inside employees. “No folders are vehicles” means the regions are separate. “Some employees are trainers” places a marker in the overlap. “Some books are not manuals” places a marker in the books-only region.'),
-    example('Text-only Venn guide', 'Read the diagrams as region instructions.', ['All A are B: [ B contains A ].', 'No A are B: [ A ]   [ B ].', 'Some A are B: place x in the A-and-B overlap.', 'Some A are not B: place x in the part of A outside B.'], 'Universal statements shape regions; only particular statements place required markers.'),
+    example('Text-only Venn guide', 'Read the diagrams as region instructions.', ['All A are B: [ B contains A ].', 'No A are B: [ A ]   [ B ].', 'Some A are B: place x in the A-and-B overlap.', 'Some A are not B: place x in the part of A outside B.'], 'Universal statements shape regions; only Some statements place required markers.'),
     example('Direction and existence', 'All clerks are employees. Which claims are guaranteed?', ['Clerks are contained in employees.', 'Employees may include people who are not clerks.', 'No clerk is required to exist.', 'Therefore the converse and any Some conclusion are unsupported.'], 'Only “All clerks are employees” and its set-containment meaning are definite.'),
     callout('Common mistakes', 'Do not reverse All, strengthen Some into All, assume existence from All or No, use real-world facts, treat possible as definite, or assume two groups overlap without evidence.', 'warning'),
     heading('Before testing a conclusion', 3),
