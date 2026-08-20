@@ -26,6 +26,80 @@ if (typeof injectedStyles !== 'string') {
 
 const stylesSource = injectedStyles
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+}
+
+function declarationsFor(selector: string): ReadonlyMap<string, string> {
+  const selectorPattern = new RegExp(
+    `${escapeRegExp(selector)}\\s*\\{([^{}]*)\\}`,
+    'gu',
+  )
+  const matches = [...stylesSource.matchAll(selectorPattern)].filter((match) => {
+    if (match.index === undefined) {
+      return false
+    }
+
+    const precedingSource = stylesSource.slice(0, match.index).trimEnd()
+    const precedingCharacter = precedingSource.at(-1)
+
+    return (
+      precedingCharacter === undefined ||
+      precedingCharacter === '{' ||
+      precedingCharacter === '}' ||
+      precedingCharacter === ','
+    )
+  })
+  const body = matches.at(-1)?.[1]
+
+  if (body === undefined) {
+    throw new Error(`Expected CSS rule for ${selector}`)
+  }
+
+  return new Map(
+    body
+      .split(';')
+      .map((declaration) => declaration.trim())
+      .filter((declaration) => declaration.length > 0)
+      .map((declaration) => {
+        const separator = declaration.indexOf(':')
+
+        if (separator < 0) {
+          throw new Error(`Invalid CSS declaration in ${selector}: ${declaration}`)
+        }
+
+        return [
+          declaration.slice(0, separator).trim(),
+          declaration.slice(separator + 1).trim(),
+        ] as const
+      }),
+  )
+}
+
+function cssLengthInPixels(value: string): number {
+  const match = /^(\d+(?:\.\d+)?)rem$/u.exec(value)
+
+  if (match?.[1] === undefined) {
+    throw new Error(`Expected a rem length, received ${value}`)
+  }
+
+  return Number(match[1]) * 16
+}
+
+function customPropertyValue(name: string): string {
+  const propertyPattern = new RegExp(
+    `${escapeRegExp(name)}\\s*:\\s*([^;]+);`,
+    'u',
+  )
+  const value = propertyPattern.exec(stylesSource)?.[1]?.trim()
+
+  if (value === undefined) {
+    throw new Error(`Expected CSS custom property ${name}`)
+  }
+
+  return value
+}
+
 const student: User = {
   id: '123e4567-e89b-12d3-a456-426614174000',
   email: 'learner@example.test',
@@ -88,19 +162,67 @@ describe('global account navigation and registration UI', () => {
     expect(markup).not.toContain('Admin</a>')
   })
 
-  it('uses the page gutter as the true mobile header edge', () => {
-    expect(stylesSource).toMatch(
-      /\.page-shell > \.topbar\.topbar--authenticated,\s*\.dashboard-page > \.topbar\.topbar--authenticated\s*\{[^}]*padding-inline:\s*0;/u,
+  it('keeps one navy avatar at the true mobile header edge', () => {
+    const mobileTopbar = declarationsFor('.topbar.topbar--authenticated')
+    const mobileActions = declarationsFor(
+      '.topbar.topbar--authenticated > .topbar-actions',
     )
-    expect(stylesSource).toMatch(
-      /\.topbar--authenticated \.topbar-actions\s*\{[^}]*margin-left:\s*auto;/u,
+    const mobileAccountMenu = declarationsFor(
+      '.topbar.topbar--authenticated > .topbar-actions > .account-menu',
     )
-    expect(stylesSource).toMatch(
-      /\.account-menu__panel\s*\{[^}]*right:\s*0;[^}]*width:\s*min\(20rem, calc\(100vw - 2rem\)\);/u,
+    const trigger = declarationsFor('.account-menu__trigger')
+    const avatar = declarationsFor('.account-menu__avatar')
+    const focusAvatar = declarationsFor(
+      '.account-menu__trigger:focus-visible .account-menu__avatar',
     )
-    expect(stylesSource).toContain(
-      ".account-menu__trigger:focus-visible",
+    const accountMenu = declarationsFor('.account-menu')
+    const mobilePanel = declarationsFor(
+      '.topbar--authenticated .account-menu__panel',
     )
+    const triggerSize = cssLengthInPixels(trigger.get('width') ?? '')
+    const avatarSize = cssLengthInPixels(avatar.get('width') ?? '')
+    const paddingRight = mobileTopbar.get('padding-right') ?? ''
+    const insetToken = /var\((--[^)]+)\)/u.exec(paddingRight)?.[1]
+
+    if (insetToken === undefined) {
+      throw new Error(`Expected a custom-property mobile inset in ${paddingRight}`)
+    }
+
+    const mobileInset = cssLengthInPixels(customPropertyValue(insetToken))
+
+    expect(mobileTopbar.get('width')).toBe('100vw')
+    expect(mobileTopbar.get('max-width')).toBe('100vw')
+    expect(mobileTopbar.get('margin-inline')).toBe('calc(50% - 50vw)')
+    expect(paddingRight).toBe(
+      'max(var(--space-16), env(safe-area-inset-right))',
+    )
+    expect(mobileActions.get('width')).toBe('auto')
+    expect(mobileActions.get('margin-left')).toBe('auto')
+    expect(mobileActions.get('justify-content')).toBe('flex-end')
+    expect(mobileAccountMenu.get('width')).toBe('2.75rem')
+    expect(trigger.get('min-height')).toBe('2.75rem')
+    expect(trigger.get('justify-items')).toBe('end')
+    expect(trigger.get('border')).toBe('0')
+    expect(trigger.get('background')).toBe('transparent')
+    expect(trigger.get('box-shadow')).toBe('none')
+    expect(avatar.get('background')).toBe('var(--brand-navy)')
+    expect(focusAvatar.get('box-shadow')).toContain('var(--focus-ring)')
+    expect(accountMenu.get('position')).toBe('relative')
+    expect(mobilePanel.get('position')).toBe('absolute')
+    expect(triggerSize).toBeGreaterThanOrEqual(44)
+    expect(avatarSize).toBeGreaterThanOrEqual(32)
+    expect(avatarSize).toBeLessThanOrEqual(36)
+
+    for (const viewportWidth of [320, 375, 390, 430]) {
+      const fullBleedHeaderRight = viewportWidth
+      const triggerRight = fullBleedHeaderRight - mobileInset
+      const avatarRight = triggerRight
+      const avatarRightInset = viewportWidth - avatarRight
+
+      expect(triggerRight - triggerSize).toBeGreaterThanOrEqual(0)
+      expect(avatarRightInset).toBeGreaterThanOrEqual(12)
+      expect(avatarRightInset).toBeLessThanOrEqual(16)
+    }
   })
 
   it('exposes Admin only from an actually authorized admin identity', () => {

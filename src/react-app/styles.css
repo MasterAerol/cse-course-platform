@@ -12740,23 +12740,30 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   min-width: 2.75rem;
   height: 2.75rem;
   min-height: 2.75rem;
-  place-items: center;
+  align-items: center;
+  justify-items: end;
   padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--surface-card);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
   color: #fff;
 }
 
 .account-menu__trigger:hover {
-  border-color: var(--brand-blue);
-  background: var(--color-info-bg);
+  background: transparent;
 }
 
 .account-menu__trigger:focus-visible {
-  border-color: var(--brand-blue);
   outline: 0;
+  box-shadow: none;
+}
+
+.account-menu__trigger:hover .account-menu__avatar {
+  background: color-mix(in srgb, var(--brand-navy) 86%, var(--brand-blue));
+}
+
+.account-menu__trigger:focus-visible .account-menu__avatar {
   box-shadow: 0 0 0 0.2rem var(--focus-ring);
 }
 
@@ -12884,19 +12891,23 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
     flex-wrap: nowrap;
     align-items: center;
     padding-block: var(--space-8);
+    width: 100vw;
+    max-width: 100vw;
+    margin-inline: calc(50% - 50vw);
+    padding-left: max(var(--space-16), env(safe-area-inset-left));
+    padding-right: max(var(--space-16), env(safe-area-inset-right));
   }
-  .page-shell > .topbar.topbar--authenticated,
-  .dashboard-page > .topbar.topbar--authenticated {
-    padding-inline: 0;
-  }
-  .topbar--authenticated .topbar-actions {
+  .topbar.topbar--authenticated > .topbar-actions {
     width: auto;
     flex: 0 0 auto;
     margin-left: auto;
     justify-content: flex-end;
   }
   .topbar--authenticated .topbar-context-actions { display: none; }
-  .topbar--authenticated .account-menu { width: auto; }
+  .topbar.topbar--authenticated > .topbar-actions > .account-menu {
+    width: 2.75rem;
+    margin-left: auto;
+  }
   .topbar--authenticated .account-menu__panel {
     position: absolute;
     width: min(20rem, calc(100vw - 1.5rem));
