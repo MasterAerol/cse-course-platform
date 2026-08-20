@@ -12741,17 +12741,37 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   height: 2.75rem;
   min-height: 2.75rem;
   align-items: center;
-  justify-items: end;
+  justify-items: center;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
   color: #fff;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .account-menu__trigger:hover {
   background: transparent;
+}
+
+.topbar.topbar--authenticated .account-menu button.account-menu__trigger:active {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+}
+
+.account-menu__trigger[aria-expanded='true'] {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+}
+
+.account-menu__trigger[aria-expanded='true'] .account-menu__avatar {
+  background: var(--brand-navy);
+  box-shadow: none;
 }
 
 .account-menu__trigger:focus-visible {
@@ -12898,8 +12918,13 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
     padding-right: max(var(--space-16), env(safe-area-inset-right));
   }
   .topbar.topbar--authenticated > .topbar-actions {
+    display: flex;
     width: auto;
     flex: 0 0 auto;
+    flex-wrap: nowrap;
+    grid-template-columns: none;
+    gap: 0;
+    align-items: center;
     margin-left: auto;
     justify-content: flex-end;
   }

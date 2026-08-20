@@ -77,7 +77,7 @@ function declarationsFor(selector: string): ReadonlyMap<string, string> {
 }
 
 function cssLengthInPixels(value: string): number {
-  const match = /^(\d+(?:\.\d+)?)rem$/u.exec(value)
+  const match = /^(-?\d+(?:\.\d+)?)rem$/u.exec(value)
 
   if (match?.[1] === undefined) {
     throw new Error(`Expected a rem length, received ${value}`)
@@ -163,6 +163,12 @@ describe('global account navigation and registration UI', () => {
   })
 
   it('keeps one navy avatar at the true mobile header edge', () => {
+    const markup = renderWithAuth(<LearnerTopbar showSignOut />)
+
+    expect(markup).toMatch(
+      /class="topbar topbar--authenticated"[\s\S]*class="brand-link"[\s\S]*class="topbar-actions"[\s\S]*class="account-menu"[\s\S]*class="account-menu__trigger"[\s\S]*class="account-menu__avatar"/u,
+    )
+
     const mobileTopbar = declarationsFor('.topbar.topbar--authenticated')
     const mobileActions = declarationsFor(
       '.topbar.topbar--authenticated > .topbar-actions',
@@ -175,10 +181,20 @@ describe('global account navigation and registration UI', () => {
     const focusAvatar = declarationsFor(
       '.account-menu__trigger:focus-visible .account-menu__avatar',
     )
+    const openTrigger = declarationsFor(
+      ".account-menu__trigger[aria-expanded='true']",
+    )
+    const openAvatar = declarationsFor(
+      ".account-menu__trigger[aria-expanded='true'] .account-menu__avatar",
+    )
+    const activeTrigger = declarationsFor(
+      '.topbar.topbar--authenticated .account-menu button.account-menu__trigger:active',
+    )
     const accountMenu = declarationsFor('.account-menu')
     const mobilePanel = declarationsFor(
       '.topbar--authenticated .account-menu__panel',
     )
+    const narrowPanel = declarationsFor('.account-menu__panel')
     const triggerSize = cssLengthInPixels(trigger.get('width') ?? '')
     const avatarSize = cssLengthInPixels(avatar.get('width') ?? '')
     const paddingRight = mobileTopbar.get('padding-right') ?? ''
@@ -196,32 +212,67 @@ describe('global account navigation and registration UI', () => {
     expect(paddingRight).toBe(
       'max(var(--space-16), env(safe-area-inset-right))',
     )
+    expect(mobileActions.get('display')).toBe('flex')
     expect(mobileActions.get('width')).toBe('auto')
+    expect(mobileActions.get('flex')).toBe('0 0 auto')
+    expect(mobileActions.get('flex-wrap')).toBe('nowrap')
+    expect(mobileActions.get('grid-template-columns')).toBe('none')
+    expect(mobileActions.get('gap')).toBe('0')
     expect(mobileActions.get('margin-left')).toBe('auto')
     expect(mobileActions.get('justify-content')).toBe('flex-end')
     expect(mobileAccountMenu.get('width')).toBe('2.75rem')
     expect(trigger.get('min-height')).toBe('2.75rem')
-    expect(trigger.get('justify-items')).toBe('end')
+    expect(trigger.get('justify-items')).toBe('center')
     expect(trigger.get('border')).toBe('0')
     expect(trigger.get('background')).toBe('transparent')
     expect(trigger.get('box-shadow')).toBe('none')
+    expect(trigger.get('-webkit-tap-highlight-color')).toBe('transparent')
+    expect(activeTrigger.get('background')).toBe('transparent')
+    expect(activeTrigger.get('box-shadow')).toBe('none')
+    expect(openTrigger.get('background')).toBe('transparent')
+    expect(openTrigger.get('box-shadow')).toBe('none')
+    expect(openAvatar.get('background')).toBe('var(--brand-navy)')
+    expect(openAvatar.get('box-shadow')).toBe('none')
     expect(avatar.get('background')).toBe('var(--brand-navy)')
     expect(focusAvatar.get('box-shadow')).toContain('var(--focus-ring)')
     expect(accountMenu.get('position')).toBe('relative')
     expect(mobilePanel.get('position')).toBe('absolute')
+    expect(mobilePanel.get('width')).toBe(
+      'min(20rem, calc(100vw - 1.5rem))',
+    )
+    expect(narrowPanel.get('right')).toBe('-0.25rem')
     expect(triggerSize).toBeGreaterThanOrEqual(44)
     expect(avatarSize).toBeGreaterThanOrEqual(32)
     expect(avatarSize).toBeLessThanOrEqual(36)
 
+    const panelMaxWidth = 20 * 16
+    const panelViewportGutter = 1.5 * 16
+    const panelRightShift = -cssLengthInPixels(narrowPanel.get('right') ?? '')
+
     for (const viewportWidth of [320, 375, 390, 430]) {
       const fullBleedHeaderRight = viewportWidth
       const triggerRight = fullBleedHeaderRight - mobileInset
-      const avatarRight = triggerRight
-      const avatarRightInset = viewportWidth - avatarRight
+      const triggerLeft = triggerRight - triggerSize
+      const avatarLeft = triggerLeft + (triggerSize - avatarSize) / 2
+      const avatarCenter = avatarLeft + avatarSize / 2
+      const panelWidth = Math.min(
+        panelMaxWidth,
+        viewportWidth - panelViewportGutter,
+      )
+      const panelRight = triggerRight + panelRightShift
+      const panelLeft = panelRight - panelWidth
 
-      expect(triggerRight - triggerSize).toBeGreaterThanOrEqual(0)
-      expect(avatarRightInset).toBeGreaterThanOrEqual(12)
-      expect(avatarRightInset).toBeLessThanOrEqual(16)
+      expect(triggerLeft).toBeGreaterThanOrEqual(0)
+      expect(viewportWidth - triggerRight).toBeGreaterThanOrEqual(12)
+      expect(viewportWidth - triggerRight).toBeLessThanOrEqual(16)
+      expect(avatarCenter).toBe(triggerLeft + triggerSize / 2)
+      expect(panelLeft).toBeGreaterThanOrEqual(0)
+      expect(panelRight).toBeLessThanOrEqual(viewportWidth)
+
+      if (viewportWidth === 390) {
+        expect(triggerRight).toBeGreaterThanOrEqual(374)
+        expect(triggerRight).toBeLessThanOrEqual(378)
+      }
     }
   })
 
