@@ -110,7 +110,7 @@ export function LearnerTopbar({
           }
         }}
       >
-        {children !== undefined && (
+        {user === null && children !== undefined && (
           <div className="topbar-context-actions">{children}</div>
         )}
         {user !== null ? (
