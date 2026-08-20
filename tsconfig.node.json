@@ -48,6 +48,7 @@
     "vitest.pronouns-modifiers-teaching-publisher.config.ts",
     "vitest.sentence-structure-errors-teaching-publisher.config.ts",
     "vitest.paragraph-organization-teaching-publisher.config.ts",
+    "vitest.reading-comprehension-teaching-publisher.config.ts",
     "vitest.safe-teaching-release.config.ts",
     "eslint.config.js",
     "tests",
