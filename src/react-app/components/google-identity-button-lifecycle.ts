@@ -4,6 +4,8 @@ export interface GoogleButtonRenderOptions {
   size: 'large'
   text: 'continue_with'
   shape: 'rectangular'
+  logo_alignment: 'left'
+  locale: 'en'
   width: number
 }
 

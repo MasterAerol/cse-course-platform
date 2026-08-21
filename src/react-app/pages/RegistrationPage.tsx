@@ -114,7 +114,7 @@ export function RegistrationPage() {
   if (registrationMode !== 'open') {
     return (
       <main className="auth-page">
-        <section className="auth-card" aria-labelledby="registration-title">
+        <section className="auth-card auth-card--authentication" aria-labelledby="registration-title">
           <PasaWiseBrand linked variant="primary" />
           <h1 id="registration-title">Registration is currently closed</h1>
           <p>PasaWise is not accepting new learner accounts right now.</p>
@@ -128,7 +128,7 @@ export function RegistrationPage() {
 
   return (
     <main className="auth-page">
-      <section className="auth-card" aria-labelledby="registration-title">
+      <section className="auth-card auth-card--authentication" aria-labelledby="registration-title">
         <PasaWiseBrand linked variant="primary" />
         <h1 id="registration-title">Create your account</h1>
         <p>Start preparing smarter for the Civil Service Exam.</p>

@@ -86,7 +86,7 @@ export function LoginPage() {
 
   return (
     <main className="auth-page">
-      <section className="auth-card" aria-labelledby="login-title">
+      <section className="auth-card auth-card--authentication" aria-labelledby="login-title">
         <PasaWiseBrand linked variant="primary" />
         <h1 id="login-title">Welcome back</h1>
         <p>Continue your CSE preparation.</p>

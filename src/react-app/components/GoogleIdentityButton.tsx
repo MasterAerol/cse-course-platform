@@ -40,7 +40,6 @@ interface GoogleIdentityButtonProps {
   clientId: string | null
   context: 'signin' | 'signup'
   onCredential: (credential: string) => Promise<void>
-  helperText?: string
 }
 
 type GoogleButtonState =
@@ -50,7 +49,7 @@ type GoogleButtonState =
   | 'unavailable'
 
 const GOOGLE_SCRIPT_ID = 'google-identity-services'
-const GOOGLE_SCRIPT_URL = 'https://accounts.google.com/gsi/client'
+const GOOGLE_SCRIPT_URL = 'https://accounts.google.com/gsi/client?hl=en'
 let googleScriptPromise: Promise<void> | null = null
 
 function loadGoogleIdentityServices(): Promise<void> {
@@ -96,7 +95,6 @@ export function GoogleIdentityButton({
   clientId,
   context,
   onCredential,
-  helperText,
 }: GoogleIdentityButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const credentialHandlerRef = useRef(onCredential)
@@ -162,6 +160,8 @@ export function GoogleIdentityButton({
             size: 'large',
             text: 'continue_with',
             shape: 'rectangular',
+            logo_alignment: 'left',
+            locale: 'en',
             width,
           },
         )
@@ -195,9 +195,6 @@ export function GoogleIdentityButton({
         data-google-identity-button
         ref={containerRef}
       />
-      {helperText && (
-        <p className="google-auth__helper">{helperText}</p>
-      )}
       {state === 'loading' && (
         <p className="google-auth__status" role="status">
           Loading Google sign-in…

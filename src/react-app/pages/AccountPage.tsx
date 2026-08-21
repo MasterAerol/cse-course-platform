@@ -148,11 +148,14 @@ export function AccountPageView({
                 <div><strong>Google</strong><span>{signInMethods.googleConnected ? 'Connected' : 'Not connected'}</span></div>
                 <p>{signInMethods.googleConnected ? user.email : 'Connect Google to your PasaWise account.'}</p>
                 {!signInMethods.googleConnected && googleClientId !== null && onConnectGoogle !== undefined && (
-                  <GoogleIdentityButton
-                    clientId={googleClientId}
-                    context="signin"
-                    onCredential={onConnectGoogle}
-                  />
+                  <div className="google-connect-panel">
+                    <strong>Connect your Google account</strong>
+                    <GoogleIdentityButton
+                      clientId={googleClientId}
+                      context="signin"
+                      onCredential={onConnectGoogle}
+                    />
+                  </div>
                 )}
               </article>
               <article>

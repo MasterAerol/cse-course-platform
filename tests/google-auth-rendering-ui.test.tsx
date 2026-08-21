@@ -126,14 +126,17 @@ describe('Google Identity Services rendering regressions', () => {
     expect(countProviderMounts(connectedAccount)).toBe(0)
     expect(account).not.toContain('Choose the Google account')
     expect(account).toContain('Connect Google to your PasaWise account.')
+    expect(account).toContain('Connect your Google account')
     expect(connectedAccount).toContain('Connected')
   })
 
   it('keeps one provider-owned button through rerender, cleanup, and remount', () => {
     let providerChildCount = 0
+    let providerVisibleText = ''
     const container = {
       replaceChildren: (...nodes: Node[]) => {
         providerChildCount = nodes.length
+        providerVisibleText = nodes.map((node) => node.textContent ?? '').join('')
       },
     } as unknown as HTMLElement
     const options: GoogleButtonRenderOptions = {
@@ -142,14 +145,20 @@ describe('Google Identity Services rendering regressions', () => {
       size: 'large',
       text: 'continue_with',
       shape: 'rectangular',
+      logo_alignment: 'left',
+      locale: 'en',
       width: 320,
     }
     const renderButton = vi.fn((parent: HTMLElement) => {
-      parent.replaceChildren({ providerOwnedButton: true } as unknown as Node)
+      parent.replaceChildren({
+        providerOwnedButton: true,
+        textContent: 'Continue with Google',
+      } as unknown as Node)
     })
 
     expect(mountGoogleIdentityButton(container, renderButton, options)).toBe(true)
     expect(providerChildCount).toBe(1)
+    expect(providerVisibleText).toBe('Continue with Google')
     expect(renderButton).toHaveBeenCalledTimes(1)
 
     expect(mountGoogleIdentityButton(container, renderButton, options)).toBe(false)
@@ -183,7 +192,7 @@ describe('Google Identity Services rendering regressions', () => {
     },
   )
 
-  it('contains provider geometry and preserves visually hidden accessibility utilities', () => {
+  it('leaves provider-owned geometry untouched and preserves accessibility utilities', () => {
     const buttonBlock = stylesSource.match(/\.google-auth__button\s*\{([^}]*)\}/s)?.[1] ?? ''
     const srOnlyBlock = stylesSource.match(/\.sr-only\s*\{([^}]*)\}/s)?.[1] ?? ''
     const visuallyHiddenBlock =
@@ -191,10 +200,14 @@ describe('Google Identity Services rendering regressions', () => {
 
     expect(googleIdentityButtonSource).not.toContain('ResizeObserver')
     expect(googleIdentityButtonSource).not.toContain('Opens in a new tab')
-    expect(buttonBlock).toContain('height: 2.75rem')
-    expect(buttonBlock).toContain('max-height: 2.75rem')
-    expect(buttonBlock).toContain('overflow: hidden')
-    expect(stylesSource).toContain('.google-auth__button :where(img, svg)')
+    expect(googleIdentityButtonSource).toContain('gsi/client?hl=en')
+    expect(googleIdentityButtonSource).toContain("logo_alignment: 'left'")
+    expect(googleIdentityButtonSource).toContain("locale: 'en'")
+    expect(buttonBlock).toContain('min-height: 2.75rem')
+    expect(buttonBlock).toContain('justify-content: center')
+    expect(buttonBlock).not.toContain('overflow: hidden')
+    expect(stylesSource).not.toContain('.google-auth__button iframe')
+    expect(stylesSource).not.toContain('.google-auth__button :where(img, svg)')
     expect(stylesSource).not.toMatch(
       /(?:^|})\s*(?:img|svg)\s*\{[^}]*width:\s*100%/m,
     )

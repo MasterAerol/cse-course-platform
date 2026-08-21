@@ -12948,7 +12948,6 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
 .google-auth {
   display: grid;
   width: 100%;
-  max-width: 25rem;
   min-width: 0;
   gap: var(--space-8);
   margin-top: var(--space-20);
@@ -12957,38 +12956,14 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
 .google-auth__button {
   display: flex;
   align-items: center;
+  justify-content: center;
   width: 100%;
-  max-width: 25rem;
   min-width: 0;
-  height: 2.75rem;
   min-height: 2.75rem;
-  max-height: 2.75rem;
-  overflow: hidden;
-  contain: layout paint;
-}
-
-.google-auth__button > div,
-.google-auth__button iframe {
-  width: 100% !important;
-  max-width: 100%;
-  height: 2.75rem !important;
-  min-height: 2.75rem !important;
-  max-height: 2.75rem !important;
-  margin-inline: auto !important;
-}
-
-.google-auth__button :where(img, svg) {
-  display: block;
-  width: 1.125rem;
-  max-width: 1.125rem;
-  height: 1.125rem;
-  max-height: 1.125rem;
-  flex: 0 0 1.125rem;
 }
 
 .google-auth__status,
-.google-auth__error,
-.google-auth__helper {
+.google-auth__error {
   margin: 0;
   text-align: center;
 }
@@ -12998,10 +12973,8 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   font-size: var(--type-small);
 }
 
-.google-auth__helper {
-  color: var(--color-text-muted);
-  font-size: var(--type-small);
-  line-height: 1.5;
+.auth-card--authentication {
+  width: min(100%, 29.5rem);
 }
 
 .auth-divider {
@@ -13116,6 +13089,24 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
 
 .sign-in-methods .google-auth {
   margin-top: var(--space-16);
+}
+
+.google-connect-panel {
+  display: grid;
+  gap: var(--space-12);
+  margin-top: var(--space-16);
+  padding: var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--surface-card);
+}
+
+.google-connect-panel > strong {
+  color: var(--brand-navy);
+}
+
+.google-connect-panel .google-auth {
+  margin-top: 0;
 }
 
 @media (max-width: 25rem) {
