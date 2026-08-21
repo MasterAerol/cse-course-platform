@@ -38,7 +38,7 @@ Worker binding counters are permissive/eventually consistent and local to a Clou
 
 ## Cloudflare dashboard controls required before beta
 
-Do not claim these are configured until an operator verifies them in the production account. If the Worker remains only on `workers.dev`, attach an approved custom domain/zone before relying on zone WAF rules.
+Do not claim these are configured until an operator verifies them in the production account. Scope hostname rules to canonical `pasawise.com`; keep the attached `workers.dev` hostname only as the temporary transition fallback, and verify protections for each hostname deliberately.
 
 Create rate-limiting rules scoped to the production hostname and method/path, using **IP with NAT support** when the plan supports it:
 

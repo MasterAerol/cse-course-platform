@@ -3,7 +3,35 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { APPROVED_COMMERCIAL_INFRASTRUCTURE, DEFAULT_HEALTH_URL, DEFAULT_LIVE_URL, buildScopedStageArgs, classifyChangedFiles, formatBytes, inspectChangedFiles, parseAppliedMigrationNames, parsePendingMigrations, parseR2BucketInfo, parseR2CustomDomains, parseR2DevUrlEnabled, parseReleaseArgs, parseStatusPorcelainZDetailed, selectPreflightReleaseScope, validateApprovedMigrationCandidate, validateApprovedMigrationRelease, validateApprovedWranglerCandidate, validateApprovedWranglerRelease, validateCleanDeploymentSync, validateConcurrentReleaseScope, validateDeploymentPolicy, validateHealthResponse, validateReleaseOptions, validateStagedScope } from './lib/safe-release.mjs'
+import {
+  APPROVED_COMMERCIAL_INFRASTRUCTURE,
+  DEFAULT_HEALTH_URL,
+  DEFAULT_LIVE_URL,
+  FALLBACK_HEALTH_URL,
+  FALLBACK_LIVE_URL,
+  buildScopedStageArgs,
+  classifyChangedFiles,
+  formatBytes,
+  inspectChangedFiles,
+  parseAppliedMigrationNames,
+  parsePendingMigrations,
+  parseR2BucketInfo,
+  parseR2CustomDomains,
+  parseR2DevUrlEnabled,
+  parseReleaseArgs,
+  parseStatusPorcelainZDetailed,
+  selectPreflightReleaseScope,
+  validateApprovedMigrationCandidate,
+  validateApprovedMigrationRelease,
+  validateApprovedWranglerCandidate,
+  validateApprovedWranglerRelease,
+  validateCleanDeploymentSync,
+  validateConcurrentReleaseScope,
+  validateDeploymentPolicy,
+  validateHealthResponse,
+  validateReleaseOptions,
+  validateStagedScope,
+} from './lib/safe-release.mjs'
 
 const HELP = `Safe Release Workflow v1
 
@@ -114,13 +142,31 @@ function verifyApprovedInfrastructureRelease(repository, risk) {
   if (summaries.length > 0) console.log('\nINFRASTRUCTURE - VERIFIED READ-ONLY\n' + summaries.map((item) => '  ' + item).join('\n'))
   return { blockers, summary: summaries.join(' ') || 'None' }
 }
+
+async function verifyHealthUrl(url) {
+  try {
+    const response = await fetch(url, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(15_000),
+    })
+    validateHealthResponse(response.status, await response.text())
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`${url}: ${message}`, { cause: error })
+  }
+}
+
 async function deployWorker(repository, options, passed, gitSummary, publisherSummary, infrastructureSummary) {
   try { console.log('\nCLOUDFLARE — AUTHENTICATION'); run(process.execPath, [path.join(repository.root, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), 'whoami'], { env: options.codex ? { CI: 'true' } : {} }) } catch { fail('Cloudflare authentication unavailable.', `${gitSummary}\nDeployment not performed.`); return false }
   let deployOutput
   try { console.log('\nCLOUDFLARE — DEPLOY'); deployOutput = run(NPM_COMMAND, [...NPM_PREFIX, 'run', 'deploy']).stdout } catch { fail('Cloudflare Worker deployment failed.', `${gitSummary}\nDeployment did not complete.`); return false }
-  try { console.log('\nPOST-DEPLOY — HEALTH'); const response = await fetch(DEFAULT_HEALTH_URL, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15_000) }); validateHealthResponse(response.status, await response.text()) } catch (error) { console.error(`\nDEPLOYED BUT HEALTH CHECK FAILED\n${error.message}\nNo automatic rollback was attempted.`); process.exitCode = 1; return false }
+  try {
+    console.log('\nPOST-DEPLOY — HEALTH')
+    await verifyHealthUrl(DEFAULT_HEALTH_URL)
+    await verifyHealthUrl(FALLBACK_HEALTH_URL)
+  } catch (error) { console.error(`\nDEPLOYED BUT HEALTH CHECK FAILED\n${error.message}\nNo automatic rollback was attempted.`); process.exitCode = 1; return false }
   const version = deployOutput.match(/(?:Version ID|Current Version ID):\s*([\w-]+)/iu)?.[1] ?? 'reported by Wrangler output above'
-  console.log(`\nSAFE RELEASE — APPLICATION DEPLOYED\nValidation: ${passed.join(', ')}\nGit: ${gitSummary}\nWorker: deployed; version ${version}\nHealth: ${DEFAULT_HEALTH_URL} → 200, status ok\nInfrastructure: ${infrastructureSummary}\nPublisher: ${publisherSummary}\nLive: ${DEFAULT_LIVE_URL}`)
+  console.log(`\nSAFE RELEASE — APPLICATION DEPLOYED\nValidation: ${passed.join(', ')}\nGit: ${gitSummary}\nWorker: deployed; version ${version}\nHealth: ${DEFAULT_HEALTH_URL} → 200, status ok\nFallback health: ${FALLBACK_HEALTH_URL} → 200, status ok\nInfrastructure: ${infrastructureSummary}\nPublisher: ${publisherSummary}\nLive: ${DEFAULT_LIVE_URL}\nFallback: ${FALLBACK_LIVE_URL}`)
   return true
 }
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { pathToFileURL } from 'node:url'
+import { CANONICAL_PRODUCTION_ORIGIN } from './lib/production-origin.mjs'
 import {
   formatHttpError,
   formatNetworkError,
@@ -48,9 +49,9 @@ Safety requirements:
 Examples:
   node scripts/create-or-reset-qa-student.mjs --base-url http://127.0.0.1:5173 --admin-email admin@example.com --qa-email test@pasawise.com --mode unlocked
 
-  node scripts/create-or-reset-qa-student.mjs --remote --base-url https://cse-course-platform.master-course.workers.dev --admin-email admin@example.com --qa-email test@pasawise.com --mode unlocked --confirm configure-cse-qa-student
+  node scripts/create-or-reset-qa-student.mjs --remote --base-url ${CANONICAL_PRODUCTION_ORIGIN} --admin-email admin@example.com --qa-email test@pasawise.com --mode unlocked --confirm configure-cse-qa-student
 
-  node scripts/create-or-reset-qa-student.mjs --remote --base-url https://cse-course-platform.master-course.workers.dev --admin-email admin@example.com --qa-email test@pasawise.com --inspect-only
+  node scripts/create-or-reset-qa-student.mjs --remote --base-url ${CANONICAL_PRODUCTION_ORIGIN} --admin-email admin@example.com --qa-email test@pasawise.com --inspect-only
 `
 
 function createApiClient(baseUrl, initialCookie = null) {

@@ -1,7 +1,8 @@
 # Production Security Hardening and Private Beta Readiness Audit
 
 Audit date: 2026-08-05 (Asia/Singapore)  
-Production origin: `https://cse-course-platform.master-course.workers.dev`  
+Canonical production origin: `https://pasawise.com`
+Temporary fallback origin: `https://cse-course-platform.master-course.workers.dev`
 D1 binding: `DB`  
 Decision: **NO-GO until the “Must pass before beta” items are completed**
 

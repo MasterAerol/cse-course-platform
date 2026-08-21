@@ -48,13 +48,13 @@ Validate only:
 
 ```powershell
 $env:CSE_AVERAGE_ADMIN_PASSWORD = '<set securely in the current session>'
-node scripts/create-and-publish-average-teaching-system.mjs --base-url https://cse-course-platform.master-course.workers.dev --email '<admin email>' --validate-only
+node scripts/create-and-publish-average-teaching-system.mjs --base-url https://pasawise.com --email '<admin email>' --validate-only
 ```
 
 After reviewing every deletion and copying the reported fingerprint:
 
 ```powershell
-node scripts/create-and-publish-average-teaching-system.mjs --base-url https://cse-course-platform.master-course.workers.dev --email '<admin email>' --confirm publish-average-teaching-system-v1 --approve-deletions '<validated fingerprint>'
+node scripts/create-and-publish-average-teaching-system.mjs --base-url https://pasawise.com --email '<admin email>' --confirm publish-average-teaching-system-v1 --approve-deletions '<validated fingerprint>'
 ```
 
 Do not put the password on the command line. Re-run validate-only after publication to verify `writesRequired: false`.

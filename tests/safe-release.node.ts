@@ -5,7 +5,12 @@ import path from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { GOOGLE_AUTHORIZED_JAVASCRIPT_ORIGINS } from '../scripts/lib/production-origin.mjs'
 import {
+  DEFAULT_HEALTH_URL,
+  DEFAULT_LIVE_URL,
+  FALLBACK_HEALTH_URL,
+  FALLBACK_LIVE_URL,
   classifyChangedFiles,
   detectSecrets,
   inspectChangedFiles,
@@ -41,6 +46,20 @@ function tempFile(name: string, content: string | Buffer) {
 }
 
 describe('Safe Release Workflow v1', () => {
+  it('uses pasawise.com canonically while retaining workers.dev health coverage', () => {
+    expect(DEFAULT_LIVE_URL).toBe('https://pasawise.com')
+    expect(DEFAULT_HEALTH_URL).toBe('https://pasawise.com/api/health')
+    expect(FALLBACK_LIVE_URL).toBe('https://cse-course-platform.master-course.workers.dev')
+    expect(FALLBACK_HEALTH_URL).toBe(
+      'https://cse-course-platform.master-course.workers.dev/api/health',
+    )
+    expect(GOOGLE_AUTHORIZED_JAVASCRIPT_ORIGINS).toEqual([
+      'https://pasawise.com',
+      'https://cse-course-platform.master-course.workers.dev',
+      'http://localhost:5173',
+    ])
+  })
+
   it('returns clean without releasing when the working tree has no changes', () => {
     expect(preflight({ files: [] })).toBe('clean')
   })

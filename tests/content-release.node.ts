@@ -18,6 +18,8 @@ function contentOperations(overrides:Partial<ContentOperations>={}){const valida
 describe('Content Release Workflow',()=>{
  it('exposes the requested package command',()=>{const pkg:unknown=JSON.parse(fs.readFileSync('package.json','utf8'));if(pkg===null||typeof pkg!=='object'||!('scripts' in pkg)||pkg.scripts===null||typeof pkg.scripts!=='object')throw new Error('package scripts missing');expect((pkg.scripts as Record<string,unknown>)['content:release']).toBe('node scripts/content-release.mjs')})
 
+ it('publishes to the canonical production origin by default',()=>{expect(DEFAULT_CONTENT_BASE_URL).toBe('https://pasawise.com')})
+
  it('resolves standard credentials before the legacy password',()=>{const meta=resolveTeachingPublisher('average');const result=resolveContentReleasePreflight({meta,environment:{CSE_CONTENT_ADMIN_EMAIL:'admin@example.com',CSE_CONTENT_ADMIN_PASSWORD:'shared',CSE_AVERAGE_ADMIN_PASSWORD:'legacy'}});expect(result).toEqual({email:'admin@example.com',password:'shared',passwordEnv:'CSE_AVERAGE_ADMIN_PASSWORD',baseUrl:DEFAULT_CONTENT_BASE_URL})})
 
  it('supports a legacy topic password and explicit safe email fallback',()=>{const meta=resolveTeachingPublisher('average');const result=resolveContentReleasePreflight({meta,environment:{CSE_AVERAGE_ADMIN_PASSWORD:'legacy'},explicitEmail:'admin@example.com'});expect(result.email).toBe('admin@example.com');expect(result.password).toBe('legacy')})

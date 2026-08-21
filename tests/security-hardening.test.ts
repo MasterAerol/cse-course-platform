@@ -143,22 +143,30 @@ describe('production security hardening', () => {
     expect(preflight.headers.get('access-control-allow-origin')).toBeNull()
   })
 
-  it('allows same-origin browser mutations and non-browser publisher requests', async () => {
-    const sameOrigin = await app.request(
-      '/api/auth/register',
-      registrationRequest({
-        origin: 'http://localhost',
-        'sec-fetch-site': 'same-origin',
-      }),
-      bindings,
-    )
+  it('allows canonical and fallback same-origin browser mutations plus publishers', async () => {
+    const browserOrigins = [
+      'https://pasawise.com',
+      'https://cse-course-platform.master-course.workers.dev',
+      'http://localhost',
+    ]
+    const sameOriginResponses: Response[] = []
+    for (const origin of browserOrigins) {
+      sameOriginResponses.push(await app.request(
+        `${origin}/api/auth/register`,
+        registrationRequest({
+          origin,
+          'sec-fetch-site': 'same-origin',
+        }),
+        bindings,
+      ))
+    }
     const publisher = await app.request(
       '/api/auth/register',
       registrationRequest(),
       bindings,
     )
 
-    expect(sameOrigin.status).toBe(201)
+    for (const response of sameOriginResponses) expect(response.status).toBe(201)
     expect(publisher.status).toBe(201)
   })
 
@@ -309,27 +317,49 @@ describe('production security hardening', () => {
     })
   })
 
-  it('clears the server session with matching hardened cookie attributes', async () => {
-    const registered = await app.request(
-      '/api/auth/register',
-      registrationRequest(),
-      bindings,
-    )
-    const cookie = registered.headers.get('set-cookie')?.split(';')[0]
-    expect(cookie).toBeDefined()
+  it('uses host-only hardened sessions on the canonical and fallback origins', async () => {
+    for (const origin of [
+      'https://pasawise.com',
+      'https://cse-course-platform.master-course.workers.dev',
+    ]) {
+      const registered = await app.request(
+        `${origin}/api/auth/register`,
+        registrationRequest({
+          origin,
+          'sec-fetch-site': 'same-origin',
+        }),
+        bindings,
+      )
+      const setCookie = registered.headers.get('set-cookie')
+      const cookie = setCookie?.split(';')[0]
+      expect(cookie).toBeDefined()
+      expect(setCookie).toContain('HttpOnly')
+      expect(setCookie).toContain('Secure')
+      expect(setCookie).toContain('SameSite=Lax')
+      expect(setCookie).toContain('Path=/')
+      expect(setCookie).not.toMatch(/(?:^|;\s*)Domain=/iu)
 
-    const response = await app.request(
-      '/api/auth/logout',
-      { method: 'POST', headers: { cookie: cookie ?? '' } },
-      bindings,
-    )
-    const cleared = response.headers.get('set-cookie')
+      const response = await app.request(
+        `${origin}/api/auth/logout`,
+        {
+          method: 'POST',
+          headers: {
+            cookie: cookie ?? '',
+            origin,
+            'sec-fetch-site': 'same-origin',
+          },
+        },
+        bindings,
+      )
+      const cleared = response.headers.get('set-cookie')
 
-    expect(response.status).toBe(200)
-    expect(cleared).toContain('HttpOnly')
-    expect(cleared).toContain('Secure')
-    expect(cleared).toContain('SameSite=Lax')
-    expect(cleared).toContain('Path=/')
+      expect(response.status).toBe(200)
+      expect(cleared).toContain('HttpOnly')
+      expect(cleared).toContain('Secure')
+      expect(cleared).toContain('SameSite=Lax')
+      expect(cleared).toContain('Path=/')
+      expect(cleared).not.toMatch(/(?:^|;\s*)Domain=/iu)
+    }
   })
 
   it('rejects oversized JSON before schema validation', async () => {

@@ -1,6 +1,8 @@
 export const RELEASE_CONFIRMATION: string
 export const DEFAULT_HEALTH_URL: string
 export const DEFAULT_LIVE_URL: string
+export const FALLBACK_HEALTH_URL: string
+export const FALLBACK_LIVE_URL: string
 export const MAX_CHANGED_FILE_BYTES: number
 export const APPROVED_COMMERCIAL_INFRASTRUCTURE: Readonly<{ migrationFile:string; migrationName:string; migrationSha256:string; databaseName:string; wranglerFile:string; r2Binding:string; r2Bucket:string }>
 export type ReleaseOptions = { message: string; dryRun: boolean; codex: boolean; skipValidation: boolean; skipDeploy: boolean; deployCurrent: boolean }

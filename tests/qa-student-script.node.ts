@@ -77,14 +77,19 @@ describe('QA student script safety', () => {
 
   it('normalizes an explicit origin and constructs production API URLs', () => {
     const origin = normalizeBaseUrl(
-      'https://cse-course-platform.master-course.workers.dev/',
+      'https://pasawise.com/',
     )
-    expect(origin).toBe('https://cse-course-platform.master-course.workers.dev')
+    expect(origin).toBe('https://pasawise.com')
     expect(resolveApiUrl(origin, '/api/admin/qa-students/configure')).toBe(
-      'https://cse-course-platform.master-course.workers.dev/api/admin/qa-students/configure',
+      'https://pasawise.com/api/admin/qa-students/configure',
     )
     expect(isLocalBaseUrl('http://127.0.0.1:5173')).toBe(true)
     expect(isLocalBaseUrl(origin)).toBe(false)
+    expect(
+      normalizeBaseUrl(
+        'https://cse-course-platform.master-course.workers.dev/',
+      ),
+    ).toBe('https://cse-course-platform.master-course.workers.dev')
   })
 
   it('requires explicit remote origin, confirmation, and administrator authentication', () => {

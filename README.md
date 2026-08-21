@@ -859,7 +859,7 @@ $env:CSE_QA_ADMIN_PASSWORD =
 
 node scripts/create-or-reset-qa-student.mjs `
   --remote `
-  --base-url "https://cse-course-platform.master-course.workers.dev" `
+  --base-url "https://pasawise.com" `
   --qa-email "test@pasawise.com" `
   --admin-email $adminCredential.UserName `
   --mode unlocked `

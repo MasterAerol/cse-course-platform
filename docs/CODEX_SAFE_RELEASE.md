@@ -40,8 +40,9 @@ The script stops on the first failure:
 5. Commit
 6. Push `main` to `origin/main`
 7. Cloudflare authentication check and `npm.cmd run deploy`
-8. `GET /api/health` validation for HTTP 200 and `{ "status": "ok" }`
-9. Final report
+8. Canonical `GET https://pasawise.com/api/health` validation for HTTP 200 and `{ "status": "ok" }`
+9. Temporary workers.dev fallback health validation
+10. Final report
 
 A clean working tree exits successfully with `Nothing to release.`
 

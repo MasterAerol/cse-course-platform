@@ -2,9 +2,18 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import {
+  CANONICAL_HEALTH_URL,
+  CANONICAL_PRODUCTION_ORIGIN,
+  TRANSITION_HEALTH_URL,
+  TRANSITION_WORKERS_DEV_ORIGIN,
+} from './production-origin.mjs'
+
 export const RELEASE_CONFIRMATION = 'release-production'
-export const DEFAULT_HEALTH_URL = 'https://cse-course-platform.master-course.workers.dev/api/health'
-export const DEFAULT_LIVE_URL = 'https://cse-course-platform.master-course.workers.dev'
+export const DEFAULT_HEALTH_URL = CANONICAL_HEALTH_URL
+export const DEFAULT_LIVE_URL = CANONICAL_PRODUCTION_ORIGIN
+export const FALLBACK_HEALTH_URL = TRANSITION_HEALTH_URL
+export const FALLBACK_LIVE_URL = TRANSITION_WORKERS_DEV_ORIGIN
 export const MAX_CHANGED_FILE_BYTES = 15 * 1024 * 1024
 export const APPROVED_COMMERCIAL_INFRASTRUCTURE = Object.freeze({
   migrationFile: 'migrations/0017_commercial_access_system.sql',
