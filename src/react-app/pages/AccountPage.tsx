@@ -144,6 +144,7 @@ export function AccountPageView({
                   <GoogleIdentityButton
                     clientId={googleClientId}
                     context="signin"
+                    helperText="Choose the Google account that uses the same email as your PasaWise account."
                     onCredential={onConnectGoogle}
                   />
                 )}

@@ -12948,25 +12948,47 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
 .google-auth {
   display: grid;
   width: 100%;
+  max-width: 25rem;
   min-width: 0;
   gap: var(--space-8);
   margin-top: var(--space-20);
 }
 
 .google-auth__button {
+  display: flex;
+  align-items: center;
   width: 100%;
+  max-width: 25rem;
   min-width: 0;
+  height: 2.75rem;
   min-height: 2.75rem;
+  max-height: 2.75rem;
   overflow: hidden;
+  contain: layout paint;
 }
 
-.google-auth__button > div {
+.google-auth__button > div,
+.google-auth__button iframe {
+  width: 100% !important;
   max-width: 100%;
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+  max-height: 2.75rem !important;
   margin-inline: auto !important;
 }
 
+.google-auth__button :where(img, svg) {
+  display: block;
+  width: 1.125rem;
+  max-width: 1.125rem;
+  height: 1.125rem;
+  max-height: 1.125rem;
+  flex: 0 0 1.125rem;
+}
+
 .google-auth__status,
-.google-auth__error {
+.google-auth__error,
+.google-auth__helper {
   margin: 0;
   text-align: center;
 }
@@ -12974,6 +12996,12 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
 .google-auth__status {
   color: var(--color-text-muted);
   font-size: var(--type-small);
+}
+
+.google-auth__helper {
+  color: var(--color-text-muted);
+  font-size: var(--type-small);
+  line-height: 1.5;
 }
 
 .auth-divider {
@@ -13035,11 +13063,5 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
 @media (max-width: 25rem) {
   .google-auth__button {
     margin-inline: auto;
-  }
-
-  .sign-in-methods article > div:first-child {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: var(--space-4);
   }
 }

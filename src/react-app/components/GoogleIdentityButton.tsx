@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import {
+  clearGoogleIdentityButton,
+  getGoogleButtonWidth,
+  mountGoogleIdentityButton,
+  type GoogleButtonRenderOptions,
+} from './google-identity-button-lifecycle'
 
 interface GoogleCredentialResponse {
   credential: string
@@ -14,14 +20,7 @@ interface GoogleAccountsId {
   }): void
   renderButton(
     parent: HTMLElement,
-    options: {
-      type: 'standard'
-      theme: 'outline'
-      size: 'large'
-      text: 'continue_with'
-      shape: 'rectangular'
-      width: number
-    },
+    options: GoogleButtonRenderOptions,
   ): void
 }
 
@@ -41,6 +40,7 @@ interface GoogleIdentityButtonProps {
   clientId: string | null
   context: 'signin' | 'signup'
   onCredential: (credential: string) => Promise<void>
+  helperText?: string
 }
 
 type GoogleButtonState =
@@ -96,6 +96,7 @@ export function GoogleIdentityButton({
   clientId,
   context,
   onCredential,
+  helperText,
 }: GoogleIdentityButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const credentialHandlerRef = useRef(onCredential)
@@ -115,7 +116,7 @@ export function GoogleIdentityButton({
     const configuredClientId = clientId
 
     let active = true
-    let resizeObserver: ResizeObserver | null = null
+    let mountedContainer: HTMLElement | null = null
 
     async function initialize(): Promise<void> {
       try {
@@ -125,21 +126,7 @@ export function GoogleIdentityButton({
         }
 
         const container = containerRef.current
-        const render = (): void => {
-          const width = Math.min(
-            400,
-            Math.max(220, Math.floor(container.getBoundingClientRect().width)),
-          )
-          container.replaceChildren()
-          window.google?.accounts.id.renderButton(container, {
-            type: 'standard',
-            theme: 'outline',
-            size: 'large',
-            text: 'continue_with',
-            shape: 'rectangular',
-            width,
-          })
-        }
+        const width = getGoogleButtonWidth(container.getBoundingClientRect().width)
 
         window.google.accounts.id.initialize({
           client_id: configuredClientId,
@@ -166,13 +153,20 @@ export function GoogleIdentityButton({
               })
           },
         })
-        render()
+        mountGoogleIdentityButton(
+          container,
+          (parent, options) => window.google?.accounts.id.renderButton(parent, options),
+          {
+            type: 'standard',
+            theme: 'outline',
+            size: 'large',
+            text: 'continue_with',
+            shape: 'rectangular',
+            width,
+          },
+        )
+        mountedContainer = container
         setState('ready')
-
-        if (typeof ResizeObserver !== 'undefined') {
-          resizeObserver = new ResizeObserver(render)
-          resizeObserver.observe(container)
-        }
       } catch {
         if (active) {
           setState('unavailable')
@@ -186,7 +180,9 @@ export function GoogleIdentityButton({
     void initialize()
     return () => {
       active = false
-      resizeObserver?.disconnect()
+      if (mountedContainer !== null) {
+        clearGoogleIdentityButton(mountedContainer)
+      }
     }
   }, [clientId, context])
 
@@ -199,14 +195,17 @@ export function GoogleIdentityButton({
         data-google-identity-button
         ref={containerRef}
       />
+      {helperText && (
+        <p className="google-auth__helper">{helperText}</p>
+      )}
       {state === 'loading' && (
         <p className="google-auth__status" role="status">
-          Loading Google sign-in?
+          Loading Google sign-in…
         </p>
       )}
       {state === 'submitting' && (
         <p className="google-auth__status" role="status">
-          Signing in securely?
+          Signing in securely…
         </p>
       )}
       {error !== null && (
