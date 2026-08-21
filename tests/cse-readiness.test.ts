@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { app } from '../src/worker'
 import { calculateCseReadiness, CSE_READINESS_WEIGHTS, type ReadinessCalculationInput, type ReadinessAssessmentEvidence, type ReadinessSkillEvidence } from '../src/worker/domain/cse-readiness'
+import { createVerifiedPasswordStudent } from '../src/worker/services/auth.service'
 import type { Bindings } from '../src/worker/types/bindings'
 
 const now = new Date('2026-08-10T00:00:00.000Z')
@@ -28,15 +29,14 @@ describe('CSE Readiness formula v1', () => {
 const allowAllRateLimiter = { limit: (): Promise<RateLimitOutcome> => Promise.resolve({ success: true }) }
 function bindings(): Bindings { return { DB: env.DB, ENVIRONMENT: 'production', REGISTRATION_MODE: 'open', LOGIN_IP_RATE_LIMITER: allowAllRateLimiter, LOGIN_ACCOUNT_RATE_LIMITER: allowAllRateLimiter, REGISTRATION_RATE_LIMITER: allowAllRateLimiter, ATTEMPT_RATE_LIMITER: allowAllRateLimiter, AUTOSAVE_RATE_LIMITER: allowAllRateLimiter, ADMIN_RATE_LIMITER: allowAllRateLimiter } }
 async function register(email: string) {
-  const response = await app.request('/api/auth/register', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email, password: 'SecurePassword123', firstName: 'Ready', lastName: 'Learner' }),
-  }, bindings())
-  const cookie = response.headers.get('set-cookie')?.split(';', 1)[0]
+  const registered = await createVerifiedPasswordStudent(env.DB, {
+    email, password: 'SecurePassword123', confirmPassword: 'SecurePassword123',
+    firstName: 'Ready', lastName: 'Learner',
+  }, { userAgent: 'Readiness test', ipAddress: '192.0.2.50' })
+  const cookie = `cse_session=${registered.sessionToken}`
   const user = await env.DB.prepare('SELECT id FROM users WHERE email=?1')
     .bind(email).first<{ id: number }>()
-  if (cookie === undefined || user === null) {
+  if (user === null) {
     throw new Error('Readiness test registration failed.')
   }
   await env.DB.prepare('DELETE FROM course_enrollments WHERE user_id=?1')

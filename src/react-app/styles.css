@@ -13013,7 +13013,6 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   color: var(--color-text-muted);
   font-size: var(--type-small);
   font-weight: 750;
-  text-transform: uppercase;
 }
 
 .auth-divider::before,
@@ -13021,6 +13020,65 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   height: 1px;
   background: var(--color-border);
   content: '';
+}
+
+.verification-card {
+  width: min(100%, 31rem);
+}
+
+.verification-card > p:not(.eyebrow, .form-error, .form-success) {
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.verification-card > .verification-email {
+  margin-block: calc(var(--space-8) * -1) var(--space-8);
+  color: var(--brand-navy);
+  overflow-wrap: anywhere;
+  font-weight: 750;
+}
+
+.verification-card form {
+  margin-top: var(--space-24);
+}
+
+.verification-card input[name='code'] {
+  min-height: 3.5rem;
+  text-align: center;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: 0.32em;
+}
+
+.form-success {
+  margin: 0;
+  padding: var(--space-12);
+  border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
+  border-radius: var(--radius-medium);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  font-size: var(--type-small);
+  line-height: 1.5;
+}
+
+.verification-resend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  margin-top: var(--space-20);
+}
+
+.verification-resend p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-small);
+}
+
+.verification-resend button {
+  width: auto;
+  min-height: 2.5rem;
 }
 
 .sign-in-methods {
@@ -13061,6 +13119,15 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
 }
 
 @media (max-width: 25rem) {
+  .verification-resend {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .verification-resend button {
+    width: 100%;
+  }
+
   .google-auth__button {
     margin-inline: auto;
   }

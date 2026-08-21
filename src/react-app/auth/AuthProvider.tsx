@@ -15,12 +15,17 @@ import {
   login as loginRequest,
   logout as logoutRequest,
   registerStudent,
+  resendRegistrationVerification as resendRegistrationVerificationRequest,
+  verifyRegistrationEmail as verifyRegistrationEmailRequest,
   type CseExamDates,
   type GoogleCredentialRequest,
   type LoginRequest,
+  type PendingRegistration,
   type RegistrationRequest,
   type RegistrationMode,
+  type ResendRegistrationVerificationRequest,
   type User,
+  type VerifyRegistrationEmailRequest,
 } from '../lib/api'
 import { AuthContext, type AuthContextValue } from './auth-context'
 import { subscribeToSessionReplaced } from './session-events'
@@ -115,13 +120,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   const register = useCallback(
-    async (input: RegistrationRequest): Promise<void> => {
-      const authenticatedUser = await registerStudent(input)
+    async (input: RegistrationRequest): Promise<PendingRegistration> => {
+      const verification = await registerStudent(input)
+      setError(null)
+      return verification
+    },
+    [],
+  )
+
+  const verifyRegistrationEmail = useCallback(
+    async (input: VerifyRegistrationEmailRequest): Promise<void> => {
+      const authenticatedUser = await verifyRegistrationEmailRequest(input)
       setUser(authenticatedUser)
       setError(null)
     },
     [],
   )
+
+  const resendRegistrationVerification = useCallback(
+    async (
+      input: ResendRegistrationVerificationRequest,
+    ): Promise<PendingRegistration> =>
+      resendRegistrationVerificationRequest(input),
+    [],
+  )
+
   const continueWithGoogle = useCallback(
     async (input: GoogleCredentialRequest): Promise<void> => {
       const authenticatedUser = await googleAuthenticationRequest(input)
@@ -156,6 +179,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       cseExamDates,
       login,
       register,
+      verifyRegistrationEmail,
+      resendRegistrationVerification,
       continueWithGoogle,
       connectGoogle,
       logout,
@@ -170,8 +195,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       login,
       logout,
       register,
+      resendRegistrationVerification,
       registrationMode,
       user,
+      verifyRegistrationEmail,
     ],
   )
 

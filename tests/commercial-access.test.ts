@@ -52,6 +52,10 @@ async function createUser(role: 'student' | 'admin') {
     firstName: 'Commercial',
     lastName: role,
     role,
+    emailVerification: {
+      verified: true,
+      method: 'legacy',
+    },
   }
   return { principal, email, password }
 }

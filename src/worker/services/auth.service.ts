@@ -2,6 +2,12 @@ import { hashPassword, verifyPassword } from '../auth/password'
 import { createSessionCredentials, hashSessionToken } from '../auth/session'
 import type { VerifiedGoogleIdentity } from '../auth/google'
 import {
+  createVerificationCode,
+  hashVerificationCode,
+  maskEmailAddress,
+  verificationCodeMatches,
+} from '../auth/verification-code'
+import {
   createUserWithSession,
   findUserByEmail,
   findUserByGoogleSubject,
@@ -11,6 +17,16 @@ import {
   revokeSessionsForUser,
   updatePasswordAndRevokeOtherSessions,
 } from '../repositories/auth.repository'
+import {
+  deleteExpiredPendingRegistrations,
+  findPendingRegistrationByEmail,
+  findPendingRegistrationByPublicId,
+  invalidatePendingVerificationCode,
+  recordFailedVerificationAttempt,
+  replacePendingVerificationCode,
+  savePendingRegistration,
+  type PendingRegistrationRecord,
+} from '../repositories/pending-registration.repository'
 import { findCourseIdBySlug } from '../repositories/course.repository'
 import {
   createLatestSession,
@@ -20,22 +36,37 @@ import type {
   ChangePasswordInput,
   LoginInput,
   RegistrationInput,
+  ResendRegistrationVerificationInput,
+  VerifyRegistrationEmailInput,
 } from '../schemas/auth.schemas'
 import type {
   AuthenticatedPrincipal,
+  EmailVerificationMethod,
   PublicUser,
   SessionMetadata,
   UserRecord,
 } from '../types/auth'
 import { AppError } from '../utils/app-error'
 import { recordLearnerActivity } from './commercial.service'
+import type { TransactionalEmailService } from './transactional-email.service'
 
 const CSE_PROFESSIONAL_SLUG = 'cse-professional'
+const VERIFICATION_CODE_DURATION_MS = 10 * 60 * 1000
+const RESEND_COOLDOWN_MS = 60 * 1000
+const PENDING_REGISTRATION_DURATION_MS = 24 * 60 * 60 * 1000
+const MAXIMUM_VERIFICATION_ATTEMPTS = 5
 
 export interface AuthenticatedSessionResult {
   user: PublicUser
   sessionToken: string
   expiresAt: Date
+}
+
+export interface PendingRegistrationResult {
+  registrationId: string
+  maskedEmail: string
+  codeExpiresAt: string
+  resendAvailableAt: string
 }
 
 interface CreateStudentAccountInput {
@@ -44,7 +75,13 @@ interface CreateStudentAccountInput {
   firstName: string
   lastName: string
   emailVerifiedAt: string | null
+  emailVerificationMethod: EmailVerificationMethod
   googleSubject: string | null
+  pendingRegistration?: {
+    id: number
+    codeHash: string
+    verifiedAt: string
+  }
 }
 
 export interface GoogleAuthenticationOptions {
@@ -59,6 +96,10 @@ function toPublicUser(user: UserRecord): PublicUser {
     firstName: user.firstName,
     lastName: user.lastName,
     role: user.role,
+    emailVerification: {
+      verified: user.emailVerifiedAt !== null,
+      method: user.emailVerificationMethod,
+    },
     signInMethods: {
       hasPassword: user.passwordHash !== null,
       googleConnected: user.hasGoogleIdentity,
@@ -75,6 +116,7 @@ export function getPublicUser(
     firstName: principal.firstName,
     lastName: principal.lastName,
     role: principal.role,
+    emailVerification: principal.emailVerification,
     signInMethods: principal.signInMethods,
   }
 }
@@ -139,7 +181,9 @@ async function createStudentAccount(
     firstName: input.firstName,
     lastName: input.lastName,
     emailVerifiedAt: input.emailVerifiedAt,
+    emailVerificationMethod: input.emailVerificationMethod,
     googleSubject: input.googleSubject,
+    pendingRegistration: input.pendingRegistration,
     tokenHash: session.tokenHash,
     expiresAt: session.expiresAt.toISOString(),
     metadata,
@@ -147,6 +191,13 @@ async function createStudentAccount(
   })
 
   if (user === null) {
+    if (input.pendingRegistration !== undefined) {
+      throw new AppError(
+        409,
+        'VERIFICATION_CODE_CHANGED',
+        'This verification code is no longer current. Enter the latest code.',
+      )
+    }
     throw new Error('The registered user could not be loaded.')
   }
 
@@ -180,7 +231,275 @@ async function startLatestUserSession(
   }
 }
 
-export async function registerStudent(
+function pendingRegistrationResult(
+  pending: PendingRegistrationRecord,
+): PendingRegistrationResult {
+  return {
+    registrationId: pending.publicId,
+    maskedEmail: maskEmailAddress(pending.email),
+    codeExpiresAt: pending.codeExpiresAt,
+    resendAvailableAt: pending.resendAvailableAt,
+  }
+}
+
+function verificationUnavailableError(): AppError {
+  return new AppError(
+    503,
+    'EMAIL_VERIFICATION_UNAVAILABLE',
+    'Email verification is temporarily unavailable. Please try again later.',
+  )
+}
+
+function verificationNotFoundError(): AppError {
+  return new AppError(
+    404,
+    'VERIFICATION_NOT_FOUND',
+    'This verification request is no longer available. Start registration again.',
+  )
+}
+
+function ensurePendingRegistrationIsActive(
+  pending: PendingRegistrationRecord,
+  now: Date,
+): void {
+  if (Date.parse(pending.pendingExpiresAt) <= now.getTime()) {
+    throw verificationNotFoundError()
+  }
+}
+
+async function sendVerificationCode(
+  database: D1Database,
+  emailService: TransactionalEmailService,
+  pending: PendingRegistrationRecord,
+  code: string,
+  now: Date,
+): Promise<void> {
+  try {
+    await emailService.sendRegistrationVerificationCode({
+      to: pending.email,
+      firstName: pending.firstName,
+      code,
+      expiresInMinutes: VERIFICATION_CODE_DURATION_MS / 60_000,
+    })
+  } catch (error: unknown) {
+    await invalidatePendingVerificationCode(
+      database,
+      pending.id,
+      pending.codeHash,
+      now.toISOString(),
+    )
+    console.error(JSON.stringify({
+      message: 'Transactional verification email failed',
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+    }))
+    throw verificationUnavailableError()
+  }
+}
+
+export async function beginPasswordRegistration(
+  database: D1Database,
+  input: RegistrationInput,
+  emailService: TransactionalEmailService,
+  verificationSecret: string,
+  now = new Date(),
+): Promise<PendingRegistrationResult> {
+  await deleteExpiredPendingRegistrations(database, now.toISOString())
+  if (await findUserByEmail(database, input.email) !== null) {
+    throw new AppError(
+      409,
+      'EMAIL_ALREADY_REGISTERED',
+      'An account with this email already exists.',
+    )
+  }
+
+  const registrationId = crypto.randomUUID()
+  const code = createVerificationCode()
+  const [passwordHash, codeHash] = await Promise.all([
+    hashPassword(input.password),
+    hashVerificationCode(verificationSecret, registrationId, code),
+  ])
+  const sentAt = now.toISOString()
+  const pending = await savePendingRegistration(database, {
+    publicId: registrationId,
+    email: input.email,
+    passwordHash,
+    firstName: input.firstName,
+    lastName: input.lastName,
+    codeHash,
+    codeExpiresAt: new Date(
+      now.getTime() + VERIFICATION_CODE_DURATION_MS,
+    ).toISOString(),
+    resendAvailableAt: new Date(
+      now.getTime() + RESEND_COOLDOWN_MS,
+    ).toISOString(),
+    pendingExpiresAt: new Date(
+      now.getTime() + PENDING_REGISTRATION_DURATION_MS,
+    ).toISOString(),
+    sentAt,
+  })
+
+  await sendVerificationCode(database, emailService, pending, code, now)
+  return pendingRegistrationResult(pending)
+}
+
+export async function resendPasswordRegistrationVerification(
+  database: D1Database,
+  input: ResendRegistrationVerificationInput,
+  emailService: TransactionalEmailService,
+  verificationSecret: string,
+  now = new Date(),
+): Promise<PendingRegistrationResult> {
+  await deleteExpiredPendingRegistrations(database, now.toISOString())
+  const pending = await findPendingRegistrationByPublicId(
+    database,
+    input.registrationId,
+  )
+  if (pending === null) throw verificationNotFoundError()
+  ensurePendingRegistrationIsActive(pending, now)
+
+  if (Date.parse(pending.resendAvailableAt) > now.getTime()) {
+    throw new AppError(
+      429,
+      'VERIFICATION_RESEND_TOO_SOON',
+      'Please wait before requesting another verification code.',
+    )
+  }
+
+  const code = createVerificationCode()
+  const codeHash = await hashVerificationCode(
+    verificationSecret,
+    pending.publicId,
+    code,
+  )
+  const sentAt = now.toISOString()
+  const codeExpiresAt = new Date(
+    now.getTime() + VERIFICATION_CODE_DURATION_MS,
+  ).toISOString()
+  const resendAvailableAt = new Date(
+    now.getTime() + RESEND_COOLDOWN_MS,
+  ).toISOString()
+  const pendingExpiresAt = pending.pendingExpiresAt
+
+  await replacePendingVerificationCode(database, {
+    pendingId: pending.id,
+    codeHash,
+    codeExpiresAt,
+    resendAvailableAt,
+    pendingExpiresAt,
+    sentAt,
+  })
+  const updated = {
+    ...pending,
+    codeHash,
+    codeExpiresAt,
+    attemptCount: 0,
+    resendAvailableAt,
+    pendingExpiresAt,
+    lastSentAt: sentAt,
+  }
+  await sendVerificationCode(database, emailService, updated, code, now)
+  return pendingRegistrationResult(updated)
+}
+
+export async function verifyPasswordRegistration(
+  database: D1Database,
+  input: VerifyRegistrationEmailInput,
+  metadata: SessionMetadata,
+  verificationSecret: string,
+  now = new Date(),
+): Promise<AuthenticatedSessionResult> {
+  await deleteExpiredPendingRegistrations(database, now.toISOString())
+  const pending = await findPendingRegistrationByPublicId(
+    database,
+    input.registrationId,
+  )
+  if (pending === null) throw verificationNotFoundError()
+  ensurePendingRegistrationIsActive(pending, now)
+
+  if (pending.attemptCount >= MAXIMUM_VERIFICATION_ATTEMPTS) {
+    throw new AppError(
+      429,
+      'VERIFICATION_ATTEMPTS_EXCEEDED',
+      'Too many incorrect codes. Request a new verification code.',
+    )
+  }
+  if (Date.parse(pending.codeExpiresAt) <= now.getTime()) {
+    throw new AppError(
+      400,
+      'VERIFICATION_CODE_EXPIRED',
+      'This verification code has expired. Request a new code.',
+    )
+  }
+
+  const candidateHash = await hashVerificationCode(
+    verificationSecret,
+    pending.publicId,
+    input.code,
+  )
+  if (!verificationCodeMatches(candidateHash, pending.codeHash)) {
+    const attempts = await recordFailedVerificationAttempt(
+      database,
+      pending.id,
+      pending.codeHash,
+      now.toISOString(),
+    )
+    if (attempts === null) {
+      throw new AppError(
+        409,
+        'VERIFICATION_CODE_CHANGED',
+        'This verification code is no longer current. Enter the latest code.',
+      )
+    }
+    if (attempts >= MAXIMUM_VERIFICATION_ATTEMPTS) {
+      throw new AppError(
+        429,
+        'VERIFICATION_ATTEMPTS_EXCEEDED',
+        'Too many incorrect codes. Request a new verification code.',
+      )
+    }
+    throw new AppError(
+      400,
+      'VERIFICATION_CODE_INVALID',
+      'The code is incorrect. Check the six digits and try again.',
+    )
+  }
+
+  if (await findUserByEmail(database, pending.email) !== null) {
+    throw new AppError(
+      409,
+      'EMAIL_ALREADY_REGISTERED',
+      'An account with this email already exists. Sign in instead.',
+    )
+  }
+
+  try {
+    return await createStudentAccount(database, {
+      email: pending.email,
+      passwordHash: pending.passwordHash,
+      firstName: pending.firstName,
+      lastName: pending.lastName,
+      emailVerifiedAt: now.toISOString(),
+      emailVerificationMethod: 'email_otp',
+      googleSubject: null,
+      pendingRegistration: {
+        id: pending.id,
+        codeHash: pending.codeHash,
+        verifiedAt: now.toISOString(),
+      },
+    }, metadata)
+  } catch (error: unknown) {
+    if (await findUserByEmail(database, pending.email) !== null) {
+      throw new AppError(
+        409,
+        'EMAIL_ALREADY_REGISTERED',
+        'An account with this email already exists. Sign in instead.',
+      )
+    }
+    throw error
+  }
+}
+
+export async function createVerifiedPasswordStudent(
   database: D1Database,
   input: RegistrationInput,
   metadata: SessionMetadata,
@@ -202,7 +521,8 @@ export async function registerStudent(
       passwordHash,
       firstName: input.firstName,
       lastName: input.lastName,
-      emailVerifiedAt: null,
+      emailVerifiedAt: new Date().toISOString(),
+      emailVerificationMethod: 'email_otp',
       googleSubject: null,
     }, metadata)
   } catch (error: unknown) {
@@ -225,7 +545,29 @@ export async function loginUser(
 ): Promise<AuthenticatedSessionResult> {
   const user = await findUserByEmail(database, input.email)
 
-  if (user === null || user.passwordHash === null) {
+  if (user === null) {
+    const pending = await findPendingRegistrationByEmail(
+      database,
+      input.email,
+    )
+    if (
+      pending !== null &&
+      Date.parse(pending.pendingExpiresAt) > Date.now() &&
+      await verifyPassword(input.password, pending.passwordHash)
+    ) {
+      throw new AppError(
+        403,
+        'EMAIL_VERIFICATION_REQUIRED',
+        'Verify your email before signing in.',
+        { verification: pendingRegistrationResult(pending) },
+      )
+    }
+
+    await hashPassword(input.password)
+    throw invalidCredentialsError()
+  }
+
+  if (user.passwordHash === null) {
     await hashPassword(input.password)
     throw invalidCredentialsError()
   }
@@ -264,6 +606,7 @@ export async function authenticateWithGoogle(
       firstName: identity.firstName,
       lastName: identity.lastName,
       emailVerifiedAt: new Date().toISOString(),
+      emailVerificationMethod: 'google',
       googleSubject: identity.subject,
     }, metadata)
   } catch (error: unknown) {
@@ -300,7 +643,7 @@ export async function connectGoogleIdentity(
     throw new AppError(
       409,
       'GOOGLE_EMAIL_MISMATCH',
-      'Choose the Google account that uses the same email as your PasaWise account.',
+      `That Google account does not match ${maskEmailAddress(user.email)}.`,
     )
   }
 
@@ -382,6 +725,7 @@ export async function authenticateSession(
     firstName: principal.firstName,
     lastName: principal.lastName,
     role: principal.role,
+    emailVerification: principal.emailVerification,
     signInMethods: principal.signInMethods,
   }
   await recordLearnerActivity(database, authenticatedPrincipal, tokenHash)

@@ -9,6 +9,10 @@ const userSchema = z.object({
   firstName: z.string(),
   lastName: z.string(),
   role: z.enum(['student', 'admin']),
+  emailVerification: z.object({
+    verified: z.boolean(),
+    method: z.enum(['legacy', 'email_otp', 'google']).nullable(),
+  }).optional(),
   signInMethods: z.object({
     hasPassword: z.boolean(),
     googleConnected: z.boolean(),
@@ -35,6 +39,20 @@ const authenticationResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     user: userSchema,
+  }),
+})
+
+const pendingRegistrationSchema = z.object({
+  registrationId: z.string().uuid(),
+  maskedEmail: z.string().min(1),
+  codeExpiresAt: z.string(),
+  resendAvailableAt: z.string(),
+})
+
+const pendingRegistrationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    verification: pendingRegistrationSchema,
   }),
 })
 
@@ -663,6 +681,8 @@ const practiceAttemptResultResponseSchema = z.object({
 const validationFieldErrorsSchema = z
   .object({
     accessExpiresAt: z.array(z.string()).optional(),
+    fullName: z.array(z.string()).optional(),
+    code: z.array(z.string()).optional(),
     courseSlug: z.array(z.string()).optional(),
     firstName: z.array(z.string()).optional(),
     lastName: z.array(z.string()).optional(),
@@ -677,6 +697,7 @@ const validationFieldErrorsSchema = z
     questionId: z.array(z.string()).optional(),
     quizId: z.array(z.string()).optional(),
     practiceSetId: z.array(z.string()).optional(),
+    registrationId: z.array(z.string()).optional(),
     selectedChoiceId: z.array(z.string()).optional(),
   })
   .strict()
@@ -694,11 +715,17 @@ const apiErrorSchema = z.object({
           fieldErrors: validationFieldErrorsSchema,
         })
         .strict(),
+      z
+        .object({
+          verification: pendingRegistrationSchema,
+        })
+        .strict(),
     ]),
   }),
 })
 
 export type User = z.infer<typeof userSchema>
+export type PendingRegistration = z.infer<typeof pendingRegistrationSchema>
 export type HealthResponse = z.infer<typeof healthResponseSchema>
 export type PlatformConfigResponse = z.infer<typeof platformConfigResponseSchema>
 export type RegistrationMode = PlatformConfigResponse['data']['registrationMode']
@@ -760,8 +787,16 @@ export interface RegistrationRequest {
   email: string
   password: string
   confirmPassword: string
-  firstName: string
-  lastName: string
+  fullName: string
+}
+
+export interface VerifyRegistrationEmailRequest {
+  registrationId: string
+  code: string
+}
+
+export interface ResendRegistrationVerificationRequest {
+  registrationId: string
 }
 
 export interface ChangePasswordRequest {
@@ -784,6 +819,7 @@ export class ApiClientError extends Error {
   readonly status: number
   readonly requestId: string | null
   readonly fieldErrors: ValidationFieldErrors
+  readonly verification: PendingRegistration | null
 
   constructor(
     message: string,
@@ -791,6 +827,7 @@ export class ApiClientError extends Error {
     status: number,
     requestId: string | null,
     fieldErrors: ValidationFieldErrors = {},
+    verification: PendingRegistration | null = null,
   ) {
     super(message)
     this.name = 'ApiClientError'
@@ -798,6 +835,7 @@ export class ApiClientError extends Error {
     this.status = status
     this.requestId = requestId
     this.fieldErrors = fieldErrors
+    this.verification = verification
   }
 }
 
@@ -845,12 +883,22 @@ export async function request<T>(
     const errorResult = apiErrorSchema.safeParse(body)
 
     if (errorResult.success) {
+      const details = errorResult.data.error.details
+      const fieldErrors =
+        details !== null && 'fieldErrors' in details
+          ? details.fieldErrors
+          : {}
+      const verification =
+        details !== null && 'verification' in details
+          ? details.verification
+          : null
       const apiError = new ApiClientError(
         errorResult.data.error.message,
         errorResult.data.error.code,
         response.status,
         errorResult.data.error.requestId,
-        errorResult.data.error.details?.fieldErrors,
+        fieldErrors,
+        verification,
       )
       if (apiError.code === 'SESSION_REPLACED') notifySessionReplaced()
       throw apiError
@@ -904,17 +952,45 @@ export function fetchPlatformConfig(
 
 export async function registerStudent(
   input: RegistrationRequest,
-): Promise<User> {
+): Promise<PendingRegistration> {
   const response = await request(
     '/api/auth/register',
-    authenticationResponseSchema,
+    pendingRegistrationResponseSchema,
     {
       method: 'POST',
       body: JSON.stringify(input),
     },
   )
 
+  return response.data.verification
+}
+
+export async function verifyRegistrationEmail(
+  input: VerifyRegistrationEmailRequest,
+): Promise<User> {
+  const response = await request(
+    '/api/auth/register/verify-email',
+    authenticationResponseSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
   return response.data.user
+}
+
+export async function resendRegistrationVerification(
+  input: ResendRegistrationVerificationRequest,
+): Promise<PendingRegistration> {
+  const response = await request(
+    '/api/auth/register/resend-verification',
+    pendingRegistrationResponseSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+  return response.data.verification
 }
 
 export async function login(input: LoginRequest): Promise<User> {

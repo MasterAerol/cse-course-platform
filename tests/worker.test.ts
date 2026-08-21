@@ -139,6 +139,7 @@ import {
 import { recomputeSimpleInterestAnswer } from '../src/worker/generators/simple-interest/simple-interest-generators'
 import { parseLessonBlock } from '../src/worker/schemas/lesson-block.schemas'
 import type { Bindings } from '../src/worker/types/bindings'
+import { CapturingResendFetch, TEST_RESEND_API_KEY } from './helpers/resend'
 import type {
   GeneratedQuestion,
   GeneratorDifficulty,
@@ -623,6 +624,10 @@ interface PracticeResultBody {
 
 const validPassword = 'SecurePassword123'
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u
+const testResend = new CapturingResendFetch()
+const testVerificationSecret = 'test-only-email-verification-secret-2026'
+
+
 
 
 const cseProfessionalLessonSlugs = [
@@ -781,6 +786,11 @@ function createBindings(
     LOGIN_IP_RATE_LIMITER: allowAllRateLimiter,
     LOGIN_ACCOUNT_RATE_LIMITER: allowAllRateLimiter,
     REGISTRATION_RATE_LIMITER: allowAllRateLimiter,
+    RESEND_API_KEY: TEST_RESEND_API_KEY,
+    EMAIL_PROVIDER_FETCH: testResend.fetch,
+    EMAIL_VERIFICATION_SECRET: testVerificationSecret,
+    EMAIL_VERIFICATION_IP_RATE_LIMITER: allowAllRateLimiter,
+    EMAIL_VERIFICATION_ACCOUNT_RATE_LIMITER: allowAllRateLimiter,
     ATTEMPT_RATE_LIMITER: allowAllRateLimiter,
     AUTOSAVE_RATE_LIMITER: allowAllRateLimiter,
     ADMIN_RATE_LIMITER: allowAllRateLimiter,
@@ -852,7 +862,9 @@ async function register(
   email: string,
   environment: Bindings['ENVIRONMENT'] = 'production',
 ): Promise<{ response: Response; cookie: string }> {
-  const response = await app.request(
+  testResend.latestCode = null
+  const bindings = createBindings(environment)
+  const started = await app.request(
     '/api/auth/register',
     jsonRequest({
       email,
@@ -860,7 +872,21 @@ async function register(
       firstName: 'Ada',
       lastName: 'Lovelace',
     }),
-    createBindings(environment),
+    bindings,
+  )
+  const body = await started.json<{
+    data: { verification: { registrationId: string } }
+  }>()
+  if (testResend.latestCode === null) {
+    throw new Error('The verification email was not captured.')
+  }
+  const response = await app.request(
+    '/api/auth/register/verify-email',
+    jsonRequest({
+      registrationId: body.data.verification.registrationId,
+      code: testResend.latestCode,
+    }),
+    bindings,
   )
 
   const registeredUser = await env.DB.prepare(

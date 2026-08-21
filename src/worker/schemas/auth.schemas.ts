@@ -39,15 +39,39 @@ export function nameSchema(label: 'First name' | 'Last name') {
     .max(80, `${label} must be 80 characters or fewer.`)
 }
 
-export const registrationSchema = z
-  .object({
-    email: emailSchema,
-    password: registrationPasswordSchema,
-    confirmPassword: z.string().max(PASSWORD_MAX_LENGTH).optional(),
+const registrationCredentialsSchema = z.object({
+  email: emailSchema,
+  password: registrationPasswordSchema,
+  confirmPassword: z.string().max(PASSWORD_MAX_LENGTH).optional(),
+})
+
+const fullNameRegistrationSchema = registrationCredentialsSchema
+  .extend({
+    fullName: z
+      .string({ error: 'Full name is required.' })
+      .trim()
+      .min(1, 'Full name is required.')
+      .max(160, 'Full name must be 160 characters or fewer.'),
+  })
+  .strict()
+  .transform(({ fullName, ...input }) => {
+    const parts = fullName.split(/\s+/u)
+    return {
+      ...input,
+      firstName: parts.length === 1 ? (parts[0] ?? '') : parts.slice(0, -1).join(' '),
+      lastName: parts.length === 1 ? '' : (parts.at(-1) ?? ''),
+    }
+  })
+
+const legacyRegistrationSchema = registrationCredentialsSchema
+  .extend({
     firstName: nameSchema('First name'),
     lastName: nameSchema('Last name'),
   })
   .strict()
+
+export const registrationSchema = z
+  .union([fullNameRegistrationSchema, legacyRegistrationSchema])
   .superRefine((input, context) => {
     if (
       input.confirmPassword !== undefined &&
@@ -65,6 +89,25 @@ export const loginSchema = z
   .object({
     email: emailSchema,
     password: z.string().min(1).max(128),
+  })
+  .strict()
+
+const registrationIdSchema = z
+  .string({ error: 'A verification request is required.' })
+  .uuid('The verification request is invalid.')
+
+export const verifyRegistrationEmailSchema = z
+  .object({
+    registrationId: registrationIdSchema,
+    code: z
+      .string({ error: 'Enter the six-digit verification code.' })
+      .regex(/^\d{6}$/u, 'Enter the six-digit verification code.'),
+  })
+  .strict()
+
+export const resendRegistrationVerificationSchema = z
+  .object({
+    registrationId: registrationIdSchema,
   })
   .strict()
 
@@ -111,5 +154,11 @@ export const changePasswordSchema = z
 
 export type RegistrationInput = z.infer<typeof registrationSchema>
 export type LoginInput = z.infer<typeof loginSchema>
+export type VerifyRegistrationEmailInput = z.infer<
+  typeof verifyRegistrationEmailSchema
+>
+export type ResendRegistrationVerificationInput = z.infer<
+  typeof resendRegistrationVerificationSchema
+>
 export type GoogleCredentialInput = z.infer<typeof googleCredentialSchema>
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>

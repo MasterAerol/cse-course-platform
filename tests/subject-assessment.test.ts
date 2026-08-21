@@ -185,6 +185,10 @@ describe('subject assessment discovery and learner state', () => {
       firstName: 'Assessment',
       lastName: 'Admin',
       role: 'admin',
+      emailVerification: {
+        verified: true,
+        method: 'legacy',
+      },
     }, {
       title: 'Numerical Ability Subject Assessment',
       slug: 'numerical-ability-subject-assessment',
@@ -224,6 +228,10 @@ describe('subject assessment discovery and learner state', () => {
       id: 'assessment-admin', internalUserId: adminId,
       email: 'assessment-admin@example.test', firstName: 'Assessment',
       lastName: 'Admin', role: 'admin',
+      emailVerification: {
+        verified: true,
+        method: 'legacy',
+      },
     }, {
       title: 'Analytical Ability Subject Assessment',
       slug: 'analytical-ability-subject-assessment',

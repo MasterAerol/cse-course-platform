@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { app } from '../src/worker'
 import { createRecoveryAttemptWithSnapshots } from '../src/worker/repositories/smart-recovery-attempt.repository'
+import { createVerifiedPasswordStudent } from '../src/worker/services/auth.service'
 
 
 import type { Bindings } from '../src/worker/types/bindings'
@@ -27,28 +28,14 @@ function bindings(): Bindings {
   }
 }
 
-function cookieFrom(response: Response): string {
-  const value = response.headers.get('set-cookie')?.split(';', 1)[0]
-  if (value === undefined) throw new Error('Authentication cookie missing.')
-  return value
-}
 
 async function register(email: string): Promise<{ cookie: string; userId: number }> {
-  const response = await app.request(
-    '/api/auth/register',
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        password: 'SecurePassword123',
-        firstName: 'Smart',
-        lastName: 'Learner',
-      }),
-    },
-    bindings(),
-  )
-  expect(response.status).toBe(201)
+  const registered = await createVerifiedPasswordStudent(env.DB, {
+    email,
+    password: 'SecurePassword123',
+    confirmPassword: 'SecurePassword123',
+    firstName: 'Smart', lastName: 'Learner',
+  }, { userAgent: 'Smart Recovery test', ipAddress: '192.0.2.52' })
   const row = await env.DB.prepare('SELECT id FROM users WHERE email=?1')
     .bind(email)
     .first<{ id: number }>()
@@ -57,7 +44,7 @@ async function register(email: string): Promise<{ cookie: string; userId: number
     'DELETE FROM course_enrollments WHERE user_id=?1',
   )
     .bind(row.id).run()
-  return { cookie: cookieFrom(response), userId: row.id }
+  return { cookie: `cse_session=${registered.sessionToken}`, userId: row.id }
 }
 
 async function enroll(userId: number): Promise<void> {

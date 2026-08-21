@@ -34,9 +34,23 @@ export const APPROVED_GOOGLE_AUTH_INFRASTRUCTURE = Object.freeze({
   googleClientId: '247375246816-10qnqrcf5c2sarc6gvbpdbtdocbs5p1o.apps.googleusercontent.com',
 })
 
+export const APPROVED_AUTH_UX_INFRASTRUCTURE = Object.freeze({
+  migrationFile: 'migrations/0019_email_registration_verification.sql',
+  migrationName: '0019_email_registration_verification.sql',
+  migrationSha256: 'e5da55c91f4d7bc44991ece0c6948b9ea0db8f8e60af7308172aa4f8948d9df1',
+  databaseName: 'cse-course-platform',
+  wranglerFile: 'wrangler.jsonc',
+  requiredSecrets: ['EMAIL_VERIFICATION_SECRET', 'RESEND_API_KEY'],
+  rateLimits: [
+    { name: 'EMAIL_VERIFICATION_IP_RATE_LIMITER', namespace_id: '31007', simple: { limit: 10, period: 60 } },
+    { name: 'EMAIL_VERIFICATION_ACCOUNT_RATE_LIMITER', namespace_id: '31008', simple: { limit: 5, period: 60 } },
+  ],
+})
+
 const APPROVED_MIGRATIONS = [
   APPROVED_COMMERCIAL_INFRASTRUCTURE,
   APPROVED_GOOGLE_AUTH_INFRASTRUCTURE,
+  APPROVED_AUTH_UX_INFRASTRUCTURE,
 ]
 const booleanFlags = new Set(['help', 'dry-run', 'codex', 'skip-validation', 'skip-deploy', 'deploy-current'])
 const valueOptions = new Set(['message', 'confirm'])
@@ -122,6 +136,33 @@ export function validateApprovedWranglerCandidate({ files, baselineContent, curr
     if (stableJson(current) !== stableJson(expected)) throw new Error('Wrangler configuration contains changes beyond the approved PAYMENT_RECEIPTS R2 binding.')
     return { kind: 'commercial-r2', binding: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Binding, bucketName: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Bucket }
   }
+  if (
+    baseline?.vars?.GOOGLE_CLIENT_ID === APPROVED_GOOGLE_AUTH_INFRASTRUCTURE.googleClientId
+  ) {
+    if (baseline.vars.ENVIRONMENT !== 'production' || baseline.vars.REGISTRATION_MODE !== 'closed') {
+      throw new Error('Authentication UX approval requires the committed production registration gate to remain closed.')
+    }
+    if (current?.vars?.ENVIRONMENT !== 'production' || current?.vars?.REGISTRATION_MODE !== 'closed') {
+      throw new Error('Authentication UX approval requires REGISTRATION_MODE to remain closed.')
+    }
+    if (Object.hasOwn(baseline, 'secrets')) {
+      throw new Error('The committed Wrangler baseline already has required secrets; independent review is required.')
+    }
+    const expected = structuredClone(baseline)
+    expected.secrets = { required: [...APPROVED_AUTH_UX_INFRASTRUCTURE.requiredSecrets] }
+    expected.ratelimits = [
+      ...(Array.isArray(baseline.ratelimits) ? baseline.ratelimits : []),
+      ...structuredClone(APPROVED_AUTH_UX_INFRASTRUCTURE.rateLimits),
+    ]
+    if (stableJson(current) !== stableJson(expected)) throw new Error('Wrangler configuration contains changes beyond the approved Authentication UX secrets and rate-limit bindings.')
+    return {
+      kind: 'authentication-ux',
+      requiredSecrets: [...APPROVED_AUTH_UX_INFRASTRUCTURE.requiredSecrets],
+      rateLimits: structuredClone(APPROVED_AUTH_UX_INFRASTRUCTURE.rateLimits),
+      registrationMode: 'closed',
+    }
+  }
+
   if (baseline?.vars?.ENVIRONMENT !== 'production' || baseline?.vars?.REGISTRATION_MODE !== 'closed') {
     throw new Error('Google authentication approval requires the committed production registration gate to remain closed.')
   }
@@ -138,9 +179,17 @@ export function validateApprovedWranglerCandidate({ files, baselineContent, curr
   }
 }
 
-export function validateApprovedWranglerRelease({ files, baselineContent, currentContent, bucketState }) {
+export function validateApprovedWranglerRelease({ files, baselineContent, currentContent, bucketState, secretNames }) {
   const candidate = validateApprovedWranglerCandidate({ files, baselineContent, currentContent })
   if (candidate.kind === 'google-auth') return candidate
+  if (candidate.kind === 'authentication-ux') {
+    const configured = new Set(Array.isArray(secretNames) ? secretNames : [])
+    const missing = candidate.requiredSecrets.filter((name) => !configured.has(name))
+    if (missing.length > 0) {
+      throw new Error('Required Authentication UX Worker secrets are missing: ' + missing.join(', ') + '.')
+    }
+    return { ...candidate, secretsConfigured: true }
+  }
   if (bucketState?.exists !== true || bucketState.name !== candidate.bucketName) throw new Error('Approved R2 bucket ' + candidate.bucketName + ' is missing or mismatched.')
   if (bucketState.devUrlEnabled !== false) throw new Error('Approved R2 bucket ' + candidate.bucketName + ' must keep r2.dev public access disabled.')
   if (!Array.isArray(bucketState.customDomains) || bucketState.customDomains.length > 0) throw new Error('Approved R2 bucket ' + candidate.bucketName + ' must not have a public custom domain.')
@@ -152,6 +201,13 @@ export function parseAppliedMigrationNames(output) {
   try { payload = JSON.parse(output) } catch { throw new Error('Remote applied-migration query did not return valid JSON.') }
   if (!Array.isArray(payload) || payload.some((item) => item?.success !== true || !Array.isArray(item.results))) throw new Error('Remote applied-migration query was unsuccessful.')
   return payload.flatMap((item) => item.results).map((row) => row?.name).filter((name) => typeof name === 'string')
+}
+
+export function parseWorkerSecretNames(output) {
+  let payload
+  try { payload = JSON.parse(output) } catch { throw new Error('Worker secret list did not return valid JSON.') }
+  if (!Array.isArray(payload) || payload.some((item) => typeof item?.name !== 'string')) throw new Error('Worker secret list response was invalid.')
+  return [...new Set(payload.map((item) => item.name))]
 }
 
 export function parsePendingMigrations(output) {

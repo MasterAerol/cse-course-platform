@@ -23,7 +23,14 @@ function renderWithRegistrationMode(
     googleClientId: null,
     cseExamDates: [],
     login: vi.fn(() => Promise.resolve()),
-    register: vi.fn(() => Promise.resolve()),
+    register: vi.fn(() => Promise.resolve({
+      registrationId: '123e4567-e89b-12d3-a456-426614174099',
+      maskedEmail: 'le•••@example.test',
+      codeExpiresAt: '2026-08-21T00:10:00.000Z',
+      resendAvailableAt: '2026-08-21T00:01:00.000Z',
+    })),
+    verifyRegistrationEmail: vi.fn(() => Promise.resolve()),
+    resendRegistrationVerification: vi.fn(() => Promise.reject(new Error('not used'))),
     continueWithGoogle: vi.fn(() => Promise.resolve()),
     connectGoogle: vi.fn(() => Promise.resolve()),
     logout: vi.fn(() => Promise.resolve()),
@@ -37,14 +44,15 @@ function renderWithRegistrationMode(
 }
 
 describe('private-beta registration UI', () => {
-  it('does not advertise self-registration when registration is closed', () => {
+  it('keeps the landing page closed while the login link leads to the fail-closed registration page', () => {
     const home = renderWithRegistrationMode('closed', <HomePage />)
     const login = renderWithRegistrationMode('closed', <LoginPage />)
 
     expect(home).not.toContain('Create account')
     expect(home).not.toContain('href="/register"')
     expect(login).not.toContain('Create an account')
-    expect(login).toContain('Private-beta access is provided by an administrator.')
+    expect(login).toContain('href="/register"')
+    expect(login).toContain('>Sign up</a>')
   })
 
   it('shows a private-beta message instead of a registration form when closed', () => {
@@ -54,7 +62,7 @@ describe('private-beta registration UI', () => {
     )
 
     expect(registration).toContain('Registration is currently closed')
-    expect(registration).toContain('approved private-beta learners')
+    expect(registration).toContain('PasaWise is not accepting new learner accounts right now.')
     expect(registration).not.toContain('<form')
   })
 

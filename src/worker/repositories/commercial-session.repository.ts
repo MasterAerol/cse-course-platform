@@ -1,5 +1,6 @@
 import type {
   AuthenticatedPrincipal,
+  EmailVerificationMethod,
   SessionMetadata,
   UserRole,
   UserStatus,
@@ -14,6 +15,8 @@ interface SessionPrincipalRow {
   last_name: string
   role: UserRole
   status: UserStatus
+  email_verified_at: string | null
+  email_verification_method: EmailVerificationMethod | null
   has_google_identity: 0 | 1
   session_generation: number | null
   user_generation: number
@@ -107,6 +110,8 @@ export async function findSessionPrincipal(
         users.last_name,
         users.role,
         users.status,
+        users.email_verified_at,
+        users.email_verification_method,
         CASE WHEN EXISTS (
           SELECT 1 FROM user_identities
           WHERE user_identities.user_id = users.id
@@ -145,6 +150,10 @@ export async function findSessionPrincipal(
       lastName: row.last_name,
       role: row.role,
       status: row.status,
+      emailVerification: {
+        verified: row.email_verified_at !== null,
+        method: row.email_verification_method,
+      },
       signInMethods: {
         hasPassword: row.password_hash !== null,
         googleConnected: row.has_google_identity === 1,

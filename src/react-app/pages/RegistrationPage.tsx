@@ -36,8 +36,7 @@ function FieldErrorList({ errors, id }: FieldErrorListProps) {
 export function RegistrationPage() {
   const { continueWithGoogle, googleClientId, register, registrationMode } = useAuth()
   const navigate = useNavigate()
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -71,8 +70,15 @@ export function RegistrationPage() {
     setFormError(null)
 
     try {
-      await register({ firstName, lastName, email, password, confirmPassword })
-      await navigate('/dashboard', { replace: true })
+      const verification = await register({
+        fullName,
+        email,
+        password,
+        confirmPassword,
+      })
+      await navigate(`/verify-email?registration=${verification.registrationId}`, {
+        state: { verification },
+      })
     } catch (registrationError: unknown) {
       if (
         registrationError instanceof ApiClientError &&
@@ -110,15 +116,10 @@ export function RegistrationPage() {
       <main className="auth-page">
         <section className="auth-card" aria-labelledby="registration-title">
           <PasaWiseBrand linked variant="primary" />
-          <p className="brand-tagline">Aral nang wais. Pasa nang handa.</p>
-          <p className="eyebrow">Private beta</p>
           <h1 id="registration-title">Registration is currently closed</h1>
-          <p>
-            Accounts are created for approved private-beta learners by an
-            administrator. If you already have an account, sign in below.
-          </p>
+          <p>PasaWise is not accepting new learner accounts right now.</p>
           <Link className="button-link" to="/login">
-            Sign in
+            Back to login
           </Link>
         </section>
       </main>
@@ -127,22 +128,10 @@ export function RegistrationPage() {
 
   return (
     <main className="auth-page">
-      <div className="auth-experience registration-experience">
-        <section className="auth-story" aria-labelledby="registration-story-title">
-          <PasaWiseBrand linked variant="primary" />
-          <p className="eyebrow">Aral nang wais. Pasa nang handa.</p>
-          <h1 id="registration-story-title">Start with a clear CSE study path.</h1>
-          <p>Your learner account includes the full CSE Professional curriculum, guided practice, Smart Recovery, and readiness evidence.</p>
-          <ul>
-            <li><span aria-hidden="true">✓</span> Fresh learner progress</li>
-            <li><span aria-hidden="true">✓</span> Normal curriculum prerequisites</li>
-            <li><span aria-hidden="true">✓</span> Secure personal account</li>
-          </ul>
-        </section>
-        <section className="auth-card" aria-labelledby="registration-title">
-        <p className="eyebrow">Student registration</p>
+      <section className="auth-card" aria-labelledby="registration-title">
+        <PasaWiseBrand linked variant="primary" />
         <h1 id="registration-title">Create your account</h1>
-        <p>Register as a learner and continue directly to your dashboard.</p>
+        <p>Start preparing smarter for the Civil Service Exam.</p>
         {googleClientId !== null && (
           <>
             <GoogleIdentityButton
@@ -150,7 +139,7 @@ export function RegistrationPage() {
               context="signup"
               onCredential={handleGoogleCredential}
             />
-            <div className="auth-divider" role="separator"><span>or</span></div>
+            <div className="auth-divider" role="separator"><span>or sign up with email</span></div>
           </>
         )}
 
@@ -158,58 +147,29 @@ export function RegistrationPage() {
           noValidate
           onSubmit={(event) => void handleSubmit(event)}
         >
-          <div className="field-grid">
-            <div>
-              <label htmlFor="first-name">First name</label>
-              <input
-                id="first-name"
-                name="firstName"
-                autoComplete="given-name"
-                maxLength={80}
-                required
-                aria-invalid={fieldErrors.firstName !== undefined}
-                aria-describedby={
-                  fieldErrors.firstName === undefined
-                    ? undefined
-                    : 'first-name-errors'
-                }
-                value={firstName}
-                onChange={(event) => {
-                  setFirstName(event.target.value)
-                  clearFieldError('firstName')
-                }}
-              />
-              <FieldErrorList
-                errors={fieldErrors.firstName}
-                id="first-name-errors"
-              />
-            </div>
-            <div>
-              <label htmlFor="last-name">Last name</label>
-              <input
-                id="last-name"
-                name="lastName"
-                autoComplete="family-name"
-                maxLength={80}
-                required
-                aria-invalid={fieldErrors.lastName !== undefined}
-                aria-describedby={
-                  fieldErrors.lastName === undefined
-                    ? undefined
-                    : 'last-name-errors'
-                }
-                value={lastName}
-                onChange={(event) => {
-                  setLastName(event.target.value)
-                  clearFieldError('lastName')
-                }}
-              />
-              <FieldErrorList
-                errors={fieldErrors.lastName}
-                id="last-name-errors"
-              />
-            </div>
-          </div>
+          <label htmlFor="full-name">Full name</label>
+          <input
+            id="full-name"
+            name="fullName"
+            autoComplete="name"
+            maxLength={160}
+            required
+            aria-invalid={fieldErrors.fullName !== undefined}
+            aria-describedby={
+              fieldErrors.fullName === undefined
+                ? undefined
+                : 'full-name-errors'
+            }
+            value={fullName}
+            onChange={(event) => {
+              setFullName(event.target.value)
+              clearFieldError('fullName')
+            }}
+          />
+          <FieldErrorList
+            errors={fieldErrors.fullName}
+            id="full-name-errors"
+          />
 
           <label htmlFor="registration-email">Email address</label>
           <input
@@ -330,15 +290,14 @@ export function RegistrationPage() {
           )}
 
           <button type="submit" disabled={submitting}>
-            {submitting ? 'Creating account…' : 'Create account'}
+            {submitting ? 'Sending verification code…' : 'Create account'}
           </button>
         </form>
 
         <p className="auth-switch">
           Already have an account? <Link to="/login">Log in</Link>
         </p>
-        </section>
-      </div>
+      </section>
     </main>
   )
 }

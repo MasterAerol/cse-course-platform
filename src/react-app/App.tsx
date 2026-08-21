@@ -17,6 +17,7 @@ import { AdminStudentsPage } from './pages/admin/AdminStudentsPage'
 import { CourseCatalogPage } from './pages/CourseCatalogPage'
 import { CourseDetailPage } from './pages/CourseDetailPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { EmailVerificationPage } from './pages/EmailVerificationPage'
 import { ExamCalendarPage } from './pages/ExamCalendarPage'
 import { HomePage } from './pages/HomePage'
 import { LessonPage } from './pages/LessonPage'
@@ -53,6 +54,7 @@ export function App() {
       <Route element={<PublicOnlyRoute />}>
         <Route path="login" element={<LoginPage />} />
         <Route path="register" element={<RegistrationPage />} />
+        <Route path="verify-email" element={<EmailVerificationPage />} />
       </Route>
 
       <Route element={<ProtectedRoute />}>

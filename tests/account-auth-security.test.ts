@@ -4,12 +4,17 @@ import { describe, expect, it } from 'vitest'
 import { verifyPassword } from '../src/worker/auth/password'
 import { app } from '../src/worker'
 import type { Bindings } from '../src/worker/types/bindings'
+import { CapturingResendFetch, TEST_RESEND_API_KEY } from './helpers/resend'
 
 const allowAllRateLimiter: RateLimit = {
   limit() {
     return Promise.resolve({ success: true })
   },
 }
+
+const testResend = new CapturingResendFetch()
+
+const testVerificationSecret = 'test-only-email-verification-secret-2026'
 
 const bindings: Bindings = {
   DB: env.DB,
@@ -18,6 +23,11 @@ const bindings: Bindings = {
   LOGIN_IP_RATE_LIMITER: allowAllRateLimiter,
   LOGIN_ACCOUNT_RATE_LIMITER: allowAllRateLimiter,
   REGISTRATION_RATE_LIMITER: allowAllRateLimiter,
+  RESEND_API_KEY: TEST_RESEND_API_KEY,
+  EMAIL_PROVIDER_FETCH: testResend.fetch,
+  EMAIL_VERIFICATION_SECRET: testVerificationSecret,
+  EMAIL_VERIFICATION_IP_RATE_LIMITER: allowAllRateLimiter,
+  EMAIL_VERIFICATION_ACCOUNT_RATE_LIMITER: allowAllRateLimiter,
   ATTEMPT_RATE_LIMITER: allowAllRateLimiter,
   AUTOSAVE_RATE_LIMITER: allowAllRateLimiter,
   ADMIN_RATE_LIMITER: allowAllRateLimiter,
@@ -46,7 +56,8 @@ async function register(
   email: string,
   password = 'OriginalPassword123',
 ): Promise<{ response: Response; cookie: string }> {
-  const response = await app.request(
+  testResend.latestCode = null
+  const started = await app.request(
     '/api/auth/register',
     jsonRequest({
       email,
@@ -54,6 +65,20 @@ async function register(
       confirmPassword: password,
       firstName: 'Fresh',
       lastName: 'Learner',
+    }),
+    bindings,
+  )
+  const body = await started.json<{
+    data: { verification: { registrationId: string } }
+  }>()
+  if (testResend.latestCode === null) {
+    throw new Error('Expected a verification code.')
+  }
+  const response = await app.request(
+    '/api/auth/register/verify-email',
+    jsonRequest({
+      registrationId: body.data.verification.registrationId,
+      code: testResend.latestCode,
     }),
     bindings,
   )

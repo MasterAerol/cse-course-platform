@@ -119,16 +119,24 @@ function renderWithAuth(
   child: ReactNode,
   user: User | null = student,
   registrationMode: AuthContextValue['registrationMode'] = 'open',
+  googleClientId: string | null = null,
 ): string {
   const value: AuthContextValue = {
     user,
     loading: false,
     error: null,
     registrationMode,
-    googleClientId: null,
+    googleClientId,
     cseExamDates: [],
     login: vi.fn(() => Promise.resolve()),
-    register: vi.fn(() => Promise.resolve()),
+    register: vi.fn(() => Promise.resolve({
+      registrationId: '123e4567-e89b-12d3-a456-426614174099',
+      maskedEmail: 'le•••@example.test',
+      codeExpiresAt: '2026-08-21T00:10:00.000Z',
+      resendAvailableAt: '2026-08-21T00:01:00.000Z',
+    })),
+    verifyRegistrationEmail: vi.fn(() => Promise.resolve()),
+    resendRegistrationVerification: vi.fn(() => Promise.reject(new Error('not used'))),
     continueWithGoogle: vi.fn(() => Promise.resolve()),
     connectGoogle: vi.fn(() => Promise.resolve()),
     logout: vi.fn(() => Promise.resolve()),
@@ -299,20 +307,22 @@ describe('global account navigation and registration UI', () => {
     expect(accountMenuSource).toContain('aria-label="Account navigation"')
   })
 
-  it('shows registration confirmation and the secondary Login signup action only when open', () => {
-    const registration = renderWithAuth(<RegistrationPage />, null, 'open')
-    const openLogin = renderWithAuth(<LoginPage />, null, 'open')
-    const closedLogin = renderWithAuth(<LoginPage />, null, 'closed')
+  it('shows the future-ready registration form and sends the Login signup action through its gate', () => {
+    const registration = renderWithAuth(<RegistrationPage />, null, 'open', 'google-client-id')
+    const openLogin = renderWithAuth(<LoginPage />, null, 'open', 'google-client-id')
+    const closedLogin = renderWithAuth(<LoginPage />, null, 'closed', 'google-client-id')
 
     expect(registration).toContain('Create your account')
     expect(registration).toContain('name="confirmPassword"')
     expect(registration).toContain('autoComplete="new-password"')
     expect(registration).toContain('Password requirements')
     expect(registration).toContain('Already have an account?')
+    expect(registration).toContain('Start preparing smarter for the Civil Service Exam.')
+    expect(registration).toContain('or sign up with email')
     expect(registration).toContain('href="/login"')
-    expect(openLogin).toContain('Create an account')
+    expect(openLogin).toContain('Sign up')
     expect(openLogin).toContain('href="/register"')
-    expect(closedLogin).not.toContain('href="/register"')
+    expect(closedLogin).toContain('href="/register"')
   })
 
   it('puts secure password change on Profile & Account without exposing identifiers', () => {

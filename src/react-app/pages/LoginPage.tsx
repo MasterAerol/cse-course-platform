@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../auth/use-auth'
 import { PasaWiseBrand } from '../components/PasaWiseBrand'
 import { GoogleIdentityButton } from '../components/GoogleIdentityButton'
+import { ApiClientError } from '../lib/api'
 
 interface LoginLocationState {
   from?: string
@@ -29,7 +30,7 @@ function getLocationState(location: Location): LoginLocationState {
 }
 
 export function LoginPage() {
-  const { continueWithGoogle, googleClientId, login, registrationMode } = useAuth()
+  const { continueWithGoogle, googleClientId, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const locationState = getLocationState(location)
@@ -50,6 +51,15 @@ export function LoginPage() {
       await login({ email, password })
       await navigate(locationState.from ?? '/dashboard', { replace: true })
     } catch (loginError: unknown) {
+      if (
+        loginError instanceof ApiClientError &&
+        loginError.code === 'EMAIL_VERIFICATION_REQUIRED' &&
+        loginError.verification !== null
+      ) {
+        const verification = loginError.verification
+        await navigate(`/verify-email?registration=${verification.registrationId}`, { state: { verification } })
+        return
+      }
       setError(
         loginError instanceof Error
           ? loginError.message
@@ -76,71 +86,55 @@ export function LoginPage() {
 
   return (
     <main className="auth-page">
-      <div className="auth-experience">
-        <section className="auth-story" aria-labelledby="auth-story-title">
-          <PasaWiseBrand linked variant="primary" />
-          <p className="eyebrow">Aral nang wais. Pasa nang handa.</p>
-          <h1 id="auth-story-title">Continue preparing with purpose.</h1>
-          <p>Return to your next lesson, targeted practice, recovery plan, and readiness evidence.</p>
-          <ul>
-            <li><span aria-hidden="true">✓</span> One clear next study action</li>
-            <li><span aria-hidden="true">✓</span> Smart Recovery for weak skills</li>
-            <li><span aria-hidden="true">✓</span> Realistic CSE assessments</li>
-          </ul>
-        </section>
-
-        <section className="auth-card" aria-labelledby="login-title">
-          <p className="eyebrow">Welcome back</p>
-          <h2 id="login-title">Sign in to PasaWise</h2>
-          <p>Use the email and password associated with your account.</p>
-          {googleClientId !== null && (
-            <>
-              <GoogleIdentityButton
-                clientId={googleClientId}
-                context="signin"
-                onCredential={handleGoogleCredential}
-              />
-              <div className="auth-divider" role="separator"><span>or</span></div>
-            </>
-          )}
-
-          <form onSubmit={(event) => void handleSubmit(event)} aria-busy={submitting}>
-            <label htmlFor="login-email">Email address</label>
-            <input
-              id="login-email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              inputMode="email"
-              maxLength={254}
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+      <section className="auth-card" aria-labelledby="login-title">
+        <PasaWiseBrand linked variant="primary" />
+        <h1 id="login-title">Welcome back</h1>
+        <p>Continue your CSE preparation.</p>
+        {googleClientId !== null && (
+          <>
+            <GoogleIdentityButton
+              clientId={googleClientId}
+              context="signin"
+              onCredential={handleGoogleCredential}
             />
+            <div className="auth-divider" role="separator"><span>or continue with email</span></div>
+          </>
+        )}
 
-            <label htmlFor="login-password">Password</label>
-            <div className="password-input-group">
-              <input id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" maxLength={128} required value={password} onChange={(event) => setPassword(event.target.value)} />
-              <button className="password-toggle" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword((current) => !current)}>
-                {showPassword ? 'Hide' : 'Show'}
-              </button>
-            </div>
+        <form onSubmit={(event) => void handleSubmit(event)} aria-busy={submitting}>
+          <label htmlFor="login-email">Email address</label>
+          <input
+            id="login-email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            maxLength={254}
+            required
+            aria-invalid={error !== null}
+            aria-describedby={error === null ? undefined : 'login-error'}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
 
-            {error !== null && <p className="form-error" role="alert">{error}</p>}
-
-            <button type="submit" disabled={submitting}>
-              {submitting ? 'Signing in…' : 'Sign in'}
+          <label htmlFor="login-password">Password</label>
+          <div className="password-input-group">
+            <input id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" maxLength={128} required aria-invalid={error !== null} aria-describedby={error === null ? undefined : 'login-error'} value={password} onChange={(event) => setPassword(event.target.value)} />
+            <button className="password-toggle" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword((current) => !current)}>
+              {showPassword ? 'Hide' : 'Show'}
             </button>
-          </form>
+          </div>
 
-          {registrationMode === 'open' ? (
-            <p className="auth-switch">Don&apos;t have an account? <Link to="/register">Create an account</Link></p>
-          ) : (
-            <p className="auth-switch">Private-beta access is provided by an administrator.</p>
-          )}
-          <Link className="auth-home-link" to="/">Return to PasaWise home</Link>
-        </section>
-      </div>
+          {error !== null && <p className="form-error" id="login-error" role="alert">{error}</p>}
+
+          <button type="submit" disabled={submitting}>
+            {submitting ? 'Logging in…' : 'Log in'}
+          </button>
+        </form>
+
+        <p className="auth-switch">Don&apos;t have an account? <Link to="/register">Sign up</Link></p>
+        <Link className="auth-home-link" to="/">Return to PasaWise home</Link>
+      </section>
     </main>
   )
 }

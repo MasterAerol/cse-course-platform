@@ -4,8 +4,10 @@ import { describe, expect, it, vi } from 'vitest'
 import staticHeaders from '../public/_headers?raw'
 import { app } from '../src/worker'
 import { validateLessonBlockContent } from '../src/worker/schemas/lesson-block.schemas'
+import { createVerifiedPasswordStudent } from '../src/worker/services/auth.service'
 import type { Bindings } from '../src/worker/types/bindings'
 import { MAXIMUM_JSON_BODY_BYTES } from '../src/worker/utils/validation'
+import { discardResendFetch, TEST_RESEND_API_KEY } from './helpers/resend'
 
 const allowAllRateLimiter: RateLimit = {
   limit() {
@@ -19,6 +21,9 @@ const denyAllRateLimiter: RateLimit = {
   },
 }
 
+const testVerificationSecret = 'test-only-email-verification-secret-2026'
+
+
 const bindings: Bindings = {
   DB: env.DB,
   ENVIRONMENT: 'production',
@@ -27,6 +32,11 @@ const bindings: Bindings = {
   LOGIN_ACCOUNT_RATE_LIMITER: allowAllRateLimiter,
   REGISTRATION_RATE_LIMITER: allowAllRateLimiter,
   ATTEMPT_RATE_LIMITER: allowAllRateLimiter,
+  RESEND_API_KEY: TEST_RESEND_API_KEY,
+  EMAIL_PROVIDER_FETCH: discardResendFetch,
+  EMAIL_VERIFICATION_SECRET: testVerificationSecret,
+  EMAIL_VERIFICATION_IP_RATE_LIMITER: allowAllRateLimiter,
+  EMAIL_VERIFICATION_ACCOUNT_RATE_LIMITER: allowAllRateLimiter,
   AUTOSAVE_RATE_LIMITER: allowAllRateLimiter,
   ADMIN_RATE_LIMITER: allowAllRateLimiter,
 }
@@ -166,8 +176,8 @@ describe('production security hardening', () => {
       bindings,
     )
 
-    for (const response of sameOriginResponses) expect(response.status).toBe(201)
-    expect(publisher.status).toBe(201)
+    for (const response of sameOriginResponses) expect(response.status).toBe(202)
+    expect(publisher.status).toBe(202)
   })
 
   it('closes production registration by default and for invalid configuration', async () => {
@@ -192,7 +202,8 @@ describe('production security hardening', () => {
       registrationRequest(),
       withBindings({ REGISTRATION_MODE: 'open' }),
     )
-    expect(openResponse.status).toBe(201)
+    expect(openResponse.status).toBe(202)
+    expect(openResponse.headers.get('set-cookie')).toBeNull()
 
     const roleResponse = await app.request(
       '/api/auth/register',
@@ -218,20 +229,16 @@ describe('production security hardening', () => {
 
   it('keeps login available when registration is closed', async () => {
     const email = `closed-login-${crypto.randomUUID()}@example.test`
-    const registered = await app.request(
-      '/api/auth/register',
-      {
-        ...registrationRequest(),
-        body: JSON.stringify({
-          email,
-          password: 'ValidPassword123',
-          firstName: 'Existing',
-          lastName: 'Learner',
-        }),
-      },
-      bindings,
-    )
-    expect(registered.status).toBe(201)
+    await createVerifiedPasswordStudent(env.DB, {
+      email,
+      password: 'ValidPassword123',
+      confirmPassword: 'ValidPassword123',
+      firstName: 'Existing',
+      lastName: 'Learner',
+    }, {
+      userAgent: 'Security test',
+      ipAddress: '192.0.2.40',
+    })
 
     const loginResponse = await app.request(
       '/api/auth/login',
@@ -276,13 +283,17 @@ describe('production security hardening', () => {
   })
 
   it('rate limits authenticated attempt mutations before service execution', async () => {
-    const registered = await app.request(
-      '/api/auth/register',
-      registrationRequest(),
-      bindings,
-    )
-    const cookie = registered.headers.get('set-cookie')?.split(';')[0]
-    expect(cookie).toBeDefined()
+    const registered = await createVerifiedPasswordStudent(env.DB, {
+      email: `attempt-${crypto.randomUUID()}@example.test`,
+      password: 'ValidPassword123',
+      confirmPassword: 'ValidPassword123',
+      firstName: 'Attempt',
+      lastName: 'Learner',
+    }, {
+      userAgent: 'Security test',
+      ipAddress: '192.0.2.41',
+    })
+    const cookie = `cse_session=${registered.sessionToken}`
 
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const response = await app.request(
@@ -322,15 +333,27 @@ describe('production security hardening', () => {
       'https://pasawise.com',
       'https://cse-course-platform.master-course.workers.dev',
     ]) {
-      const registered = await app.request(
-        `${origin}/api/auth/register`,
-        registrationRequest({
+      const email = `cookie-${crypto.randomUUID()}@example.test`
+      await createVerifiedPasswordStudent(env.DB, {
+        email,
+        password: 'ValidPassword123',
+        confirmPassword: 'ValidPassword123',
+        firstName: 'Cookie',
+        lastName: 'Learner',
+      }, {
+        userAgent: 'Security test',
+        ipAddress: '192.0.2.42',
+      })
+      const loggedIn = await app.request(`${origin}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
           origin,
           'sec-fetch-site': 'same-origin',
-        }),
-        bindings,
-      )
-      const setCookie = registered.headers.get('set-cookie')
+        },
+        body: JSON.stringify({ email, password: 'ValidPassword123' }),
+      }, bindings)
+      const setCookie = loggedIn.headers.get('set-cookie')
       const cookie = setCookie?.split(';')[0]
       expect(cookie).toBeDefined()
       expect(setCookie).toContain('HttpOnly')

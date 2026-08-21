@@ -3,6 +3,7 @@ import { getCookie } from 'hono/cookie'
 
 import { clearAuthenticationCookie, AUTH_COOKIE_NAME, setAuthenticationCookie } from '../auth/cookie'
 import { verifyGoogleIdToken } from '../auth/google'
+import { requireEmailVerificationSecret } from '../config/email-verification'
 import { getGoogleClientId } from '../config/google'
 import { getRegistrationMode } from '../config/registration'
 import { requireAuthentication } from '../middleware/auth.middleware'
@@ -16,17 +17,22 @@ import {
   googleCredentialSchema,
   loginSchema,
   registrationSchema,
+  resendRegistrationVerificationSchema,
+  verifyRegistrationEmailSchema,
 } from '../schemas/auth.schemas'
 import {
   authenticateWithGoogle,
+  beginPasswordRegistration,
   changePassword,
   connectGoogleIdentity,
   getPublicUser,
   loginUser,
   logoutSession,
-  registerStudent,
+  resendPasswordRegistrationVerification,
+  verifyPasswordRegistration,
 } from '../services/auth.service'
 import { isEffectivePublicSignupEnabled } from '../services/commercial.service'
+import { createTransactionalEmailService } from '../services/transactional-email.service'
 import type { AppEnv } from '../types/app'
 import type { SessionMetadata } from '../types/auth'
 import { AppError } from '../utils/app-error'
@@ -64,36 +70,124 @@ function requireGoogleClientId(context: { env: AppEnv['Bindings'] }): string {
   return clientId
 }
 
-authRoutes.post('/register', async (context) => {
-  const registrationEnabled = await isEffectivePublicSignupEnabled(
-    context.env.DB,
-    getRegistrationMode(context.env),
+async function requirePublicRegistration(
+  bindings: AppEnv['Bindings'],
+): Promise<void> {
+  const enabled = await isEffectivePublicSignupEnabled(
+    bindings.DB,
+    getRegistrationMode(bindings),
   )
-
-  if (!registrationEnabled) {
+  if (!enabled) {
     throw new AppError(
       403,
       'REGISTRATION_CLOSED',
       'Registration is currently limited to approved private-beta learners.',
     )
   }
+}
 
+authRoutes.post('/register', async (context) => {
+  await requirePublicRegistration(context.env)
   await enforceRateLimit(
     context,
     'REGISTRATION_RATE_LIMITER',
     `registration:${getClientAddress(context)}`,
-    'registration',
+    'registration-ip',
   )
 
   const input = await parseJsonBody(context, registrationSchema)
-  const result = await registerStudent(
+  const accountKey = await hashRateLimitKey(
+    'registration-email',
+    input.email,
+  )
+  await enforceRateLimit(
+    context,
+    'REGISTRATION_RATE_LIMITER',
+    accountKey,
+    'registration-email',
+  )
+
+  const verification = await beginPasswordRegistration(
+    context.env.DB,
+    input,
+    createTransactionalEmailService(
+      context.env.RESEND_API_KEY,
+      context.env.EMAIL_PROVIDER_FETCH,
+    ),
+    requireEmailVerificationSecret(context.env),
+  )
+
+  return successResponse(context, { verification }, 202)
+})
+
+authRoutes.post('/register/verify-email', async (context) => {
+  await requirePublicRegistration(context.env)
+  await enforceRateLimit(
+    context,
+    'EMAIL_VERIFICATION_IP_RATE_LIMITER',
+    `email-verification:${getClientAddress(context)}`,
+    'email-verification-ip',
+  )
+
+  const input = await parseJsonBody(
+    context,
+    verifyRegistrationEmailSchema,
+  )
+  const accountKey = await hashRateLimitKey(
+    'email-verification-account',
+    input.registrationId,
+  )
+  await enforceRateLimit(
+    context,
+    'EMAIL_VERIFICATION_ACCOUNT_RATE_LIMITER',
+    accountKey,
+    'email-verification-account',
+  )
+
+  const result = await verifyPasswordRegistration(
     context.env.DB,
     input,
     getSessionMetadata(context),
+    requireEmailVerificationSecret(context.env),
   )
-
   setAuthenticationCookie(context, result.sessionToken, result.expiresAt)
   return successResponse(context, { user: result.user }, 201)
+})
+
+authRoutes.post('/register/resend-verification', async (context) => {
+  await requirePublicRegistration(context.env)
+  await enforceRateLimit(
+    context,
+    'EMAIL_VERIFICATION_IP_RATE_LIMITER',
+    `email-verification-resend:${getClientAddress(context)}`,
+    'email-verification-resend-ip',
+  )
+
+  const input = await parseJsonBody(
+    context,
+    resendRegistrationVerificationSchema,
+  )
+  const accountKey = await hashRateLimitKey(
+    'email-verification-resend-account',
+    input.registrationId,
+  )
+  await enforceRateLimit(
+    context,
+    'EMAIL_VERIFICATION_ACCOUNT_RATE_LIMITER',
+    accountKey,
+    'email-verification-resend-account',
+  )
+
+  const verification = await resendPasswordRegistrationVerification(
+    context.env.DB,
+    input,
+    createTransactionalEmailService(
+      context.env.RESEND_API_KEY,
+      context.env.EMAIL_PROVIDER_FETCH,
+    ),
+    requireEmailVerificationSecret(context.env),
+  )
+  return successResponse(context, { verification })
 })
 
 authRoutes.post('/login', async (context) => {

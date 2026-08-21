@@ -7,6 +7,7 @@ import {
   type MistakeNotebookRow,
   type MistakeNotebookSourceType,
 } from '../src/worker/domain/mistake-notebook'
+import { createVerifiedPasswordStudent } from '../src/worker/services/auth.service'
 import type { Bindings } from '../src/worker/types/bindings'
 
 const allowAllRateLimiter = { limit: (): Promise<RateLimitOutcome> => Promise.resolve({ success: true }) }
@@ -21,22 +22,16 @@ function bindings(): Bindings {
     ADMIN_RATE_LIMITER: allowAllRateLimiter,
   }
 }
-function cookieFrom(response: Response): string {
-  const cookie = response.headers.get('set-cookie')?.split(';', 1)[0]
-  if (cookie === undefined) throw new Error('Authentication cookie missing.')
-  return cookie
-}
 async function register(email: string) {
-  const response = await app.request('/api/auth/register', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email, password: 'SecurePassword123', firstName: 'Notebook', lastName: 'Learner' }),
-  }, bindings())
-  expect(response.status).toBe(201)
+  const registered = await createVerifiedPasswordStudent(env.DB, {
+    email, password: 'SecurePassword123', confirmPassword: 'SecurePassword123',
+    firstName: 'Notebook', lastName: 'Learner',
+  }, { userAgent: 'Notebook test', ipAddress: '192.0.2.51' })
   const user = await env.DB.prepare('SELECT id FROM users WHERE email=?1').bind(email).first<{ id: number }>()
   if (user === null) throw new Error('Registered user missing.')
   await env.DB.prepare('DELETE FROM course_enrollments WHERE user_id=?1')
     .bind(user.id).run()
-  return { cookie: cookieFrom(response), userId: user.id }
+  return { cookie: `cse_session=${registered.sessionToken}`, userId: user.id }
 }
 async function enroll(userId: number) {
   await env.DB.prepare(`INSERT INTO course_enrollments(

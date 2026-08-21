@@ -1,5 +1,6 @@
 import type {
   AuthenticatedPrincipal,
+  EmailVerificationMethod,
   SessionMetadata,
   UserRecord,
   UserRole,
@@ -16,6 +17,8 @@ interface UserRow {
   role: UserRole
   status: UserStatus
   has_google_identity: 0 | 1
+  email_verified_at: string | null
+  email_verification_method: EmailVerificationMethod | null
 }
 
 interface SessionPrincipalRow {
@@ -28,6 +31,8 @@ interface SessionPrincipalRow {
   role: UserRole
   status: UserStatus
   has_google_identity: 0 | 1
+  email_verified_at: string | null
+  email_verification_method: EmailVerificationMethod | null
 }
 
 export interface CreateUserWithSessionInput {
@@ -37,7 +42,13 @@ export interface CreateUserWithSessionInput {
   firstName: string
   lastName: string
   emailVerifiedAt: string | null
+  emailVerificationMethod: EmailVerificationMethod
   googleSubject: string | null
+  pendingRegistration?: {
+    id: number
+    codeHash: string
+    verifiedAt: string
+  }
   tokenHash: string
   expiresAt: string
   metadata: SessionMetadata
@@ -62,6 +73,8 @@ function mapUser(row: UserRow): UserRecord {
     lastName: row.last_name,
     role: row.role,
     status: row.status,
+    emailVerifiedAt: row.email_verified_at,
+    emailVerificationMethod: row.email_verification_method,
   }
 }
 
@@ -74,6 +87,8 @@ const userSelect = `SELECT
   users.last_name,
   users.role,
   users.status,
+  users.email_verified_at,
+  users.email_verification_method,
   CASE WHEN EXISTS (
     SELECT 1
     FROM user_identities
@@ -131,27 +146,63 @@ export async function createUserWithSession(
   database: D1Database,
   input: CreateUserWithSessionInput,
 ): Promise<UserRecord | null> {
-  const createUser = database
-    .prepare(
-      `INSERT INTO users (
-        public_id,
-        email,
-        password_hash,
-        first_name,
-        last_name,
-        role,
-        status,
-        email_verified_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, 'student', 'active', ?6)`,
-    )
-    .bind(
-      input.publicId,
-      input.email,
-      input.passwordHash,
-      input.firstName,
-      input.lastName,
-      input.emailVerifiedAt,
-    )
+  const createUser = input.pendingRegistration === undefined
+    ? database
+        .prepare(
+          `INSERT INTO users (
+            public_id,
+            email,
+            password_hash,
+            first_name,
+            last_name,
+            role,
+            status,
+            email_verified_at,
+            email_verification_method
+          ) VALUES (?1, ?2, ?3, ?4, ?5, 'student', 'active', ?6, ?7)`,
+        )
+        .bind(
+          input.publicId,
+          input.email,
+          input.passwordHash,
+          input.firstName,
+          input.lastName,
+          input.emailVerifiedAt,
+          input.emailVerificationMethod,
+        )
+    : database
+        .prepare(
+          `INSERT INTO users (
+            public_id,
+            email,
+            password_hash,
+            first_name,
+            last_name,
+            role,
+            status,
+            email_verified_at,
+            email_verification_method
+          )
+          SELECT ?1, ?2, ?3, ?4, ?5, 'student', 'active', ?6, ?7
+          FROM pending_registrations
+          WHERE id = ?8
+            AND code_hash = ?9
+            AND attempt_count < 5
+            AND datetime(code_expires_at) > datetime(?10)
+            AND datetime(pending_expires_at) > datetime(?10)`,
+        )
+        .bind(
+          input.publicId,
+          input.email,
+          input.passwordHash,
+          input.firstName,
+          input.lastName,
+          input.emailVerifiedAt,
+          input.emailVerificationMethod,
+          input.pendingRegistration.id,
+          input.pendingRegistration.codeHash,
+          input.pendingRegistration.verifiedAt,
+        )
   const createIdentity = input.googleSubject === null
     ? null
     : database
@@ -194,21 +245,43 @@ export async function createUserWithSession(
         course_id,
         enrollment_status,
         enrollment_source
-      ) VALUES (
-        (SELECT id FROM users WHERE public_id = ?1),
-        ?2,
-        'active',
-        'free'
-      )`,
+      )
+      SELECT id, ?2, 'active', 'free'
+      FROM users
+      WHERE public_id = ?1`,
     )
     .bind(input.publicId, input.courseId)
+  const consumePendingRegistration =
+    input.pendingRegistration === undefined
+      ? null
+      : database
+          .prepare(
+            `DELETE FROM pending_registrations
+            WHERE id = ?1
+              AND code_hash = ?2
+              AND attempt_count < 5
+              AND datetime(code_expires_at) > datetime(?3)
+              AND datetime(pending_expires_at) > datetime(?3)`,
+          )
+          .bind(
+            input.pendingRegistration.id,
+            input.pendingRegistration.codeHash,
+            input.pendingRegistration.verifiedAt,
+          )
 
-  await database.batch([
+  const [createUserResult] = await database.batch([
     createUser,
     ...(createIdentity === null ? [] : [createIdentity]),
     createSession,
     createEnrollment,
+    ...(consumePendingRegistration === null
+      ? []
+      : [consumePendingRegistration]),
   ])
+
+  if (createUserResult?.meta.changes !== 1) {
+    return null
+  }
 
   return findUserByEmail(database, input.email)
 }
@@ -293,6 +366,8 @@ export async function findActiveSessionPrincipal(
         users.last_name,
         users.role,
         users.status,
+        users.email_verified_at,
+        users.email_verification_method,
         CASE WHEN EXISTS (
           SELECT 1
           FROM user_identities
@@ -321,6 +396,10 @@ export async function findActiveSessionPrincipal(
     lastName: row.last_name,
     role: row.role,
     status: row.status,
+    emailVerification: {
+      verified: row.email_verified_at !== null,
+      method: row.email_verification_method,
+    },
     signInMethods: {
       hasPassword: row.password_hash !== null,
       googleConnected: row.has_google_identity === 1,

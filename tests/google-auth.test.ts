@@ -11,7 +11,7 @@ import {
   changePassword,
   connectGoogleIdentity,
   loginUser,
-  registerStudent,
+  createVerifiedPasswordStudent,
 } from '../src/worker/services/auth.service'
 import { getLearnerCommercialAccess } from '../src/worker/services/commercial.service'
 import type { Bindings } from '../src/worker/types/bindings'
@@ -193,7 +193,7 @@ describe('Google account registration and sign-in', () => {
   it('requires intentional linking for an existing verified-email account', async () => {
     const email = `password-google-${crypto.randomUUID()}@example.test`
     const password = 'ExistingPassword123'
-    const registered = await registerStudent(env.DB, {
+    const registered = await createVerifiedPasswordStudent(env.DB, {
       email,
       password,
       confirmPassword: password,

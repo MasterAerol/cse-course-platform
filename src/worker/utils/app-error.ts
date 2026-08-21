@@ -8,6 +8,7 @@ export type ValidationField =
   | 'blockType'
   | 'choices'
   | 'content'
+  | 'code'
   | 'confirmPassword'
   | 'confirmNewPassword'
   | 'courseId'
@@ -17,6 +18,7 @@ export type ValidationField =
   | 'entityType'
   | 'estimatedMinutes'
   | 'firstName'
+  | 'fullName'
   | 'generatorSlug'
   | 'generatorVersion'
   | 'instructions'
@@ -37,6 +39,7 @@ export type ValidationField =
   | 'lessonPublicId'
   | 'password'
   | 'questionCount'
+  | 'registrationId'
   | 'requiresPrevious'
   | 'selectedChoiceId'
   | 'shortDescription'
@@ -58,7 +61,19 @@ export interface ValidationErrorDetails {
   fieldErrors: ValidationFieldErrors
 }
 
-export type ApiErrorDetails = ValidationErrorDetails | null
+export interface PendingRegistrationDetails {
+  verification: {
+    registrationId: string
+    maskedEmail: string
+    codeExpiresAt: string
+    resendAvailableAt: string
+  }
+}
+
+export type ApiErrorDetails =
+  | ValidationErrorDetails
+  | PendingRegistrationDetails
+  | null
 
 export class AppError extends Error {
   readonly code: string

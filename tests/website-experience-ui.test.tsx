@@ -39,7 +39,14 @@ function renderWithAuth(child: ReactNode, overrides: Partial<AuthContextValue> =
     googleClientId: null,
     cseExamDates: [],
     login: vi.fn(() => Promise.resolve()),
-    register: vi.fn(() => Promise.resolve()),
+    register: vi.fn(() => Promise.resolve({
+      registrationId: '123e4567-e89b-12d3-a456-426614174099',
+      maskedEmail: 'le•••@example.test',
+      codeExpiresAt: '2026-08-21T00:10:00.000Z',
+      resendAvailableAt: '2026-08-21T00:01:00.000Z',
+    })),
+    verifyRegistrationEmail: vi.fn(() => Promise.resolve()),
+    resendRegistrationVerification: vi.fn(() => Promise.reject(new Error('not used'))),
     continueWithGoogle: vi.fn(() => Promise.resolve()),
     connectGoogle: vi.fn(() => Promise.resolve()),
     logout: vi.fn(() => Promise.resolve()),
@@ -192,8 +199,10 @@ describe('PasaWise website experience', () => {
   })
 
   it('keeps the login form accessible while presenting the polished product entry', () => {
-    const markup = renderWithAuth(<LoginPage />)
-    expect(markup).toContain('Continue preparing with purpose.')
+    const markup = renderWithAuth(<LoginPage />, { googleClientId: 'google-client-id' })
+    expect(markup).toContain('Welcome back')
+    expect(markup).toContain('Continue your CSE preparation.')
+    expect(markup).toContain('or continue with email')
     expect(markup).toContain('for="login-email"')
     expect(markup).toContain('autoComplete="email"')
     expect(markup).toContain('for="login-password"')

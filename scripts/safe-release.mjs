@@ -19,6 +19,7 @@ import {
   parseR2DevUrlEnabled,
   parseReleaseArgs,
   parseStatusPorcelainZDetailed,
+  parseWorkerSecretNames,
   selectPreflightReleaseScope,
   validateApprovedMigrationCandidate,
   validateApprovedMigrationRelease,
@@ -137,6 +138,14 @@ function verifyApprovedInfrastructureRelease(repository, risk) {
       }
       validateApprovedWranglerRelease({ files: risk.wranglerConfig, baselineContent, currentContent, bucketState })
       summaries.push(candidate.binding + ' verified against existing private bucket ' + candidate.bucketName + '; r2.dev disabled; no custom domains.')
+    } else if (candidate.kind === 'authentication-ux') {
+      const secretNames = parseWorkerSecretNames(runWranglerReadOnly(repository, [
+        'secret', 'list', '--format', 'json',
+      ]))
+      validateApprovedWranglerRelease({
+        files: risk.wranglerConfig, baselineContent, currentContent, secretNames,
+      })
+      summaries.push('Authentication UX secret names and rate limits verified; REGISTRATION_MODE remains closed.')
     } else {
       validateApprovedWranglerRelease({ files: risk.wranglerConfig, baselineContent, currentContent })
       summaries.push('GOOGLE_CLIENT_ID exact public identifier verified; REGISTRATION_MODE remains closed.')

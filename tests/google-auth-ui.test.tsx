@@ -34,7 +34,14 @@ function renderAuth(
     googleClientId: 'pasawise-test.apps.googleusercontent.com',
     cseExamDates: [],
     login: vi.fn(() => Promise.resolve()),
-    register: vi.fn(() => Promise.resolve()),
+    register: vi.fn(() => Promise.resolve({
+      registrationId: '123e4567-e89b-12d3-a456-426614174099',
+      maskedEmail: 'le•••@example.test',
+      codeExpiresAt: '2026-08-21T00:10:00.000Z',
+      resendAvailableAt: '2026-08-21T00:01:00.000Z',
+    })),
+    verifyRegistrationEmail: vi.fn(() => Promise.resolve()),
+    resendRegistrationVerification: vi.fn(() => Promise.reject(new Error('not used'))),
     continueWithGoogle: vi.fn(() => Promise.resolve()),
     connectGoogle: vi.fn(() => Promise.resolve()),
     logout: vi.fn(() => Promise.resolve()),
@@ -56,7 +63,7 @@ describe('Google account UI', () => {
     expect(markup).toContain('Loading Google sign-in')
     expect(markup).toContain('role="separator"')
     expect(markup).toContain('login-password')
-    expect(markup).toContain('Sign in')
+    expect(markup).toContain('Log in')
   })
 
   it('shows Google and password account creation only when registration is open', () => {
