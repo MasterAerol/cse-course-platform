@@ -7,7 +7,7 @@ import {
   PASSWORD_REQUIREMENTS,
 } from '../../shared/password-policy'
 import { useAuth } from '../auth/use-auth'
-import { PasaWiseBrand } from '../components/PasaWiseBrand'
+import { PublicAuthShell } from '../components/PublicAuthShell'
 import { GoogleIdentityButton } from '../components/GoogleIdentityButton'
 import {
   ApiClientError,
@@ -113,23 +113,18 @@ export function RegistrationPage() {
 
   if (registrationMode !== 'open') {
     return (
-      <main className="auth-page">
-        <section className="auth-card auth-card--authentication" aria-labelledby="registration-title">
-          <PasaWiseBrand linked variant="primary" />
+      <PublicAuthShell labelledBy="registration-title">
           <h1 id="registration-title">Registration is currently closed</h1>
           <p>PasaWise is not accepting new learner accounts right now.</p>
           <Link className="button-link" to="/login">
             Back to login
           </Link>
-        </section>
-      </main>
+      </PublicAuthShell>
     )
   }
 
   return (
-    <main className="auth-page">
-      <section className="auth-card auth-card--authentication" aria-labelledby="registration-title">
-        <PasaWiseBrand linked variant="primary" />
+    <PublicAuthShell labelledBy="registration-title">
         <h1 id="registration-title">Create your account</h1>
         <p>Start preparing smarter for the Civil Service Exam.</p>
         {googleClientId !== null && (
@@ -297,7 +292,6 @@ export function RegistrationPage() {
         <p className="auth-switch">
           Already have an account? <Link to="/login">Log in</Link>
         </p>
-      </section>
-    </main>
+    </PublicAuthShell>
   )
 }

@@ -40,8 +40,12 @@ export function PasaWiseBrand({
     return image
   }
 
+  const linkClassName = variant === 'primary'
+    ? 'brand-link brand-link--primary'
+    : 'brand-link'
+
   return (
-    <Link className="brand-link" to="/" aria-label="PasaWise home">
+    <Link className={linkClassName} to="/" aria-label="PasaWise home">
       {image}
     </Link>
   )

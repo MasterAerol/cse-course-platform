@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
-import { PasaWiseBrand } from '../components/PasaWiseBrand'
+import { PublicAuthShell } from '../components/PublicAuthShell'
 import { ApiClientError, type PendingRegistration } from '../lib/api'
 
 interface VerificationLocationState {
@@ -107,36 +107,28 @@ export function EmailVerificationPage() {
 
   if (registrationMode !== 'open') {
     return (
-      <main className="auth-page">
-        <section className="auth-card" aria-labelledby="verification-closed-title">
-          <PasaWiseBrand linked variant="primary" />
+      <PublicAuthShell labelledBy="verification-closed-title">
           <p className="eyebrow">Private beta</p>
           <h1 id="verification-closed-title">Registration is currently closed</h1>
           <p>Email verification cannot create a new public account while registration is closed.</p>
           <Link className="button-link" to="/login">Sign in</Link>
-        </section>
-      </main>
+      </PublicAuthShell>
     )
   }
 
   if (registrationId.length === 0) {
     return (
-      <main className="auth-page">
-        <section className="auth-card" aria-labelledby="verification-missing-title">
-          <PasaWiseBrand linked variant="primary" />
+      <PublicAuthShell labelledBy="verification-missing-title">
           <p className="eyebrow">Email verification</p>
           <h1 id="verification-missing-title">Start registration again</h1>
           <p>This verification request is missing or no longer available.</p>
           <Link className="button-link" to="/register">Create an account</Link>
-        </section>
-      </main>
+      </PublicAuthShell>
     )
   }
 
   return (
-    <main className="auth-page">
-      <section className="auth-card verification-card" aria-labelledby="verification-title">
-        <PasaWiseBrand linked variant="primary" />
+    <PublicAuthShell labelledBy="verification-title" cardClassName="verification-card">
         <p className="eyebrow">Check your inbox</p>
         <h1 id="verification-title">Verify your email</h1>
         <p>We sent a 6-digit verification code to:</p>
@@ -186,7 +178,6 @@ export function EmailVerificationPage() {
           </button>
         </div>
         <Link className="auth-home-link" to="/login">Back to sign in</Link>
-      </section>
-    </main>
+    </PublicAuthShell>
   )
 }

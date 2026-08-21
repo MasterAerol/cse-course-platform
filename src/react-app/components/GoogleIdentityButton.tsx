@@ -115,6 +115,49 @@ export function GoogleIdentityButton({
 
     let active = true
     let mountedContainer: HTMLElement | null = null
+    let readinessObserver: MutationObserver | null = null
+    let firstReadinessFrame: number | null = null
+    let secondReadinessFrame: number | null = null
+
+    function cancelReadinessWatch(): void {
+      readinessObserver?.disconnect()
+      readinessObserver = null
+      if (firstReadinessFrame !== null) {
+        window.cancelAnimationFrame(firstReadinessFrame)
+        firstReadinessFrame = null
+      }
+      if (secondReadinessFrame !== null) {
+        window.cancelAnimationFrame(secondReadinessFrame)
+        secondReadinessFrame = null
+      }
+    }
+
+    function scheduleProviderReveal(container: HTMLElement): void {
+      if (container.childElementCount === 0 || firstReadinessFrame !== null) {
+        return
+      }
+
+      firstReadinessFrame = window.requestAnimationFrame(() => {
+        firstReadinessFrame = null
+        secondReadinessFrame = window.requestAnimationFrame(() => {
+          secondReadinessFrame = null
+          if (!active || container.childElementCount === 0) {
+            return
+          }
+          readinessObserver?.disconnect()
+          readinessObserver = null
+          setState('ready')
+        })
+      })
+    }
+
+    function watchProviderReadiness(container: HTMLElement): void {
+      readinessObserver = new MutationObserver(() => {
+        scheduleProviderReveal(container)
+      })
+      readinessObserver.observe(container, { childList: true, subtree: true })
+      scheduleProviderReveal(container)
+    }
 
     async function initialize(): Promise<void> {
       try {
@@ -166,8 +209,9 @@ export function GoogleIdentityButton({
           },
         )
         mountedContainer = container
-        setState('ready')
+        watchProviderReadiness(container)
       } catch {
+        cancelReadinessWatch()
         if (active) {
           setState('unavailable')
           setError(
@@ -180,6 +224,7 @@ export function GoogleIdentityButton({
     void initialize()
     return () => {
       active = false
+      cancelReadinessWatch()
       if (mountedContainer !== null) {
         clearGoogleIdentityButton(mountedContainer)
       }
@@ -187,16 +232,26 @@ export function GoogleIdentityButton({
   }, [clientId, context])
 
   if (clientId === null) return null
+  const providerReady = state === 'ready' || state === 'submitting'
+  const frameState = state === 'unavailable'
+    ? 'unavailable'
+    : providerReady
+      ? 'ready'
+      : 'loading'
 
   return (
     <div className="google-auth">
-      <div
-        className="google-auth__button"
-        data-google-identity-button
-        ref={containerRef}
-      />
+      <div className={`google-auth__button-frame google-auth__button-frame--${frameState}`}>
+        <div
+          aria-hidden={providerReady ? undefined : true}
+          className="google-auth__button"
+          data-google-identity-button
+          ref={containerRef}
+        />
+        <div className="google-auth__placeholder" aria-hidden="true" />
+      </div>
       {state === 'loading' && (
-        <p className="google-auth__status" role="status">
+        <p className="sr-only" role="status">
           Loading Google sign-in…
         </p>
       )}

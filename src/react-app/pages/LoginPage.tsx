@@ -7,8 +7,8 @@ import {
 } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
-import { PasaWiseBrand } from '../components/PasaWiseBrand'
 import { GoogleIdentityButton } from '../components/GoogleIdentityButton'
+import { PublicAuthShell } from '../components/PublicAuthShell'
 import { ApiClientError } from '../lib/api'
 
 interface LoginLocationState {
@@ -85,9 +85,7 @@ export function LoginPage() {
   }
 
   return (
-    <main className="auth-page">
-      <section className="auth-card auth-card--authentication" aria-labelledby="login-title">
-        <PasaWiseBrand linked variant="primary" />
+    <PublicAuthShell labelledBy="login-title">
         <h1 id="login-title">Welcome back</h1>
         <p>Continue your CSE preparation.</p>
         {googleClientId !== null && (
@@ -134,7 +132,6 @@ export function LoginPage() {
 
         <p className="auth-switch">Don&apos;t have an account? <Link to="/register">Sign up</Link></p>
         <Link className="auth-home-link" to="/">Return to PasaWise home</Link>
-      </section>
-    </main>
+    </PublicAuthShell>
   )
 }
