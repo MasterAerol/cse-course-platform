@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 
 import { getConfiguredCseExamDates } from '../config/exam-target'
+import { getGoogleClientId } from '../config/google'
 import { getRegistrationMode } from '../config/registration'
 import { isEffectivePublicSignupEnabled } from '../services/commercial.service'
 import type { AppEnv } from '../types/app'
@@ -16,6 +17,7 @@ configRoutes.get('/', async (context) => {
   )
   return successResponse(context, {
     registrationMode: registrationEnabled ? 'open' : 'closed',
+    googleClientId: getGoogleClientId(context.env),
     cseExamDates: getConfiguredCseExamDates(),
   })
 })

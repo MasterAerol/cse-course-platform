@@ -7,13 +7,18 @@ export interface PublicUser {
   firstName: string
   lastName: string
   role: UserRole
+  signInMethods?: {
+    hasPassword: boolean
+    googleConnected: boolean
+  }
 }
 
 export interface UserRecord {
   id: number
   publicId: string
   email: string
-  passwordHash: string
+  passwordHash: string | null
+  hasGoogleIdentity: boolean
   firstName: string
   lastName: string
   role: UserRole

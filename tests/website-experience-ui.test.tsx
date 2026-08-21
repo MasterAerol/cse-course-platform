@@ -36,9 +36,12 @@ function renderWithAuth(child: ReactNode, overrides: Partial<AuthContextValue> =
     loading: false,
     error: null,
     registrationMode: 'closed',
+    googleClientId: null,
     cseExamDates: [],
     login: vi.fn(() => Promise.resolve()),
     register: vi.fn(() => Promise.resolve()),
+    continueWithGoogle: vi.fn(() => Promise.resolve()),
+    connectGoogle: vi.fn(() => Promise.resolve()),
     logout: vi.fn(() => Promise.resolve()),
     ...overrides,
   }

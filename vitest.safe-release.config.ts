@@ -7,6 +7,7 @@ export default defineConfig({
       'tests/safe-release.node.ts',
       'tests/safe-release-scoped-staging.node.ts',
       'tests/safe-release-commercial-infrastructure.node.ts',
+      'tests/safe-release-google-auth-infrastructure.node.ts',
     ],
   },
 })

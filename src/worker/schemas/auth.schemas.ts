@@ -68,6 +68,15 @@ export const loginSchema = z
   })
   .strict()
 
+export const googleCredentialSchema = z
+  .object({
+    credential: z
+      .string({ error: 'A Google credential is required.' })
+      .min(1, 'A Google credential is required.')
+      .max(16_384, 'The Google credential is too large.'),
+  })
+  .strict()
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z
@@ -102,4 +111,5 @@ export const changePasswordSchema = z
 
 export type RegistrationInput = z.infer<typeof registrationSchema>
 export type LoginInput = z.infer<typeof loginSchema>
+export type GoogleCredentialInput = z.infer<typeof googleCredentialSchema>
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>

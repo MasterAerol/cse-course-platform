@@ -1,13 +1,10 @@
 import { Hono } from 'hono'
 import { getCookie } from 'hono/cookie'
 
+import { clearAuthenticationCookie, AUTH_COOKIE_NAME, setAuthenticationCookie } from '../auth/cookie'
+import { verifyGoogleIdToken } from '../auth/google'
+import { getGoogleClientId } from '../config/google'
 import { getRegistrationMode } from '../config/registration'
-
-import {
-  AUTH_COOKIE_NAME,
-  clearAuthenticationCookie,
-  setAuthenticationCookie,
-} from '../auth/cookie'
 import { requireAuthentication } from '../middleware/auth.middleware'
 import {
   enforceRateLimit,
@@ -16,19 +13,22 @@ import {
 } from '../middleware/rate-limit.middleware'
 import {
   changePasswordSchema,
+  googleCredentialSchema,
   loginSchema,
   registrationSchema,
 } from '../schemas/auth.schemas'
 import {
+  authenticateWithGoogle,
   changePassword,
+  connectGoogleIdentity,
   getPublicUser,
   loginUser,
   logoutSession,
   registerStudent,
 } from '../services/auth.service'
 import { isEffectivePublicSignupEnabled } from '../services/commercial.service'
-import type { SessionMetadata } from '../types/auth'
 import type { AppEnv } from '../types/app'
+import type { SessionMetadata } from '../types/auth'
 import { AppError } from '../utils/app-error'
 import { successResponse } from '../utils/responses'
 import { parseJsonBody } from '../utils/validation'
@@ -39,10 +39,7 @@ function optionalHeaderValue(
   value: string | undefined,
   maximumLength: number,
 ): string | null {
-  if (value === undefined || value.length === 0) {
-    return null
-  }
-
+  if (value === undefined || value.length === 0) return null
   return value.slice(0, maximumLength)
 }
 
@@ -50,15 +47,21 @@ function getSessionMetadata(context: {
   req: { header(name: string): string | undefined }
 }): SessionMetadata {
   return {
-    userAgent: optionalHeaderValue(
-      context.req.header('user-agent'),
-      512,
-    ),
-    ipAddress: optionalHeaderValue(
-      context.req.header('cf-connecting-ip'),
-      64,
-    ),
+    userAgent: optionalHeaderValue(context.req.header('user-agent'), 512),
+    ipAddress: optionalHeaderValue(context.req.header('cf-connecting-ip'), 64),
   }
+}
+
+function requireGoogleClientId(context: { env: AppEnv['Bindings'] }): string {
+  const clientId = getGoogleClientId(context.env)
+  if (clientId === null) {
+    throw new AppError(
+      503,
+      'GOOGLE_AUTH_UNAVAILABLE',
+      'Google sign-in is temporarily unavailable. Use your password or try again later.',
+    )
+  }
+  return clientId
 }
 
 authRoutes.post('/register', async (context) => {
@@ -89,12 +92,7 @@ authRoutes.post('/register', async (context) => {
     getSessionMetadata(context),
   )
 
-  setAuthenticationCookie(
-    context,
-    result.sessionToken,
-    result.expiresAt,
-  )
-
+  setAuthenticationCookie(context, result.sessionToken, result.expiresAt)
   return successResponse(context, { user: result.user }, 201)
 })
 
@@ -123,24 +121,102 @@ authRoutes.post('/login', async (context) => {
     getSessionMetadata(context),
   )
 
-  setAuthenticationCookie(
-    context,
-    result.sessionToken,
-    result.expiresAt,
-  )
-
+  setAuthenticationCookie(context, result.sessionToken, result.expiresAt)
   return successResponse(context, { user: result.user })
 })
 
+authRoutes.post('/google', async (context) => {
+  const clientId = requireGoogleClientId(context)
+
+  await enforceRateLimit(
+    context,
+    'LOGIN_IP_RATE_LIMITER',
+    `google:${getClientAddress(context)}`,
+    'google-ip',
+  )
+
+  const input = await parseJsonBody(context, googleCredentialSchema)
+  const identity = await verifyGoogleIdToken(input.credential, clientId)
+  const accountKey = await hashRateLimitKey(
+    'google-login-account',
+    identity.subject,
+  )
+  await enforceRateLimit(
+    context,
+    'LOGIN_ACCOUNT_RATE_LIMITER',
+    accountKey,
+    'google-account',
+  )
+
+  const registrationEnabled = await isEffectivePublicSignupEnabled(
+    context.env.DB,
+    getRegistrationMode(context.env),
+  )
+  const result = await authenticateWithGoogle(
+    context.env.DB,
+    identity,
+    getSessionMetadata(context),
+    {
+      registrationEnabled,
+      beforeCreate: () =>
+        enforceRateLimit(
+          context,
+          'REGISTRATION_RATE_LIMITER',
+          `google-registration:${getClientAddress(context)}`,
+          'google-registration',
+        ),
+    },
+  )
+
+  setAuthenticationCookie(context, result.sessionToken, result.expiresAt)
+  return successResponse(context, { user: result.user })
+})
+
+authRoutes.post(
+  '/google/link',
+  requireAuthentication,
+  async (context) => {
+    const clientId = requireGoogleClientId(context)
+    const principal = context.get('authUser')
+    const accountKey = await hashRateLimitKey(
+      'google-link-account',
+      principal.id,
+    )
+
+    await Promise.all([
+      enforceRateLimit(
+        context,
+        'LOGIN_IP_RATE_LIMITER',
+        `google-link:${getClientAddress(context)}`,
+        'google-link-ip',
+      ),
+      enforceRateLimit(
+        context,
+        'LOGIN_ACCOUNT_RATE_LIMITER',
+        accountKey,
+        'google-link-account',
+      ),
+    ])
+
+    const input = await parseJsonBody(context, googleCredentialSchema)
+    const identity = await verifyGoogleIdToken(input.credential, clientId)
+    const user = await connectGoogleIdentity(
+      context.env.DB,
+      principal,
+      identity,
+    )
+
+    return successResponse(context, { user })
+  },
+)
+
 authRoutes.post('/logout', async (context) => {
   const token = getCookie(context, AUTH_COOKIE_NAME)
-
   if (token !== undefined && token.length > 0) {
     await logoutSession(context.env.DB, token)
   }
 
   clearAuthenticationCookie(context)
-
   return successResponse(context, { loggedOut: true })
 })
 

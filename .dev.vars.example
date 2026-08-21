@@ -1,3 +1,8 @@
 # Copy this file to .dev.vars for local development.
 ENVIRONMENT=development
 REGISTRATION_MODE=open
+# Google Authorized JavaScript origins:
+# https://pasawise.com
+# https://cse-course-platform.master-course.workers.dev
+# http://localhost:5173
+GOOGLE_CLIENT_ID=247375246816-10qnqrcf5c2sarc6gvbpdbtdocbs5p1o.apps.googleusercontent.com

@@ -25,6 +25,19 @@ export const APPROVED_COMMERCIAL_INFRASTRUCTURE = Object.freeze({
   r2Bucket: 'pasawise-payment-receipts',
 })
 
+export const APPROVED_GOOGLE_AUTH_INFRASTRUCTURE = Object.freeze({
+  migrationFile: 'migrations/0018_google_account_authentication.sql',
+  migrationName: '0018_google_account_authentication.sql',
+  migrationSha256: 'cf10dded7ccc335793640ec5a6753ec74df5df73aa42d4eaa786bfdf08a09f35',
+  databaseName: 'cse-course-platform',
+  wranglerFile: 'wrangler.jsonc',
+  googleClientId: '247375246816-10qnqrcf5c2sarc6gvbpdbtdocbs5p1o.apps.googleusercontent.com',
+})
+
+const APPROVED_MIGRATIONS = [
+  APPROVED_COMMERCIAL_INFRASTRUCTURE,
+  APPROVED_GOOGLE_AUTH_INFRASTRUCTURE,
+]
 const booleanFlags = new Set(['help', 'dry-run', 'codex', 'skip-validation', 'skip-deploy', 'deploy-current'])
 const valueOptions = new Set(['message', 'confirm'])
 
@@ -78,10 +91,13 @@ function exactInfrastructureFiles(files, expected, label) {
 }
 
 export function validateApprovedMigrationCandidate({ files, content }) {
-  exactInfrastructureFiles(files, APPROVED_COMMERCIAL_INFRASTRUCTURE.migrationFile, 'Migration')
+  const normalized = [...new Set(files.map(normalizeGitPath))]
+  if (normalized.length !== 1) throw new Error('Migration approval applies to exactly one approved migration file.')
+  const approved = APPROVED_MIGRATIONS.find((candidate) => candidate.migrationFile === normalized[0])
+  if (!approved) throw new Error('Migration approval applies only to approved migration files; received ' + normalized[0] + '.')
   const sha256 = normalizedTextSha256(content)
-  if (sha256 !== APPROVED_COMMERCIAL_INFRASTRUCTURE.migrationSha256) throw new Error('Migration ' + APPROVED_COMMERCIAL_INFRASTRUCTURE.migrationName + ' does not match the approved SHA-256.')
-  return { name: APPROVED_COMMERCIAL_INFRASTRUCTURE.migrationName, sha256 }
+  if (sha256 !== approved.migrationSha256) throw new Error('Migration ' + approved.migrationName + ' does not match the approved SHA-256.')
+  return { name: approved.migrationName, sha256, databaseName: approved.databaseName }
 }
 
 export function validateApprovedMigrationRelease({ files, content, appliedMigrations, pendingMigrations }) {
@@ -97,22 +113,38 @@ export function validateApprovedWranglerCandidate({ files, baselineContent, curr
   exactInfrastructureFiles(files, APPROVED_COMMERCIAL_INFRASTRUCTURE.wranglerFile, 'Wrangler configuration')
   const baseline = parseStrictJson(baselineContent, 'Committed Wrangler configuration')
   const current = parseStrictJson(currentContent, 'Changed Wrangler configuration')
-  if (Object.hasOwn(baseline, 'r2_buckets')) throw new Error('The committed Wrangler baseline already has R2 configuration; independent review is required.')
+  if (!Object.hasOwn(baseline, 'r2_buckets')) {
+    const expected = structuredClone(baseline)
+    expected.r2_buckets = [{
+      binding: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Binding,
+      bucket_name: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Bucket,
+    }]
+    if (stableJson(current) !== stableJson(expected)) throw new Error('Wrangler configuration contains changes beyond the approved PAYMENT_RECEIPTS R2 binding.')
+    return { kind: 'commercial-r2', binding: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Binding, bucketName: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Bucket }
+  }
+  if (baseline?.vars?.ENVIRONMENT !== 'production' || baseline?.vars?.REGISTRATION_MODE !== 'closed') {
+    throw new Error('Google authentication approval requires the committed production registration gate to remain closed.')
+  }
+  if (Object.hasOwn(baseline.vars, 'GOOGLE_CLIENT_ID')) {
+    throw new Error('The committed Wrangler baseline already has GOOGLE_CLIENT_ID; independent review is required.')
+  }
   const expected = structuredClone(baseline)
-  expected.r2_buckets = [{
-    binding: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Binding,
-    bucket_name: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Bucket,
-  }]
-  if (stableJson(current) !== stableJson(expected)) throw new Error('Wrangler configuration contains changes beyond the approved PAYMENT_RECEIPTS R2 binding.')
-  return { binding: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Binding, bucketName: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Bucket }
+  expected.vars.GOOGLE_CLIENT_ID = APPROVED_GOOGLE_AUTH_INFRASTRUCTURE.googleClientId
+  if (stableJson(current) !== stableJson(expected)) throw new Error('Wrangler configuration contains changes beyond the approved GOOGLE_CLIENT_ID addition with registration closed.')
+  return {
+    kind: 'google-auth',
+    clientId: APPROVED_GOOGLE_AUTH_INFRASTRUCTURE.googleClientId,
+    registrationMode: 'closed',
+  }
 }
 
 export function validateApprovedWranglerRelease({ files, baselineContent, currentContent, bucketState }) {
   const candidate = validateApprovedWranglerCandidate({ files, baselineContent, currentContent })
+  if (candidate.kind === 'google-auth') return candidate
   if (bucketState?.exists !== true || bucketState.name !== candidate.bucketName) throw new Error('Approved R2 bucket ' + candidate.bucketName + ' is missing or mismatched.')
   if (bucketState.devUrlEnabled !== false) throw new Error('Approved R2 bucket ' + candidate.bucketName + ' must keep r2.dev public access disabled.')
   if (!Array.isArray(bucketState.customDomains) || bucketState.customDomains.length > 0) throw new Error('Approved R2 bucket ' + candidate.bucketName + ' must not have a public custom domain.')
-  return { ...candidate, private: true }
+  return { binding: candidate.binding, bucketName: candidate.bucketName, private: true }
 }
 
 export function parseAppliedMigrationNames(output) {

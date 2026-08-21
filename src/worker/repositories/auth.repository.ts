@@ -10,29 +10,34 @@ interface UserRow {
   id: number
   public_id: string
   email: string
-  password_hash: string
+  password_hash: string | null
   first_name: string
   last_name: string
   role: UserRole
   status: UserStatus
+  has_google_identity: 0 | 1
 }
 
 interface SessionPrincipalRow {
   id: number
   public_id: string
   email: string
+  password_hash: string | null
   first_name: string
   last_name: string
   role: UserRole
   status: UserStatus
+  has_google_identity: 0 | 1
 }
 
 export interface CreateUserWithSessionInput {
   publicId: string
   email: string
-  passwordHash: string
+  passwordHash: string | null
   firstName: string
   lastName: string
+  emailVerifiedAt: string | null
+  googleSubject: string | null
   tokenHash: string
   expiresAt: string
   metadata: SessionMetadata
@@ -52,6 +57,7 @@ function mapUser(row: UserRow): UserRecord {
     publicId: row.public_id,
     email: row.email,
     passwordHash: row.password_hash,
+    hasGoogleIdentity: row.has_google_identity === 1,
     firstName: row.first_name,
     lastName: row.last_name,
     role: row.role,
@@ -59,25 +65,31 @@ function mapUser(row: UserRow): UserRecord {
   }
 }
 
+const userSelect = `SELECT
+  users.id,
+  users.public_id,
+  users.email,
+  users.password_hash,
+  users.first_name,
+  users.last_name,
+  users.role,
+  users.status,
+  CASE WHEN EXISTS (
+    SELECT 1
+    FROM user_identities
+    WHERE user_identities.user_id = users.id
+      AND user_identities.provider = 'google'
+  ) THEN 1 ELSE 0 END AS has_google_identity
+FROM users`
+
 export async function findUserByEmail(
   database: D1Database,
   email: string,
 ): Promise<UserRecord | null> {
   const row = await database
-    .prepare(
-      `SELECT
-        id,
-        public_id,
-        email,
-        password_hash,
-        first_name,
-        last_name,
-        role,
-        status
-      FROM users
-      WHERE email = ?1
-      LIMIT 1`,
-    )
+    .prepare(`${userSelect}
+      WHERE users.email = ?1
+      LIMIT 1`)
     .bind(email)
     .first<UserRow>()
 
@@ -89,21 +101,27 @@ export async function findUserById(
   userId: number,
 ): Promise<UserRecord | null> {
   const row = await database
-    .prepare(
-      `SELECT
-        id,
-        public_id,
-        email,
-        password_hash,
-        first_name,
-        last_name,
-        role,
-        status
-      FROM users
-      WHERE id = ?1
-      LIMIT 1`,
-    )
+    .prepare(`${userSelect}
+      WHERE users.id = ?1
+      LIMIT 1`)
     .bind(userId)
+    .first<UserRow>()
+
+  return row === null ? null : mapUser(row)
+}
+
+export async function findUserByGoogleSubject(
+  database: D1Database,
+  providerSubject: string,
+): Promise<UserRecord | null> {
+  const row = await database
+    .prepare(`${userSelect}
+      INNER JOIN user_identities
+        ON user_identities.user_id = users.id
+      WHERE user_identities.provider = 'google'
+        AND user_identities.provider_subject = ?1
+      LIMIT 1`)
+    .bind(providerSubject)
     .first<UserRow>()
 
   return row === null ? null : mapUser(row)
@@ -122,8 +140,9 @@ export async function createUserWithSession(
         first_name,
         last_name,
         role,
-        status
-      ) VALUES (?1, ?2, ?3, ?4, ?5, 'student', 'active')`,
+        status,
+        email_verified_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, 'student', 'active', ?6)`,
     )
     .bind(
       input.publicId,
@@ -131,7 +150,22 @@ export async function createUserWithSession(
       input.passwordHash,
       input.firstName,
       input.lastName,
+      input.emailVerifiedAt,
     )
+  const createIdentity = input.googleSubject === null
+    ? null
+    : database
+        .prepare(
+          `INSERT INTO user_identities (
+            user_id,
+            provider,
+            provider_subject
+          )
+          SELECT id, 'google', ?1
+          FROM users
+          WHERE public_id = ?2`,
+        )
+        .bind(input.googleSubject, input.publicId)
   const createSession = database
     .prepare(
       `INSERT INTO user_sessions (
@@ -139,9 +173,10 @@ export async function createUserWithSession(
         token_hash,
         expires_at,
         user_agent,
-        ip_address
+        ip_address,
+        learner_session_generation
       )
-      SELECT id, ?1, ?2, ?3, ?4
+      SELECT id, ?1, ?2, ?3, ?4, learner_session_generation
       FROM users
       WHERE public_id = ?5`,
     )
@@ -168,9 +203,31 @@ export async function createUserWithSession(
     )
     .bind(input.publicId, input.courseId)
 
-  await database.batch([createUser, createSession, createEnrollment])
+  await database.batch([
+    createUser,
+    ...(createIdentity === null ? [] : [createIdentity]),
+    createSession,
+    createEnrollment,
+  ])
 
   return findUserByEmail(database, input.email)
+}
+
+export async function linkGoogleIdentity(
+  database: D1Database,
+  userId: number,
+  providerSubject: string,
+): Promise<void> {
+  await database
+    .prepare(
+      `INSERT INTO user_identities (
+        user_id,
+        provider,
+        provider_subject
+      ) VALUES (?1, 'google', ?2)`,
+    )
+    .bind(userId, providerSubject)
+    .run()
 }
 
 export async function updatePasswordAndRevokeOtherSessions(
@@ -231,10 +288,17 @@ export async function findActiveSessionPrincipal(
         users.id,
         users.public_id,
         users.email,
+        users.password_hash,
         users.first_name,
         users.last_name,
         users.role,
-        users.status
+        users.status,
+        CASE WHEN EXISTS (
+          SELECT 1
+          FROM user_identities
+          WHERE user_identities.user_id = users.id
+            AND user_identities.provider = 'google'
+        ) THEN 1 ELSE 0 END AS has_google_identity
       FROM user_sessions
       INNER JOIN users ON users.id = user_sessions.user_id
       WHERE user_sessions.token_hash = ?1
@@ -257,6 +321,10 @@ export async function findActiveSessionPrincipal(
     lastName: row.last_name,
     role: row.role,
     status: row.status,
+    signInMethods: {
+      hasPassword: row.password_hash !== null,
+      googleConnected: row.has_google_identity === 1,
+    },
   }
 }
 

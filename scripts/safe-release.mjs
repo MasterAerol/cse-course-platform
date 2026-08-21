@@ -4,7 +4,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import {
-  APPROVED_COMMERCIAL_INFRASTRUCTURE,
   DEFAULT_HEALTH_URL,
   DEFAULT_LIVE_URL,
   FALLBACK_HEALTH_URL,
@@ -109,15 +108,16 @@ function verifyApprovedInfrastructureRelease(repository, risk) {
   const summaries = []
 
   if (risk.migrations.length > 0) {
-    const migrationPath = path.join(repository.root, ...APPROVED_COMMERCIAL_INFRASTRUCTURE.migrationFile.split('/'))
+    const migrationFile = risk.migrations[0]
+    const migrationPath = path.join(repository.root, ...migrationFile.split('/'))
     const content = fs.readFileSync(migrationPath, 'utf8')
     const candidate = validateApprovedMigrationCandidate({ files: risk.migrations, content })
     const pendingMigrations = parsePendingMigrations(runWranglerReadOnly(repository, [
-      'd1', 'migrations', 'list', APPROVED_COMMERCIAL_INFRASTRUCTURE.databaseName, '--remote',
+      'd1', 'migrations', 'list', candidate.databaseName, '--remote',
     ]))
     const appliedMigrations = parseAppliedMigrationNames(runWranglerReadOnly(repository, [
-      'd1', 'execute', APPROVED_COMMERCIAL_INFRASTRUCTURE.databaseName, '--remote',
-      '--command', "SELECT name FROM d1_migrations WHERE name = '0017_commercial_access_system.sql'", '--json',
+      'd1', 'execute', candidate.databaseName, '--remote',
+      '--command', `SELECT name FROM d1_migrations WHERE name = '${candidate.name}'`, '--json',
     ]))
     validateApprovedMigrationRelease({ files: risk.migrations, content, appliedMigrations, pendingMigrations })
     approvedCodes.add('migration_detected')
@@ -125,17 +125,23 @@ function verifyApprovedInfrastructureRelease(repository, risk) {
   }
 
   if (risk.wranglerConfig.length > 0) {
-    const currentContent = fs.readFileSync(path.join(repository.root, APPROVED_COMMERCIAL_INFRASTRUCTURE.wranglerFile), 'utf8')
-    const baselineContent = git(['show', 'HEAD:' + APPROVED_COMMERCIAL_INFRASTRUCTURE.wranglerFile], { print: false }).stdout
+    const wranglerFile = risk.wranglerConfig[0]
+    const currentContent = fs.readFileSync(path.join(repository.root, wranglerFile), 'utf8')
+    const baselineContent = git(['show', 'HEAD:' + wranglerFile], { print: false }).stdout
     const candidate = validateApprovedWranglerCandidate({ files: risk.wranglerConfig, baselineContent, currentContent })
-    const bucketState = {
-      ...parseR2BucketInfo(runWranglerReadOnly(repository, ['r2', 'bucket', 'info', candidate.bucketName])),
-      devUrlEnabled: parseR2DevUrlEnabled(runWranglerReadOnly(repository, ['r2', 'bucket', 'dev-url', 'get', candidate.bucketName])),
-      customDomains: parseR2CustomDomains(runWranglerReadOnly(repository, ['r2', 'bucket', 'domain', 'list', candidate.bucketName])),
+    if (candidate.kind === 'commercial-r2') {
+      const bucketState = {
+        ...parseR2BucketInfo(runWranglerReadOnly(repository, ['r2', 'bucket', 'info', candidate.bucketName])),
+        devUrlEnabled: parseR2DevUrlEnabled(runWranglerReadOnly(repository, ['r2', 'bucket', 'dev-url', 'get', candidate.bucketName])),
+        customDomains: parseR2CustomDomains(runWranglerReadOnly(repository, ['r2', 'bucket', 'domain', 'list', candidate.bucketName])),
+      }
+      validateApprovedWranglerRelease({ files: risk.wranglerConfig, baselineContent, currentContent, bucketState })
+      summaries.push(candidate.binding + ' verified against existing private bucket ' + candidate.bucketName + '; r2.dev disabled; no custom domains.')
+    } else {
+      validateApprovedWranglerRelease({ files: risk.wranglerConfig, baselineContent, currentContent })
+      summaries.push('GOOGLE_CLIENT_ID exact public identifier verified; REGISTRATION_MODE remains closed.')
     }
-    validateApprovedWranglerRelease({ files: risk.wranglerConfig, baselineContent, currentContent, bucketState })
     approvedCodes.add('wrangler_config_changed')
-    summaries.push(candidate.binding + ' verified against existing private bucket ' + candidate.bucketName + '; r2.dev disabled; no custom domains.')
   }
 
   const blockers = risk.blockers.filter((blocker) => !approvedCodes.has(blocker.code))

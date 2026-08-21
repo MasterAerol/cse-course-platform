@@ -9,10 +9,12 @@ interface SessionPrincipalRow {
   id: number
   public_id: string
   email: string
+  password_hash: string | null
   first_name: string
   last_name: string
   role: UserRole
   status: UserStatus
+  has_google_identity: 0 | 1
   session_generation: number | null
   user_generation: number
   session_active: 0 | 1
@@ -100,10 +102,16 @@ export async function findSessionPrincipal(
         users.id,
         users.public_id,
         users.email,
+        users.password_hash,
         users.first_name,
         users.last_name,
         users.role,
         users.status,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM user_identities
+          WHERE user_identities.user_id = users.id
+            AND user_identities.provider = 'google'
+        ) THEN 1 ELSE 0 END AS has_google_identity,
         user_sessions.learner_session_generation AS session_generation,
         users.learner_session_generation AS user_generation,
         CASE
@@ -137,6 +145,10 @@ export async function findSessionPrincipal(
       lastName: row.last_name,
       role: row.role,
       status: row.status,
+      signInMethods: {
+        hasPassword: row.password_hash !== null,
+        googleConnected: row.has_google_identity === 1,
+      },
     },
     replaced,
     active: row.session_active === 1,

@@ -13,7 +13,8 @@
   },
   "vars": {
     "ENVIRONMENT": "production",
-    "REGISTRATION_MODE": "closed"
+    "REGISTRATION_MODE": "closed",
+    "GOOGLE_CLIENT_ID": "247375246816-10qnqrcf5c2sarc6gvbpdbtdocbs5p1o.apps.googleusercontent.com"
   },
   "ratelimits": [
     { "name": "LOGIN_IP_RATE_LIMITER", "namespace_id": "31001", "simple": { "limit": 10, "period": 60 } },

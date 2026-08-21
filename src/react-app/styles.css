@@ -12945,3 +12945,101 @@ button:not(:disabled):not(.button-secondary):not(.password-toggle):active,
   .registration-experience .auth-card { padding-inline: var(--space-16); }
   .account-menu__panel { right: -0.25rem; }
 }
+.google-auth {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: var(--space-8);
+  margin-top: var(--space-20);
+}
+
+.google-auth__button {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  overflow: hidden;
+}
+
+.google-auth__button > div {
+  max-width: 100%;
+  margin-inline: auto !important;
+}
+
+.google-auth__status,
+.google-auth__error {
+  margin: 0;
+  text-align: center;
+}
+
+.google-auth__status {
+  color: var(--color-text-muted);
+  font-size: var(--type-small);
+}
+
+.auth-divider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-12);
+  margin: var(--space-20) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-small);
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  height: 1px;
+  background: var(--color-border);
+  content: '';
+}
+
+.sign-in-methods {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.sign-in-methods article {
+  min-width: 0;
+  padding: var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--surface-subtle);
+}
+
+.sign-in-methods article > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.sign-in-methods article span {
+  color: var(--color-text-muted);
+  font-size: var(--type-small);
+  font-weight: 750;
+}
+
+.sign-in-methods article p {
+  margin: var(--space-8) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-small);
+  line-height: 1.5;
+}
+
+.sign-in-methods .google-auth {
+  margin-top: var(--space-16);
+}
+
+@media (max-width: 25rem) {
+  .google-auth__button {
+    margin-inline: auto;
+  }
+
+  .sign-in-methods article > div:first-child {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+}

@@ -9,6 +9,10 @@ const userSchema = z.object({
   firstName: z.string(),
   lastName: z.string(),
   role: z.enum(['student', 'admin']),
+  signInMethods: z.object({
+    hasPassword: z.boolean(),
+    googleConnected: z.boolean(),
+  }).optional(),
 })
 
 const healthResponseSchema = z.object({
@@ -22,6 +26,7 @@ const platformConfigResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     registrationMode: z.enum(['open', 'closed']),
+    googleClientId: z.string().min(1).nullable(),
     cseExamDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/u)),
   }),
 })
@@ -770,6 +775,10 @@ export interface LoginRequest {
   password: string
 }
 
+
+export interface GoogleCredentialRequest {
+  credential: string
+}
 export class ApiClientError extends Error {
   readonly code: string
   readonly status: number
@@ -918,6 +927,33 @@ export async function login(input: LoginRequest): Promise<User> {
     },
   )
 
+  return response.data.user
+}
+export async function authenticateWithGoogle(
+  input: GoogleCredentialRequest,
+): Promise<User> {
+  const response = await request(
+    '/api/auth/google',
+    authenticationResponseSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+  return response.data.user
+}
+
+export async function connectGoogle(
+  input: GoogleCredentialRequest,
+): Promise<User> {
+  const response = await request(
+    '/api/auth/google/link',
+    authenticationResponseSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
   return response.data.user
 }
 

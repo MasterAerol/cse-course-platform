@@ -2,6 +2,7 @@ import { createContext } from 'react'
 
 import type {
   CseExamDates,
+  GoogleCredentialRequest,
   LoginRequest,
   RegistrationRequest,
   RegistrationMode,
@@ -13,9 +14,12 @@ export interface AuthContextValue {
   loading: boolean
   error: string | null
   registrationMode: RegistrationMode
+  googleClientId: string | null
   cseExamDates: CseExamDates
   login: (input: LoginRequest) => Promise<void>
   register: (input: RegistrationRequest) => Promise<void>
+  continueWithGoogle: (input: GoogleCredentialRequest) => Promise<void>
+  connectGoogle: (input: GoogleCredentialRequest) => Promise<void>
   logout: () => Promise<void>
 }
 

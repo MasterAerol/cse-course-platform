@@ -8,6 +8,7 @@ import {
 } from '../../shared/password-policy'
 import { useAuth } from '../auth/use-auth'
 import { PasaWiseBrand } from '../components/PasaWiseBrand'
+import { GoogleIdentityButton } from '../components/GoogleIdentityButton'
 import {
   ApiClientError,
   type ValidationFieldErrors,
@@ -33,7 +34,7 @@ function FieldErrorList({ errors, id }: FieldErrorListProps) {
 }
 
 export function RegistrationPage() {
-  const { register, registrationMode } = useAuth()
+  const { continueWithGoogle, googleClientId, register, registrationMode } = useAuth()
   const navigate = useNavigate()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -89,6 +90,20 @@ export function RegistrationPage() {
       setSubmitting(false)
     }
   }
+  async function handleGoogleCredential(credential: string): Promise<void> {
+    setFormError(null)
+    try {
+      await continueWithGoogle({ credential })
+      await navigate('/dashboard', { replace: true })
+    } catch (googleError: unknown) {
+      setFormError(
+        googleError instanceof Error
+          ? googleError.message
+          : 'Google registration could not be completed.',
+      )
+      throw googleError
+    }
+  }
 
   if (registrationMode !== 'open') {
     return (
@@ -128,6 +143,16 @@ export function RegistrationPage() {
         <p className="eyebrow">Student registration</p>
         <h1 id="registration-title">Create your account</h1>
         <p>Register as a learner and continue directly to your dashboard.</p>
+        {googleClientId !== null && (
+          <>
+            <GoogleIdentityButton
+              clientId={googleClientId}
+              context="signup"
+              onCredential={handleGoogleCredential}
+            />
+            <div className="auth-divider" role="separator"><span>or</span></div>
+          </>
+        )}
 
         <form
           noValidate

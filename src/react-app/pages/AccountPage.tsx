@@ -5,6 +5,7 @@ import { useAuth } from '../auth/use-auth'
 import { CommercialAccessPanel } from '../components/CommercialAccessPanel'
 import { ChangePasswordForm } from '../components/ChangePasswordForm'
 import { CseExamTargetCard } from '../components/CseExamTarget'
+import { GoogleIdentityButton } from '../components/GoogleIdentityButton'
 import { LearnerTopbar } from '../components/LearnerTopbar'
 import { PasaWisePageLoader } from '../components/PasaWiseLoader'
 import { ProgressBar } from '../components/ProgressBar'
@@ -48,15 +49,20 @@ export function AccountPageView({
   user,
   cseExamDates,
   data,
+  googleClientId = null,
+  onConnectGoogle,
 }: {
   user: User
   cseExamDates: readonly string[]
   data: AccountPageData
+  googleClientId?: string | null
+  onConnectGoogle?: (credential: string) => Promise<void>
 }) {
   const course = data.dashboard.courses.find((item) => item.course.slug === 'cse-professional') ?? data.dashboard.courses[0] ?? null
   const initials = `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase()
   const subjects = subjectProgress(data.curriculum)
   const assessmentAttempts = course?.subjectAssessments.reduce((sum, assessment) => sum + assessment.attemptCount, 0) ?? 0
+  const signInMethods = user.signInMethods ?? { hasPassword: true, googleConnected: false }
 
   return (
     <>
@@ -125,10 +131,42 @@ export function AccountPageView({
         <aside className="account-side-column">
           <CseExamTargetCard configuredDates={cseExamDates} compact linkToCalendar />
           <CommercialAccessPanel />
+          <section className="account-panel" aria-labelledby="sign-in-methods-title">
+            <div className="account-panel__heading">
+              <p className="eyebrow">Account security</p>
+              <h2 id="sign-in-methods-title">Sign-in methods</h2>
+            </div>
+            <div className="sign-in-methods">
+              <article>
+                <div><strong>Google</strong><span>{signInMethods.googleConnected ? 'Connected' : 'Not connected'}</span></div>
+                <p>{signInMethods.googleConnected ? 'You can continue with Google using this account.' : 'Connect the Google account with the same verified email.'}</p>
+                {!signInMethods.googleConnected && googleClientId !== null && onConnectGoogle !== undefined && (
+                  <GoogleIdentityButton
+                    clientId={googleClientId}
+                    context="signin"
+                    onCredential={onConnectGoogle}
+                  />
+                )}
+              </article>
+              <article>
+                <div><strong>Password</strong><span>{signInMethods.hasPassword ? 'Configured' : 'Not configured'}</span></div>
+                <p>{signInMethods.hasPassword ? 'You can sign in with your email and password.' : 'This Google-created account has no password credential.'}</p>
+              </article>
+            </div>
+          </section>
           <section className="account-panel" aria-labelledby="account-security-title">
-            <div className="account-panel__heading"><p className="eyebrow">Account security</p><h2 id="account-security-title">Change password</h2></div>
-            <p>Confirm your current password before choosing a new one.</p>
-            <ChangePasswordForm />
+            <div className="account-panel__heading">
+              <p className="eyebrow">Password security</p>
+              <h2 id="account-security-title">{signInMethods.hasPassword ? 'Change password' : 'Password not configured'}</h2>
+            </div>
+            {signInMethods.hasPassword ? (
+              <>
+                <p>Confirm your current password before choosing a new one.</p>
+                <ChangePasswordForm />
+              </>
+            ) : (
+              <p>Continue with Google to sign in. PasaWise does not create or store a placeholder password.</p>
+            )}
           </section>
         </aside>
       </div>
@@ -137,7 +175,7 @@ export function AccountPageView({
 }
 
 export function AccountPage() {
-  const { user, cseExamDates } = useAuth()
+  const { connectGoogle, googleClientId, user, cseExamDates } = useAuth()
   const [state, setState] = useState<AccountState>({ status: 'loading' })
 
   useEffect(() => {
@@ -172,7 +210,19 @@ export function AccountPage() {
         <Link className="dashboard-nav-link" to="/courses">Courses</Link>
         <Link aria-current="page" className="dashboard-nav-link dashboard-nav-link--active" to="/account">Account</Link>
       </LearnerTopbar>
-      {state.status === 'error' ? <section className="message-card account-error" role="alert"><h1>Profile unavailable</h1><p>{state.message}</p></section> : <AccountPageView user={user} cseExamDates={cseExamDates} data={state.data} />}
+      {state.status === 'error' ? (
+        <section className="message-card account-error" role="alert">
+          <h1>Profile unavailable</h1><p>{state.message}</p>
+        </section>
+      ) : (
+        <AccountPageView
+          user={user}
+          cseExamDates={cseExamDates}
+          data={state.data}
+          googleClientId={googleClientId}
+          onConnectGoogle={(credential) => connectGoogle({ credential })}
+        />
+      )}
     </main>
   )
 }

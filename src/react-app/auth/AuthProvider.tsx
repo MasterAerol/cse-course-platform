@@ -8,12 +8,15 @@ import {
 
 import {
   ApiClientError,
+  authenticateWithGoogle as googleAuthenticationRequest,
+  connectGoogle as connectGoogleRequest,
   fetchCurrentUser,
   fetchPlatformConfig,
   login as loginRequest,
   logout as logoutRequest,
   registerStudent,
   type CseExamDates,
+  type GoogleCredentialRequest,
   type LoginRequest,
   type RegistrationRequest,
   type RegistrationMode,
@@ -39,6 +42,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [registrationMode, setRegistrationMode] =
     useState<RegistrationMode>('closed')
   const [cseExamDates, setCseExamDates] = useState<CseExamDates>([])
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -74,10 +78,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const config = await fetchPlatformConfig(controller.signal)
         setRegistrationMode(config.data.registrationMode)
+        setGoogleClientId(config.data.googleClientId)
         setCseExamDates(config.data.cseExamDates)
       } catch {
         if (!controller.signal.aborted) {
           setRegistrationMode('closed')
+          setGoogleClientId(null)
           setCseExamDates([])
         }
       }
@@ -116,6 +122,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     },
     [],
   )
+  const continueWithGoogle = useCallback(
+    async (input: GoogleCredentialRequest): Promise<void> => {
+      const authenticatedUser = await googleAuthenticationRequest(input)
+      setUser(authenticatedUser)
+      setError(null)
+    },
+    [],
+  )
+
+  const connectGoogle = useCallback(
+    async (input: GoogleCredentialRequest): Promise<void> => {
+      const updatedUser = await connectGoogleRequest(input)
+      setUser(updatedUser)
+      setError(null)
+    },
+    [],
+  )
 
   const logout = useCallback(async (): Promise<void> => {
     await logoutRequest()
@@ -129,12 +152,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
       loading,
       error,
       registrationMode,
+      googleClientId,
       cseExamDates,
       login,
       register,
+      continueWithGoogle,
+      connectGoogle,
       logout,
     }),
-    [cseExamDates, error, loading, login, logout, register, registrationMode, user],
+    [
+      connectGoogle,
+      continueWithGoogle,
+      cseExamDates,
+      error,
+      googleClientId,
+      loading,
+      login,
+      logout,
+      register,
+      registrationMode,
+      user,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

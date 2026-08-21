@@ -4,6 +4,7 @@ export type RegistrationMode = 'open' | 'closed'
 type SecurityBindingName =
   | 'ENVIRONMENT'
   | 'REGISTRATION_MODE'
+  | 'GOOGLE_CLIENT_ID'
   | 'PAYMENT_RECEIPTS'
   | 'LOGIN_IP_RATE_LIMITER'
   | 'LOGIN_ACCOUNT_RATE_LIMITER'
@@ -15,6 +16,7 @@ type SecurityBindingName =
 export type Bindings = Omit<Cloudflare.Env, SecurityBindingName> & {
   ENVIRONMENT: RuntimeEnvironment
   REGISTRATION_MODE?: string
+  GOOGLE_CLIENT_ID?: string
   PAYMENT_RECEIPTS?: R2Bucket
   LOGIN_IP_RATE_LIMITER?: RateLimit
   LOGIN_ACCOUNT_RATE_LIMITER?: RateLimit

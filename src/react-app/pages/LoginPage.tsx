@@ -8,6 +8,7 @@ import {
 
 import { useAuth } from '../auth/use-auth'
 import { PasaWiseBrand } from '../components/PasaWiseBrand'
+import { GoogleIdentityButton } from '../components/GoogleIdentityButton'
 
 interface LoginLocationState {
   from?: string
@@ -28,7 +29,7 @@ function getLocationState(location: Location): LoginLocationState {
 }
 
 export function LoginPage() {
-  const { login, registrationMode } = useAuth()
+  const { continueWithGoogle, googleClientId, login, registrationMode } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const locationState = getLocationState(location)
@@ -58,6 +59,20 @@ export function LoginPage() {
       setSubmitting(false)
     }
   }
+  async function handleGoogleCredential(credential: string): Promise<void> {
+    setError(null)
+    try {
+      await continueWithGoogle({ credential })
+      await navigate(locationState.from ?? '/dashboard', { replace: true })
+    } catch (googleError: unknown) {
+      setError(
+        googleError instanceof Error
+          ? googleError.message
+          : 'Google sign-in could not be completed.',
+      )
+      throw googleError
+    }
+  }
 
   return (
     <main className="auth-page">
@@ -78,6 +93,16 @@ export function LoginPage() {
           <p className="eyebrow">Welcome back</p>
           <h2 id="login-title">Sign in to PasaWise</h2>
           <p>Use the email and password associated with your account.</p>
+          {googleClientId !== null && (
+            <>
+              <GoogleIdentityButton
+                clientId={googleClientId}
+                context="signin"
+                onCredential={handleGoogleCredential}
+              />
+              <div className="auth-divider" role="separator"><span>or</span></div>
+            </>
+          )}
 
           <form onSubmit={(event) => void handleSubmit(event)} aria-busy={submitting}>
             <label htmlFor="login-email">Email address</label>
