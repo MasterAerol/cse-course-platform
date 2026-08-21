@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 
 import { requireAuthentication } from '../middleware/auth.middleware'
+import { requireCommercialFeature } from '../middleware/commercial-access.middleware'
 import { requireLearner } from '../middleware/learner.middleware'
 import { requireLearnerMutationRateLimit } from '../middleware/rate-limit.middleware'
 import {
@@ -29,6 +30,7 @@ import { parseJsonBody, parseValidatedInput } from '../utils/validation'
 export const smartRecoveryRoutes = new Hono<AppEnv>()
 
 smartRecoveryRoutes.use('*', requireAuthentication)
+smartRecoveryRoutes.use('*', requireCommercialFeature('smart_recovery'))
 smartRecoveryRoutes.use('*', requireLearner)
 smartRecoveryRoutes.use('*', requireLearnerMutationRateLimit)
 

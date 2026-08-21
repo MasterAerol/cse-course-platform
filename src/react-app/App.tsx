@@ -8,6 +8,11 @@ import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage'
 import { AdminCourseBuilderPage } from './pages/admin/AdminCourseBuilderPage'
 import { AdminCoursesPage } from './pages/admin/AdminCoursesPage'
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
+import { AdminBusinessPage } from './pages/admin/AdminBusinessPage'
+import { AdminCommercialLearnersPage } from './pages/admin/AdminCommercialLearnersPage'
+import { AdminCommercialSettingsPage } from './pages/admin/AdminCommercialSettingsPage'
+import { AdminLearnerAccessPage } from './pages/admin/AdminLearnerAccessPage'
+import { AdminPaymentsPage } from './pages/admin/AdminPaymentsPage'
 import { AdminStudentsPage } from './pages/admin/AdminStudentsPage'
 import { CourseCatalogPage } from './pages/CourseCatalogPage'
 import { CourseDetailPage } from './pages/CourseDetailPage'
@@ -104,6 +109,11 @@ export function App() {
             <Route path="courses" element={<AdminCoursesPage />} />
             <Route path="courses/:courseId" element={<AdminCourseBuilderPage />} />
             <Route path="students" element={<AdminStudentsPage />} />
+            <Route path="commercial-learners" element={<AdminCommercialLearnersPage />} />
+            <Route path="commercial-learners/:learnerId" element={<AdminLearnerAccessPage />} />
+            <Route path="payments" element={<AdminPaymentsPage />} />
+            <Route path="business" element={<AdminBusinessPage />} />
+            <Route path="commercial-settings" element={<AdminCommercialSettingsPage />} />
             <Route path="audit-log" element={<AdminAuditLogPage />} />
           </Route>
         </Route>

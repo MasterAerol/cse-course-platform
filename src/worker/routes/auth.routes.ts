@@ -26,6 +26,7 @@ import {
   logoutSession,
   registerStudent,
 } from '../services/auth.service'
+import { isEffectivePublicSignupEnabled } from '../services/commercial.service'
 import type { SessionMetadata } from '../types/auth'
 import type { AppEnv } from '../types/app'
 import { AppError } from '../utils/app-error'
@@ -61,7 +62,12 @@ function getSessionMetadata(context: {
 }
 
 authRoutes.post('/register', async (context) => {
-  if (getRegistrationMode(context.env) !== 'open') {
+  const registrationEnabled = await isEffectivePublicSignupEnabled(
+    context.env.DB,
+    getRegistrationMode(context.env),
+  )
+
+  if (!registrationEnabled) {
     throw new AppError(
       403,
       'REGISTRATION_CLOSED',

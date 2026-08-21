@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -5,6 +6,15 @@ export const RELEASE_CONFIRMATION = 'release-production'
 export const DEFAULT_HEALTH_URL = 'https://cse-course-platform.master-course.workers.dev/api/health'
 export const DEFAULT_LIVE_URL = 'https://cse-course-platform.master-course.workers.dev'
 export const MAX_CHANGED_FILE_BYTES = 15 * 1024 * 1024
+export const APPROVED_COMMERCIAL_INFRASTRUCTURE = Object.freeze({
+  migrationFile: 'migrations/0017_commercial_access_system.sql',
+  migrationName: '0017_commercial_access_system.sql',
+  migrationSha256: '65f661b71b8ede6107ff2cc53d4ccc53b80c6be36681769ede3efa26921889a5',
+  databaseName: 'cse-course-platform',
+  wranglerFile: 'wrangler.jsonc',
+  r2Binding: 'PAYMENT_RECEIPTS',
+  r2Bucket: 'pasawise-payment-receipts',
+})
 
 const booleanFlags = new Set(['help', 'dry-run', 'codex', 'skip-validation', 'skip-deploy', 'deploy-current'])
 const valueOptions = new Set(['message', 'confirm'])
@@ -38,6 +48,92 @@ export function validateReleaseOptions(args) {
 }
 
 export function normalizeGitPath(file) { return file.replaceAll('\\', '/').replace(/^\.\//u, '') }
+function stableJson(value) {
+  if (Array.isArray(value)) return '[' + value.map(stableJson).join(',') + ']'
+  if (value !== null && typeof value === 'object') return '{' + Object.keys(value).sort().map((key) => JSON.stringify(key) + ':' + stableJson(value[key])).join(',') + '}'
+  return JSON.stringify(value)
+}
+
+function parseStrictJson(content, label) {
+  try { return JSON.parse(content) } catch { throw new Error(label + ' must remain strict JSON for this approved release.') }
+}
+
+function normalizedTextSha256(content) {
+  return crypto.createHash('sha256').update(String(content).replace(/\r\n?/gu, '\n'), 'utf8').digest('hex')
+}
+
+function exactInfrastructureFiles(files, expected, label) {
+  const normalized = [...new Set(files.map(normalizeGitPath))].sort()
+  if (normalized.length !== 1 || normalized[0] !== expected) throw new Error(label + ' approval applies only to ' + expected + '.')
+  return normalized
+}
+
+export function validateApprovedMigrationCandidate({ files, content }) {
+  exactInfrastructureFiles(files, APPROVED_COMMERCIAL_INFRASTRUCTURE.migrationFile, 'Migration')
+  const sha256 = normalizedTextSha256(content)
+  if (sha256 !== APPROVED_COMMERCIAL_INFRASTRUCTURE.migrationSha256) throw new Error('Migration ' + APPROVED_COMMERCIAL_INFRASTRUCTURE.migrationName + ' does not match the approved SHA-256.')
+  return { name: APPROVED_COMMERCIAL_INFRASTRUCTURE.migrationName, sha256 }
+}
+
+export function validateApprovedMigrationRelease({ files, content, appliedMigrations, pendingMigrations }) {
+  const candidate = validateApprovedMigrationCandidate({ files, content })
+  const applied = [...new Set(appliedMigrations.map(String))]
+  const pending = [...new Set(pendingMigrations.map(String))]
+  if (!applied.includes(candidate.name)) throw new Error('Migration ' + candidate.name + ' is not recorded as applied in production.')
+  if (pending.length > 0) throw new Error('Production still has pending migrations: ' + pending.join(', ') + '.')
+  return { ...candidate, applied: true, pending: [] }
+}
+
+export function validateApprovedWranglerCandidate({ files, baselineContent, currentContent }) {
+  exactInfrastructureFiles(files, APPROVED_COMMERCIAL_INFRASTRUCTURE.wranglerFile, 'Wrangler configuration')
+  const baseline = parseStrictJson(baselineContent, 'Committed Wrangler configuration')
+  const current = parseStrictJson(currentContent, 'Changed Wrangler configuration')
+  if (Object.hasOwn(baseline, 'r2_buckets')) throw new Error('The committed Wrangler baseline already has R2 configuration; independent review is required.')
+  const expected = structuredClone(baseline)
+  expected.r2_buckets = [{
+    binding: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Binding,
+    bucket_name: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Bucket,
+  }]
+  if (stableJson(current) !== stableJson(expected)) throw new Error('Wrangler configuration contains changes beyond the approved PAYMENT_RECEIPTS R2 binding.')
+  return { binding: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Binding, bucketName: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Bucket }
+}
+
+export function validateApprovedWranglerRelease({ files, baselineContent, currentContent, bucketState }) {
+  const candidate = validateApprovedWranglerCandidate({ files, baselineContent, currentContent })
+  if (bucketState?.exists !== true || bucketState.name !== candidate.bucketName) throw new Error('Approved R2 bucket ' + candidate.bucketName + ' is missing or mismatched.')
+  if (bucketState.devUrlEnabled !== false) throw new Error('Approved R2 bucket ' + candidate.bucketName + ' must keep r2.dev public access disabled.')
+  if (!Array.isArray(bucketState.customDomains) || bucketState.customDomains.length > 0) throw new Error('Approved R2 bucket ' + candidate.bucketName + ' must not have a public custom domain.')
+  return { ...candidate, private: true }
+}
+
+export function parseAppliedMigrationNames(output) {
+  let payload
+  try { payload = JSON.parse(output) } catch { throw new Error('Remote applied-migration query did not return valid JSON.') }
+  if (!Array.isArray(payload) || payload.some((item) => item?.success !== true || !Array.isArray(item.results))) throw new Error('Remote applied-migration query was unsuccessful.')
+  return payload.flatMap((item) => item.results).map((row) => row?.name).filter((name) => typeof name === 'string')
+}
+
+export function parsePendingMigrations(output) {
+  if (/No migrations to apply!/iu.test(output)) return []
+  throw new Error('Remote migration list did not confirm that there are no pending migrations.')
+}
+
+export function parseR2BucketInfo(output) {
+  const name = output.match(/^name:\s*(\S+)\s*$/imu)?.[1]
+  if (!name) throw new Error('Remote R2 bucket info did not confirm the bucket name.')
+  return { exists: true, name }
+}
+
+export function parseR2DevUrlEnabled(output) {
+  if (/Public access via the r2\.dev URL is disabled\./iu.test(output)) return false
+  if (/Public access via the r2\.dev URL is enabled\./iu.test(output)) return true
+  throw new Error('Remote R2 status did not confirm whether r2.dev public access is disabled.')
+}
+
+export function parseR2CustomDomains(output) {
+  if (/There are no custom domains connected to this bucket\./iu.test(output)) return []
+  throw new Error('Remote R2 status did not confirm an empty custom-domain list.')
+}
 export function parseStatusPorcelainZDetailed(output) {
   const entries = output.split('\0').filter(Boolean), result = []
   for (let index = 0; index < entries.length; index += 1) {

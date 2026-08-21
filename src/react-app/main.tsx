@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router'
 import { App } from './App'
 import { AuthProvider } from './auth/AuthProvider'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
+import './commercial.css'
 import './styles.css'
 
 const rootElement = document.getElementById('root')

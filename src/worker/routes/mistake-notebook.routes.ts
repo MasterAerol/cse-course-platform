@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 
 import { requireAuthentication } from '../middleware/auth.middleware'
+import { requireCommercialFeature } from '../middleware/commercial-access.middleware'
 import { requireLearner } from '../middleware/learner.middleware'
 import { requireLearnerMutationRateLimit } from '../middleware/rate-limit.middleware'
 import {
@@ -19,6 +20,7 @@ import { parseValidatedInput } from '../utils/validation'
 export const mistakeNotebookRoutes = new Hono<AppEnv>()
 
 mistakeNotebookRoutes.use('*', requireAuthentication)
+mistakeNotebookRoutes.use('*', requireCommercialFeature('mistake_notebook'))
 mistakeNotebookRoutes.use('*', requireLearner)
 mistakeNotebookRoutes.use('*', requireLearnerMutationRateLimit)
 

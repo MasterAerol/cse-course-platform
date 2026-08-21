@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
+import { CommercialAccessPanel } from '../components/CommercialAccessPanel'
 import { ChangePasswordForm } from '../components/ChangePasswordForm'
 import { CseExamTargetCard } from '../components/CseExamTarget'
 import { LearnerTopbar } from '../components/LearnerTopbar'
@@ -123,6 +124,7 @@ export function AccountPageView({
 
         <aside className="account-side-column">
           <CseExamTargetCard configuredDates={cseExamDates} compact linkToCalendar />
+          <CommercialAccessPanel />
           <section className="account-panel" aria-labelledby="account-security-title">
             <div className="account-panel__heading"><p className="eyebrow">Account security</p><h2 id="account-security-title">Change password</h2></div>
             <p>Confirm your current password before choosing a new one.</p>

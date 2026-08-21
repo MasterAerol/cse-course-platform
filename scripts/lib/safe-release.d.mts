@@ -2,11 +2,21 @@ export const RELEASE_CONFIRMATION: string
 export const DEFAULT_HEALTH_URL: string
 export const DEFAULT_LIVE_URL: string
 export const MAX_CHANGED_FILE_BYTES: number
+export const APPROVED_COMMERCIAL_INFRASTRUCTURE: Readonly<{ migrationFile:string; migrationName:string; migrationSha256:string; databaseName:string; wranglerFile:string; r2Binding:string; r2Bucket:string }>
 export type ReleaseOptions = { message: string; dryRun: boolean; codex: boolean; skipValidation: boolean; skipDeploy: boolean; deployCurrent: boolean }
 export type RiskBlocker = { code: string; reason: string; files: string[] }
 export function parseReleaseArgs(argv?: string[]): Map<string, string>
 export function validateReleaseOptions(args: Map<string, string>): ReleaseOptions
 export function normalizeGitPath(file: string): string
+export function validateApprovedMigrationCandidate(input:{ files:string[]; content:string }):{ name:string; sha256:string }
+export function validateApprovedMigrationRelease(input:{ files:string[]; content:string; appliedMigrations:string[]; pendingMigrations:string[] }):{ name:string; sha256:string; applied:true; pending:[] }
+export function validateApprovedWranglerCandidate(input:{ files:string[]; baselineContent:string; currentContent:string }):{ binding:string; bucketName:string }
+export function validateApprovedWranglerRelease(input:{ files:string[]; baselineContent:string; currentContent:string; bucketState:{ exists:boolean; name:string; devUrlEnabled:boolean; customDomains:string[] } }):{ binding:string; bucketName:string; private:true }
+export function parseAppliedMigrationNames(output:string):string[]
+export function parsePendingMigrations(output:string):string[]
+export function parseR2BucketInfo(output:string):{ exists:true; name:string }
+export function parseR2DevUrlEnabled(output:string):boolean
+export function parseR2CustomDomains(output:string):string[]
 export type GitStatusEntry = { file:string; status:string; untracked:boolean; staged:boolean }
 export function parseStatusPorcelainZDetailed(output:string):GitStatusEntry[]
 export function isReleaseRelevantPath(file:string):boolean

@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { requireAuthentication } from '../middleware/auth.middleware'
+import { requireCommercialFeature } from '../middleware/commercial-access.middleware'
 import { requireLearnerMutationRateLimit } from '../middleware/rate-limit.middleware'
 import { createMockAttemptSchema, markMockQuestionSchema, mockAttemptParamsSchema, mockExamSlugParamsSchema, mockQuestionParamsSchema, saveMockAnswerSchema } from '../schemas/mock-exam.schemas'
 import { createMockExamAttempt, getMockExamAttempt, getMockExamResult, getMockExamReview, getMockExamSummary, getMockReviewSummary, markMockExamQuestion, saveMockExamAnswer, startMockExamProper, submitMockExam } from '../services/mock-exam.service'
@@ -9,6 +10,7 @@ import { parseJsonBody, parseValidatedInput } from '../utils/validation'
 
 export const mockExamRoutes=new Hono<AppEnv>()
 mockExamRoutes.use('*',requireAuthentication)
+mockExamRoutes.use('*', requireCommercialFeature('full_mock'))
 mockExamRoutes.use('*',requireLearnerMutationRateLimit)
 mockExamRoutes.get('/mock-examinations/:mockExamSlug',async(c)=>{const {mockExamSlug}=parseValidatedInput(mockExamSlugParamsSchema.safeParse(c.req.param()));return successResponse(c,await getMockExamSummary(c.env.DB,c.get('authUser').internalUserId,mockExamSlug))})
 mockExamRoutes.post('/mock-examinations/:mockExamSlug/attempts',async(c)=>{const {mockExamSlug}=parseValidatedInput(mockExamSlugParamsSchema.safeParse(c.req.param()));const {mode}=await parseJsonBody(c,createMockAttemptSchema);return successResponse(c,await createMockExamAttempt(c.env.DB,c.get('authUser').internalUserId,mockExamSlug,mode),201)})

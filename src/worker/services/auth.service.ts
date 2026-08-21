@@ -1,9 +1,7 @@
 import { createSessionCredentials, hashSessionToken } from '../auth/session'
 import { hashPassword, verifyPassword } from '../auth/password'
 import {
-  createSession,
   createUserWithSession,
-  findActiveSessionPrincipal,
   findUserByEmail,
   findUserById,
   revokeSessionByTokenHash,
@@ -11,6 +9,11 @@ import {
   updatePasswordAndRevokeOtherSessions,
 } from '../repositories/auth.repository'
 import { findCourseIdBySlug } from '../repositories/course.repository'
+import {
+  createLatestSession,
+  findSessionPrincipal,
+} from '../repositories/commercial-session.repository'
+import { recordLearnerActivity } from './commercial.service'
 import type {
   ChangePasswordInput,
   LoginInput,
@@ -163,8 +166,9 @@ export async function loginUser(
 
   const session = await createSessionCredentials()
 
-  await createSession(database, {
+  await createLatestSession(database, {
     userId: user.id,
+    role: user.role,
     tokenHash: session.tokenHash,
     expiresAt: session.expiresAt.toISOString(),
     metadata,
@@ -182,9 +186,9 @@ export async function authenticateSession(
   token: string,
 ): Promise<AuthenticatedPrincipal> {
   const tokenHash = await hashSessionToken(token)
-  const principal = await findActiveSessionPrincipal(database, tokenHash)
+  const session = await findSessionPrincipal(database, tokenHash)
 
-  if (principal === null) {
+  if (session === null || !session.active) {
     throw new AppError(
       401,
       'UNAUTHENTICATED',
@@ -192,6 +196,15 @@ export async function authenticateSession(
     )
   }
 
+  if (session.replaced) {
+    throw new AppError(
+      401,
+      'SESSION_REPLACED',
+      'Your learner account was signed in on another device.',
+    )
+  }
+
+  const { principal } = session
   if (principal.status === 'suspended') {
     await revokeSessionsForUser(database, principal.internalUserId)
     throw new AppError(
@@ -201,7 +214,7 @@ export async function authenticateSession(
     )
   }
 
-  return {
+  const authenticatedPrincipal: AuthenticatedPrincipal = {
     internalUserId: principal.internalUserId,
     id: principal.id,
     email: principal.email,
@@ -209,6 +222,8 @@ export async function authenticateSession(
     lastName: principal.lastName,
     role: principal.role,
   }
+  await recordLearnerActivity(database, authenticatedPrincipal, tokenHash)
+  return authenticatedPrincipal
 }
 
 export async function changePassword(

@@ -13,3 +13,10 @@ await applyD1Migrations(
   testEnvironment.DB,
   testEnvironment.TEST_MIGRATIONS,
 )
+
+// Existing API suites that bind REGISTRATION_MODE='open' intentionally exercise
+// public registration. Production remains closed, while focused commercial tests
+// reset this database control to verify the fail-closed default independently.
+await testEnvironment.DB.prepare(
+  "UPDATE commercial_settings SET enabled=1 WHERE setting_key='public_signup'",
+).run()

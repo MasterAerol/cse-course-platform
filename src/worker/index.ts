@@ -7,6 +7,7 @@ import {
 import { adminRoutes } from './routes/admin.routes'
 import { authRoutes } from './routes/auth.routes'
 import { configRoutes } from './routes/config.routes'
+import { commercialRoutes } from './routes/commercial.routes'
 import { courseRoutes } from './routes/course.routes'
 import { devRoutes } from './routes/dev.routes'
 import { healthRoutes } from './routes/health.routes'
@@ -40,6 +41,7 @@ app.route('/api/auth', authRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/courses', courseRoutes)
 app.route('/api/student', studentRoutes)
+app.route('/api/student', commercialRoutes)
 app.route('/api/student', practiceRoutes)
 app.route('/api/student', quizRoutes)
 app.route('/api/student', smartRecoveryRoutes)

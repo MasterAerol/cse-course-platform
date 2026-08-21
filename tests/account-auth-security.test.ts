@@ -179,13 +179,13 @@ describe('global account authentication security', () => {
     expect(invalidReplacementText).toContain('Password must contain at least')
   })
 
-  it('updates the versioned hash, keeps the current session, and revokes other sessions', async () => {
+  it('updates the versioned hash, keeps the latest learner session, and revokes older sessions', async () => {
     const email = `password-success-${crypto.randomUUID()}@example.test`
     const originalPassword = 'OriginalPassword123'
     const replacementPassword = 'ReplacementPassword456'
-    const { cookie: currentCookie } = await register(email, originalPassword)
+    const { cookie: replacedCookie } = await register(email, originalPassword)
     const secondLogin = await login(email, originalPassword)
-    const otherCookie = getCookie(secondLogin)
+    const currentCookie = getCookie(secondLogin)
 
     const response = await app.request(
       '/api/auth/change-password',
@@ -210,9 +210,9 @@ describe('global account authentication security', () => {
       { headers: { cookie: currentCookie } },
       bindings,
     )
-    const otherSession = await app.request(
+    const replacedSession = await app.request(
       '/api/auth/me',
-      { headers: { cookie: otherCookie } },
+      { headers: { cookie: replacedCookie } },
       bindings,
     )
     const oldLogin = await login(email, originalPassword)
@@ -224,7 +224,7 @@ describe('global account authentication security', () => {
       .first<{ password_hash: string }>()
 
     expect(currentSession.status).toBe(200)
-    expect(otherSession.status).toBe(401)
+    expect(replacedSession.status).toBe(401)
     expect(oldLogin.status).toBe(401)
     expect(newLogin.status).toBe(200)
     expect(stored?.password_hash).toMatch(/^pbkdf2-sha256\$v1\$100000\$/u)

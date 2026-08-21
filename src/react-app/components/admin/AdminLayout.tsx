@@ -20,6 +20,10 @@ export function AdminLayout() {
           <NavLink to="/admin/courses">Courses &amp; curriculum</NavLink>
           <p>Operations</p>
           <NavLink to="/admin/students">Learner accounts</NavLink>
+          <NavLink to="/admin/commercial-learners">Learner access</NavLink>
+          <NavLink to="/admin/payments">Payments</NavLink>
+          <NavLink to="/admin/business">Business overview</NavLink>
+          <NavLink to="/admin/commercial-settings">Commercial controls</NavLink>
           <NavLink to="/admin/audit-log">Audit log</NavLink>
         </nav>
       </aside>

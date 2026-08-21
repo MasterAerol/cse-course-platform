@@ -15,6 +15,7 @@ import { parseJsonBody } from '../utils/validation'
 import { adminAssessmentRoutes } from './admin/assessment.routes'
 import { adminBetaStudentRoutes } from './admin/beta-student.routes'
 import { adminAuditRoutes } from './admin/audit.routes'
+import { adminCommercialRoutes } from './admin/commercial.routes'
 import { adminCourseRoutes } from './admin/course.routes'
 import { adminCurriculumRoutes } from './admin/curriculum.routes'
 import { adminDashboardRoutes } from './admin/dashboard.routes'
@@ -50,6 +51,7 @@ adminRoutes.route('/', adminLessonBlockRoutes)
 adminRoutes.route('/', adminAssessmentRoutes)
 adminRoutes.route('/', adminBetaStudentRoutes)
 adminRoutes.route('/', adminAuditRoutes)
+adminRoutes.route('/', adminCommercialRoutes)
 adminRoutes.route('/', adminSubjectAssessmentRoutes)
 adminRoutes.route('/', adminMockExamRoutes)
 adminRoutes.route('/', adminQaStudentRoutes)

@@ -20,6 +20,7 @@ import {
   type User,
 } from '../lib/api'
 import { AuthContext, type AuthContextValue } from './auth-context'
+import { subscribeToSessionReplaced } from './session-events'
 
 interface AuthProviderProps {
   children: ReactNode
@@ -88,6 +89,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       controller.abort()
     }
+  }, [])
+
+  useEffect(() => {
+    function handleSessionReplaced(): void {
+      setUser(null)
+      setError(
+        'Your account was signed in on another device. Sign in again to continue here.',
+      )
+    }
+
+    return subscribeToSessionReplaced(handleSessionReplaced)
   }, [])
 
   const login = useCallback(async (input: LoginRequest): Promise<void> => {

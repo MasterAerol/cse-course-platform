@@ -167,18 +167,28 @@ describe('Safe Release Workflow v1', () => {
   })
 
   it('runs a real dry-run inspection without staging, committing, pushing, or deploying', () => {
-    const before = spawnSync('git', ['status', '--porcelain=v1'], { encoding: 'utf8' }).stdout
-    const startedClean = before.trim() === ''
-    const result = spawnSync(process.execPath, ['scripts/safe-release.mjs', '--message', 'Safe release test', '--dry-run', '--skip-validation'], { encoding: 'utf8' })
-    const after = spawnSync('git', ['status', '--porcelain=v1'], { encoding: 'utf8' }).stdout
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'safe-release-dry-run-'))
+    temporaryDirectories.push(directory)
+    const releaseScript = path.resolve('scripts/safe-release.mjs')
+    const git = (args: string[]) => spawnSync('git', args, { cwd: directory, encoding: 'utf8' })
+    expect(git(['init', '-b', 'main']).status).toBe(0)
+    expect(git(['config', 'user.email', 'safe-release@example.com']).status).toBe(0)
+    expect(git(['config', 'user.name', 'Safe Release Test']).status).toBe(0)
+    expect(git(['remote', 'add', 'origin', 'https://github.com/example/repo.git']).status).toBe(0)
+    fs.mkdirSync(path.join(directory, 'src'))
+    fs.writeFileSync(path.join(directory, 'src/app.ts'), 'export const value = 1\n')
+    expect(git(['add', '--all']).status).toBe(0)
+    expect(git(['commit', '-m', 'base']).status).toBe(0)
+    fs.writeFileSync(path.join(directory, 'src/app.ts'), 'export const value = 2\n')
+    const before = git(['status', '--porcelain=v1']).stdout
+    const result = spawnSync(process.execPath, [
+      releaseScript, '--message', 'Safe release test', '--dry-run', '--skip-validation',
+    ], { cwd: directory, encoding: 'utf8' })
+    const after = git(['status', '--porcelain=v1']).stdout
     expect(result.status).toBe(0)
-    if (startedClean) {
-      expect(result.stdout).toContain('SAFE RELEASE — PREFLIGHT')
-      expect(result.stdout).toContain('Nothing to release.')
-    } else {
-      expect(result.stdout).toContain('SAFE RELEASE — DRY RUN PASS')
-      expect(result.stdout).toContain('No staging, commit, push, deployment, migration, or publisher execution occurred.')
-    }
+    expect(result.stdout).toContain('SAFE RELEASE — PREFLIGHT')
+    expect(result.stdout).toContain('SAFE RELEASE — DRY RUN PASS')
+    expect(result.stdout).toContain('No staging, commit, push, deployment, migration, or publisher execution occurred.')
     expect(after).toBe(before)
   })
 })

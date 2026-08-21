@@ -30,5 +30,11 @@
       "database_id": "614f781f-bdb5-4879-95bf-b26c7b8c6d12",
       "migrations_dir": "migrations"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PAYMENT_RECEIPTS",
+      "bucket_name": "pasawise-payment-receipts"
+    }
   ]
 }

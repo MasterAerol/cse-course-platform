@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { DEFAULT_HEALTH_URL, DEFAULT_LIVE_URL, buildScopedStageArgs, classifyChangedFiles, formatBytes, inspectChangedFiles, parseReleaseArgs, parseStatusPorcelainZDetailed, selectPreflightReleaseScope, validateCleanDeploymentSync, validateConcurrentReleaseScope, validateDeploymentPolicy, validateHealthResponse, validateReleaseOptions, validateStagedScope } from './lib/safe-release.mjs'
+import { APPROVED_COMMERCIAL_INFRASTRUCTURE, DEFAULT_HEALTH_URL, DEFAULT_LIVE_URL, buildScopedStageArgs, classifyChangedFiles, formatBytes, inspectChangedFiles, parseAppliedMigrationNames, parsePendingMigrations, parseR2BucketInfo, parseR2CustomDomains, parseR2DevUrlEnabled, parseReleaseArgs, parseStatusPorcelainZDetailed, selectPreflightReleaseScope, validateApprovedMigrationCandidate, validateApprovedMigrationRelease, validateApprovedWranglerCandidate, validateApprovedWranglerRelease, validateCleanDeploymentSync, validateConcurrentReleaseScope, validateDeploymentPolicy, validateHealthResponse, validateReleaseOptions, validateStagedScope } from './lib/safe-release.mjs'
 
 const HELP = `Safe Release Workflow v1
 
@@ -71,13 +71,56 @@ function runValidation() {
   return passed
 }
 
-async function deployWorker(repository, options, passed, gitSummary, publisherSummary) {
+function runWranglerReadOnly(repository, args) {
+  const executable = path.join(repository.root, 'node_modules', 'wrangler', 'bin', 'wrangler.js')
+  return run(process.execPath, [executable, ...args], { print: false, env: { CI: 'true' } }).stdout
+}
+
+function verifyApprovedInfrastructureRelease(repository, risk) {
+  const approvedCodes = new Set()
+  const summaries = []
+
+  if (risk.migrations.length > 0) {
+    const migrationPath = path.join(repository.root, ...APPROVED_COMMERCIAL_INFRASTRUCTURE.migrationFile.split('/'))
+    const content = fs.readFileSync(migrationPath, 'utf8')
+    const candidate = validateApprovedMigrationCandidate({ files: risk.migrations, content })
+    const pendingMigrations = parsePendingMigrations(runWranglerReadOnly(repository, [
+      'd1', 'migrations', 'list', APPROVED_COMMERCIAL_INFRASTRUCTURE.databaseName, '--remote',
+    ]))
+    const appliedMigrations = parseAppliedMigrationNames(runWranglerReadOnly(repository, [
+      'd1', 'execute', APPROVED_COMMERCIAL_INFRASTRUCTURE.databaseName, '--remote',
+      '--command', "SELECT name FROM d1_migrations WHERE name = '0017_commercial_access_system.sql'", '--json',
+    ]))
+    validateApprovedMigrationRelease({ files: risk.migrations, content, appliedMigrations, pendingMigrations })
+    approvedCodes.add('migration_detected')
+    summaries.push(candidate.name + ' exact SHA-256 verified, already applied remotely, no pending migrations, not reapplied.')
+  }
+
+  if (risk.wranglerConfig.length > 0) {
+    const currentContent = fs.readFileSync(path.join(repository.root, APPROVED_COMMERCIAL_INFRASTRUCTURE.wranglerFile), 'utf8')
+    const baselineContent = git(['show', 'HEAD:' + APPROVED_COMMERCIAL_INFRASTRUCTURE.wranglerFile], { print: false }).stdout
+    const candidate = validateApprovedWranglerCandidate({ files: risk.wranglerConfig, baselineContent, currentContent })
+    const bucketState = {
+      ...parseR2BucketInfo(runWranglerReadOnly(repository, ['r2', 'bucket', 'info', candidate.bucketName])),
+      devUrlEnabled: parseR2DevUrlEnabled(runWranglerReadOnly(repository, ['r2', 'bucket', 'dev-url', 'get', candidate.bucketName])),
+      customDomains: parseR2CustomDomains(runWranglerReadOnly(repository, ['r2', 'bucket', 'domain', 'list', candidate.bucketName])),
+    }
+    validateApprovedWranglerRelease({ files: risk.wranglerConfig, baselineContent, currentContent, bucketState })
+    approvedCodes.add('wrangler_config_changed')
+    summaries.push(candidate.binding + ' verified against existing private bucket ' + candidate.bucketName + '; r2.dev disabled; no custom domains.')
+  }
+
+  const blockers = risk.blockers.filter((blocker) => !approvedCodes.has(blocker.code))
+  if (summaries.length > 0) console.log('\nINFRASTRUCTURE - VERIFIED READ-ONLY\n' + summaries.map((item) => '  ' + item).join('\n'))
+  return { blockers, summary: summaries.join(' ') || 'None' }
+}
+async function deployWorker(repository, options, passed, gitSummary, publisherSummary, infrastructureSummary) {
   try { console.log('\nCLOUDFLARE — AUTHENTICATION'); run(process.execPath, [path.join(repository.root, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), 'whoami'], { env: options.codex ? { CI: 'true' } : {} }) } catch { fail('Cloudflare authentication unavailable.', `${gitSummary}\nDeployment not performed.`); return false }
   let deployOutput
   try { console.log('\nCLOUDFLARE — DEPLOY'); deployOutput = run(NPM_COMMAND, [...NPM_PREFIX, 'run', 'deploy']).stdout } catch { fail('Cloudflare Worker deployment failed.', `${gitSummary}\nDeployment did not complete.`); return false }
   try { console.log('\nPOST-DEPLOY — HEALTH'); const response = await fetch(DEFAULT_HEALTH_URL, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15_000) }); validateHealthResponse(response.status, await response.text()) } catch (error) { console.error(`\nDEPLOYED BUT HEALTH CHECK FAILED\n${error.message}\nNo automatic rollback was attempted.`); process.exitCode = 1; return false }
   const version = deployOutput.match(/(?:Version ID|Current Version ID):\s*([\w-]+)/iu)?.[1] ?? 'reported by Wrangler output above'
-  console.log(`\nSAFE RELEASE — APPLICATION DEPLOYED\nValidation: ${passed.join(', ')}\nGit: ${gitSummary}\nWorker: deployed; version ${version}\nHealth: ${DEFAULT_HEALTH_URL} → 200, status ok\nMigration: None\nPublisher: ${publisherSummary}\nLive: ${DEFAULT_LIVE_URL}`)
+  console.log(`\nSAFE RELEASE — APPLICATION DEPLOYED\nValidation: ${passed.join(', ')}\nGit: ${gitSummary}\nWorker: deployed; version ${version}\nHealth: ${DEFAULT_HEALTH_URL} → 200, status ok\nInfrastructure: ${infrastructureSummary}\nPublisher: ${publisherSummary}\nLive: ${DEFAULT_LIVE_URL}`)
   return true
 }
 
@@ -103,7 +146,7 @@ async function main() {
     let passed = []
     if (!options.skipValidation) try { passed = runValidation() } catch (error) { fail(error.message); return }
     if (options.dryRun) { console.log(`\nSAFE RELEASE — CLEAN DEPLOY DRY RUN PASS\nWould deploy synchronized commit ${synchronized.head}.\nNo commit, push, deployment, migration, or publisher execution occurred.`); return }
-    await deployWorker(repository, options, passed, `current synchronized commit ${synchronized.head}; no commit or push required`, 'controlled separately after capability verification')
+    await deployWorker(repository, options, passed, `current synchronized commit ${synchronized.head}; no commit or push required`, 'controlled separately after capability verification', 'None')
     return
   }
   console.log('\ngit status --short'); git(['status', '--short'])
@@ -112,15 +155,20 @@ async function main() {
   const risk = classifyChangedFiles(repository.files)
   console.log(`\nRISK CLASSIFICATION\nChanged files: ${risk.files.length}\nWorker runtime files: ${risk.runtimeFiles.length}\nDeployment required: ${risk.deploymentRequired}\nMigrations: ${risk.migrations.length}\nPublishers requiring separate manual execution: ${risk.publishers.length}\nWrangler/binding changes: ${risk.wranglerConfig.length}`)
   risk.publishers.forEach((file) => console.log(`  Publisher: ${file}`))
+  let infrastructure = { blockers: risk.blockers, summary: 'None' }
   try {
     validateDeploymentPolicy(risk, options.skipDeploy)
     ensureNoConflictMarkers(repository.root, repository.files)
+    infrastructure = verifyApprovedInfrastructureRelease(repository, risk)
     const inspection = inspectChangedFiles(repository.root, [...repository.files, ...repository.ignoredUntrackedFiles])
     if (inspection.secretFindings.length) throw new Error(`Possible secret detected in ${inspection.secretFindings.map((item) => item.file).join(', ')}. Values were not printed.`)
     if (inspection.largeFiles.length) throw new Error(`Oversized changed file detected: ${inspection.largeFiles.map((item) => `${item.file} (${formatBytes(item.bytes)})`).join(', ')}`)
     if (inspection.suspiciousTemporaryFiles.length) throw new Error(`Suspicious temporary binary detected: ${inspection.suspiciousTemporaryFiles.map((item) => `${item.file} (${formatBytes(item.bytes)})`).join(', ')}`)
     if (inspection.productionMutationSignals.length) throw new Error(`Explicit production-mutation signal detected in ${inspection.productionMutationSignals.map((item) => item.file).join(', ')}.`)
-    if (risk.blockers.length) throw new Error(`${risk.blockers.map((item) => `${item.reason}\n${item.files.map((file) => `  - ${file}`).join('\n')}`).join('\n')}\n\nHuman action required: use the controlled production procedure.`)
+    if (infrastructure.blockers.length) {
+      const details = infrastructure.blockers.map((item) => item.reason + '\n' + item.files.map((file) => '  - ' + file).join('\n')).join('\n')
+      throw new Error(details + '\n\nHuman action required: use the controlled production procedure.')
+    }
   } catch (error) { fail(error.message); return }
   let passed = []
   if (!options.skipValidation) try { passed = runValidation() } catch (error) { fail(error.message); return }
@@ -151,9 +199,9 @@ async function main() {
   try { console.log('\nGIT — COMMIT'); git(['commit', '-m', options.message]); commit = git(['log', '-1', '--format=%h %s'], { print: false }).stdout.trim(); console.log(commit) } catch (error) { fail(error.message, 'No push/deploy performed. Local work was preserved.'); return }
   try { console.log('\nGIT — PUSH'); git(['push', 'origin', 'main']) } catch { fail('Git push unavailable in this environment.', `Local commit preserved: ${commit}\nDeployment not performed.`); return }
   if (options.skipDeploy) {
-    console.log(`\nSAFE RELEASE — TOOLING RELEASED\nValidation: ${passed.join(', ')}\nGit: ${commit}; pushed main → origin/main\nWorker: not deployed (--skip-deploy)\nMigration: None\nPublisher: ${risk.publisherRequired ? 'NOT PUBLISHED — separate validate/review/confirmation workflow required' : 'None'}`)
+    console.log(`\nSAFE RELEASE — TOOLING RELEASED\nValidation: ${passed.join(', ')}\nGit: ${commit}; pushed main → origin/main\nWorker: not deployed (--skip-deploy)\nInfrastructure: ${infrastructure.summary}\nPublisher: ${risk.publisherRequired ? 'NOT PUBLISHED — separate validate/review/confirmation workflow required' : 'None'}`)
     return
   }
-  await deployWorker(repository, options, passed, `${commit}; pushed main → origin/main`, risk.publisherRequired ? 'NOT PUBLISHED — separate validate/review/confirmation workflow required' : 'None')
+  await deployWorker(repository, options, passed, `${commit}; pushed main → origin/main`, risk.publisherRequired ? 'NOT PUBLISHED — separate validate/review/confirmation workflow required' : 'None', infrastructure.summary)
 }
 await main()

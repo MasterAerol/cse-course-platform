@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { notifySessionReplaced } from '../auth/session-events'
 import { visualTeachingSchema } from '../../shared/visual-teaching.schema'
 import { subjectAssessmentResultSchema } from '../../shared/subject-assessment-result.schema'
 
@@ -808,7 +809,7 @@ export async function request<T>(
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
 
-  if (init?.body !== undefined) {
+  if (init?.body !== undefined && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
 
@@ -835,13 +836,15 @@ export async function request<T>(
     const errorResult = apiErrorSchema.safeParse(body)
 
     if (errorResult.success) {
-      throw new ApiClientError(
+      const apiError = new ApiClientError(
         errorResult.data.error.message,
         errorResult.data.error.code,
         response.status,
         errorResult.data.error.requestId,
         errorResult.data.error.details?.fieldErrors,
       )
+      if (apiError.code === 'SESSION_REPLACED') notifySessionReplaced()
+      throw apiError
     }
 
     console.error('API error response validation failed.', {
