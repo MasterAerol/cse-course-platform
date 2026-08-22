@@ -19,6 +19,7 @@ import { adminCommercialRoutes } from './admin/commercial.routes'
 import { adminCourseRoutes } from './admin/course.routes'
 import { adminCurriculumRoutes } from './admin/curriculum.routes'
 import { adminDashboardRoutes } from './admin/dashboard.routes'
+import { adminFeedbackRoutes } from './admin/feedback.routes'
 import { adminLessonBlockRoutes } from './admin/lesson-block.routes'
 import { adminSubjectAssessmentRoutes } from './admin/subject-assessment.routes'
 import { adminMockExamRoutes } from './admin/mock-exam.routes'
@@ -52,6 +53,7 @@ adminRoutes.route('/', adminAssessmentRoutes)
 adminRoutes.route('/', adminBetaStudentRoutes)
 adminRoutes.route('/', adminAuditRoutes)
 adminRoutes.route('/', adminCommercialRoutes)
+adminRoutes.route('/', adminFeedbackRoutes)
 adminRoutes.route('/', adminSubjectAssessmentRoutes)
 adminRoutes.route('/', adminMockExamRoutes)
 adminRoutes.route('/', adminQaStudentRoutes)

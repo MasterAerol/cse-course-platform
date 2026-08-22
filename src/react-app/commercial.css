@@ -158,6 +158,128 @@
   padding: var(--space-4, 1rem);
 }
 
+.commercial-pricing,
+.feedback-form,
+.feedback-admin-list {
+  display: grid;
+  gap: var(--space-4, 1rem);
+}
+
+.commercial-plan-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.commercial-discount {
+  justify-self: start;
+  border-radius: 999px;
+  background: var(--status-success, #168253);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 0.3rem 0.65rem;
+}
+
+.commercial-regular-price {
+  color: var(--text-muted, #68758a);
+  text-decoration: line-through;
+}
+
+.commercial-launch-price {
+  color: var(--brand-navy, #0b2f63);
+  font-size: clamp(1.75rem, 6vw, 2.5rem);
+}
+
+.commercial-launch-price small {
+  font-size: 0.9rem;
+}
+
+.premium-lock-page {
+  min-height: 100vh;
+}
+
+.premium-upsell {
+  width: min(100% - 2rem, 44rem);
+  margin: clamp(2rem, 8vw, 7rem) auto;
+  border: 1px solid var(--border-default, #d6deea);
+  border-radius: var(--radius-lg, 1rem);
+  background: #fff;
+  box-shadow: 0 1rem 3rem rgb(11 47 99 / 10%);
+  padding: clamp(1.25rem, 5vw, 3rem);
+  text-align: center;
+}
+
+.premium-upsell .curriculum-lock-badge {
+  display: inline-flex;
+}
+
+.lesson-item--premium {
+  border-color: rgb(177 125 27 / 45%);
+  background: #fffbf2;
+}
+
+.curriculum-lock-link {
+  color: var(--brand-navy, #0b2f63);
+  font-weight: 700;
+}
+
+.launch-readiness__heading,
+.tester-program__heading,
+.feedback-admin-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4, 1rem);
+}
+
+.launch-readiness__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: var(--space-3, 0.75rem);
+}
+
+.launch-readiness__grid article {
+  display: grid;
+  gap: 0.3rem;
+  border: 1px solid var(--border-default, #d6deea);
+  border-radius: var(--radius-md, 0.75rem);
+  padding: var(--space-3, 0.75rem);
+}
+
+.launch-readiness__grid article > span:first-child {
+  color: var(--text-muted, #68758a);
+  text-transform: capitalize;
+}
+
+.tester-program progress {
+  width: 100%;
+  height: 0.9rem;
+}
+
+.feedback-form label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.feedback-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 30rem) {
+  .launch-readiness__heading,
+  .tester-program__heading,
+  .feedback-admin-card header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .premium-upsell {
+    width: calc(100% - 1rem);
+    margin-block: 1rem;
+  }
+}
+
 .commercial-proof-detail {
   margin-block: var(--space-3, 0.75rem);
 }

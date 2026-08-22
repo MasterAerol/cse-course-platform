@@ -138,6 +138,14 @@ function verifyApprovedInfrastructureRelease(repository, risk) {
       }
       validateApprovedWranglerRelease({ files: risk.wranglerConfig, baselineContent, currentContent, bucketState })
       summaries.push(candidate.binding + ' verified against existing private bucket ' + candidate.bucketName + '; r2.dev disabled; no custom domains.')
+    } else if (candidate.kind === 'commercial-simulation') {
+      const secretNames = parseWorkerSecretNames(runWranglerReadOnly(repository, [
+        'secret', 'list', '--format', 'json',
+      ]))
+      validateApprovedWranglerRelease({
+        files: risk.wranglerConfig, baselineContent, currentContent, secretNames,
+      })
+      summaries.push('Commercial simulation registration gate verified OPEN; required Worker secret names remain configured.')
     } else if (candidate.kind === 'authentication-ux') {
       const secretNames = parseWorkerSecretNames(runWranglerReadOnly(repository, [
         'secret', 'list', '--format', 'json',

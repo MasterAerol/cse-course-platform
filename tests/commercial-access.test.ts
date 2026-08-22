@@ -144,6 +144,14 @@ describe('PasaWise Commercial Access System v1', () => {
       { slug: `manual-${crypto.randomUUID()}`, displayName: 'Manual transfer', instructions: 'Transfer and submit proof.', enabled: true, position: paymentMethodPosition++ },
       crypto.randomUUID(),
     )
+    await setCommercialPaymentMethodQr(
+      env.DB,
+      env.PAYMENT_RECEIPTS,
+      admin.principal,
+      method.id,
+      new File([new Uint8Array([137, 80, 78, 71])], 'method.png', { type: 'image/png' }),
+      crypto.randomUUID(),
+    )
     const paymentRequest = await createLearnerPaymentRequest(env.DB, learner.principal.internalUserId, 'founding-learner')
     expect(paymentRequest.id).toMatch(/^PW-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$/u)
     const reference = ` pw-${crypto.randomUUID()} `
@@ -202,6 +210,14 @@ describe('PasaWise Commercial Access System v1', () => {
       crypto.randomUUID(),
     )
     const request = await createLearnerPaymentRequest(env.DB, owner.principal.internalUserId, 'founding-learner')
+    await setCommercialPaymentMethodQr(
+      env.DB,
+      env.PAYMENT_RECEIPTS,
+      admin.principal,
+      method.id,
+      new File([new Uint8Array([137, 80, 78, 71])], 'ownership-method.png', { type: 'image/png' }),
+      crypto.randomUUID(),
+    )
     await expect(getLearnerPaymentRequest(
       env.DB,
       otherLearner.principal.internalUserId,

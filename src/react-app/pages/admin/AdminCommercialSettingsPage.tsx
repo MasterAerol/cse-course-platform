@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { AdminPageHeader } from '../../components/admin/AdminUi'
 import { AdminPaymentMethodForm } from '../../components/admin/AdminPaymentMethodForm'
@@ -21,28 +21,51 @@ export function AdminCommercialSettingsPage() {
   const [draft, setDraft] = useState<CommercialSettings | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
+  const load = useCallback((signal?: AbortSignal): Promise<void> =>
+    fetchAdminCommercialSettings(signal).then((result) => {
+      setData(result)
+      setDraft(result.settings)
+    }), [])
+
   useEffect(() => {
     const controller = new AbortController()
-    void fetchAdminCommercialSettings(controller.signal)
-      .then((result) => {
-        setData(result)
-        setDraft(result.settings)
-      })
+    void load(controller.signal)
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
           setMessage(error instanceof Error ? error.message : 'Commercial settings could not be loaded.')
         }
       })
     return () => controller.abort()
-  }, [])
+  }, [load])
 
   return (
     <main className="admin-page">
       <AdminPageHeader
         title="Commercial controls"
-        description="Manage staged access controls and future plan visibility. All public controls start disabled."
+        description="Manage server-authoritative launch, pricing, checkout, and access controls."
       />
       {message !== null && <p className="form-error" role="status">{message}</p>}
+      {data !== null && (
+        <section className="admin-panel launch-readiness" aria-labelledby="launch-readiness-title">
+          <div className="launch-readiness__heading">
+            <div><p className="eyebrow">Production checks</p><h2 id="launch-readiness-title">Launch Readiness</h2></div>
+            <span className={`admin-status admin-status--${data.launchReadiness.readyForInternalSimulation ? 'active' : 'warning'}`}>
+              {data.launchReadiness.readyForInternalSimulation ? 'READY' : 'ACTION REQUIRED'}
+            </span>
+          </div>
+          <div className="launch-readiness__grid">
+            {Object.entries(data.launchReadiness.checks).map(([key, check]) => (
+              <article key={key}>
+                <span>{key.replaceAll(/([A-Z])/gu, ' $1')}</span>
+                <strong>{check.value ?? (check.ready ? 'READY' : 'MISSING')}</strong>
+                <span aria-label={check.ready ? 'Ready' : 'Action required'}>
+                  {check.ready ? '✓ Ready' : 'Needs attention'}
+                </span>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       {draft !== null && (
         <section className="admin-panel">
           <h2>Platform controls</h2>
@@ -56,8 +79,8 @@ export function AdminCommercialSettingsPage() {
               )) return
               setMessage(null)
               void saveAdminCommercialSettings(draft)
-                .then((result) => {
-                  setDraft(result.settings)
+                .then(() => load())
+                .then(() => {
                   setMessage('Commercial controls saved and audit logged.')
                 })
                 .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'Settings could not be saved.'))
@@ -81,7 +104,7 @@ export function AdminCommercialSettingsPage() {
         <h2>Subscription plans</h2>
         <div className="admin-table-wrap">
           <table className="admin-table">
-            <thead><tr><th>Plan</th><th>Price</th><th>Duration</th><th>Access</th><th>Visibility</th><th>Revenue</th></tr></thead>
+            <thead><tr><th>Plan</th><th>Price</th><th>Duration</th><th>Access</th><th>Visibility</th><th>Offer limit</th><th>Revenue</th></tr></thead>
             <tbody>
               {data?.plans.map((plan) => (
                 <tr key={plan.id}>
@@ -90,6 +113,7 @@ export function AdminCommercialSettingsPage() {
                   <td>{plan.durationDays === null ? 'Manual' : `${plan.durationDays} days`}</td>
                   <td>{plan.accessType}</td>
                   <td>{plan.publicVisible && plan.checkoutEnabled ? 'Public checkout' : 'Hidden'}</td>
+                  <td>{plan.purchaseLimit === null ? 'None' : `${plan.approvedPurchaseCount} / ${plan.purchaseLimit} approved`}</td>
                   <td>{plan.countsAsRevenue ? 'Yes' : 'No'}</td>
                 </tr>
               ))}
@@ -132,16 +156,9 @@ export function AdminCommercialSettingsPage() {
         )}
         <AdminPaymentMethodForm
           methods={data?.paymentMethods ?? []}
-          onSaved={(method) => {
-            setData((current) => {
-              if (current === null) return current
-              const exists = current.paymentMethods.some((item) => item.id === method.id)
-              return {
-                ...current,
-                paymentMethods: exists
-                  ? current.paymentMethods.map((item) => item.id === method.id ? method : item)
-                  : [...current.paymentMethods, method].sort((left, right) => left.position - right.position),
-              }
+          onSaved={() => {
+            void load().catch((error: unknown) => {
+              setMessage(error instanceof Error ? error.message : 'Launch readiness could not be refreshed.')
             })
           }}
         />

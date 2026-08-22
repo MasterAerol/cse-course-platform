@@ -44,7 +44,9 @@ describe('PasaWise lesson reader polish', () => {
     expect(lessonItemSource).toContain('lesson-item--current')
     expect(lessonItemSource).toContain("aria-current={isCurrent ? 'page' : undefined}")
     expect(lessonItemSource).toContain("? 'Completed'")
-    expect(lessonItemSource).toContain('curriculum-lock-badge">Locked')
+    expect(lessonItemSource).toContain("{commercialLock ? 'Premium' : 'Locked'}")
+    expect(lessonItemSource).toContain("? 'Unlock the complete PasaWise experience.'")
+    expect(lessonItemSource).toContain(": 'Complete the previous lesson first.'")
     expect(lessonItemSource).toContain("isCurrent ? 'Current' : progressLabel")
   })
 

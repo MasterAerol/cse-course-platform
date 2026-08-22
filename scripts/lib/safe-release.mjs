@@ -47,10 +47,20 @@ export const APPROVED_AUTH_UX_INFRASTRUCTURE = Object.freeze({
   ],
 })
 
+export const APPROVED_COMMERCIAL_BETA_INFRASTRUCTURE = Object.freeze({
+  migrationFile: 'migrations/0020_commercial_beta_readiness.sql',
+  migrationName: '0020_commercial_beta_readiness.sql',
+  migrationSha256: '75d4efab48a9be58c502229b15bb97e6ae56f638bfe71f01cea2f50a8db4424c',
+  databaseName: 'cse-course-platform',
+  wranglerFile: 'wrangler.jsonc',
+  requiredSecrets: ['EMAIL_VERIFICATION_SECRET', 'RESEND_API_KEY'],
+})
+
 const APPROVED_MIGRATIONS = [
   APPROVED_COMMERCIAL_INFRASTRUCTURE,
   APPROVED_GOOGLE_AUTH_INFRASTRUCTURE,
   APPROVED_AUTH_UX_INFRASTRUCTURE,
+  APPROVED_COMMERCIAL_BETA_INFRASTRUCTURE,
 ]
 const booleanFlags = new Set(['help', 'dry-run', 'codex', 'skip-validation', 'skip-deploy', 'deploy-current'])
 const valueOptions = new Set(['message', 'confirm'])
@@ -137,6 +147,26 @@ export function validateApprovedWranglerCandidate({ files, baselineContent, curr
     return { kind: 'commercial-r2', binding: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Binding, bucketName: APPROVED_COMMERCIAL_INFRASTRUCTURE.r2Bucket }
   }
   if (
+    baseline?.vars?.ENVIRONMENT === 'production' &&
+    baseline?.vars?.REGISTRATION_MODE === 'closed' &&
+    baseline?.vars?.GOOGLE_CLIENT_ID ===
+      APPROVED_GOOGLE_AUTH_INFRASTRUCTURE.googleClientId &&
+    Object.hasOwn(baseline, 'secrets')
+  ) {
+    const expected = structuredClone(baseline)
+    expected.vars.REGISTRATION_MODE = 'open'
+    if (stableJson(current) !== stableJson(expected)) {
+      throw new Error(
+        'Commercial simulation approval permits only REGISTRATION_MODE closed-to-open.',
+      )
+    }
+    return {
+      kind: 'commercial-simulation',
+      registrationMode: 'open',
+      requiredSecrets: [...APPROVED_COMMERCIAL_BETA_INFRASTRUCTURE.requiredSecrets],
+    }
+  }
+  if (
     baseline?.vars?.GOOGLE_CLIENT_ID === APPROVED_GOOGLE_AUTH_INFRASTRUCTURE.googleClientId
   ) {
     if (baseline.vars.ENVIRONMENT !== 'production' || baseline.vars.REGISTRATION_MODE !== 'closed') {
@@ -182,6 +212,14 @@ export function validateApprovedWranglerCandidate({ files, baselineContent, curr
 export function validateApprovedWranglerRelease({ files, baselineContent, currentContent, bucketState, secretNames }) {
   const candidate = validateApprovedWranglerCandidate({ files, baselineContent, currentContent })
   if (candidate.kind === 'google-auth') return candidate
+  if (candidate.kind === 'commercial-simulation') {
+    const configured = new Set(Array.isArray(secretNames) ? secretNames : [])
+    const missing = candidate.requiredSecrets.filter((name) => !configured.has(name))
+    if (missing.length > 0) {
+      throw new Error('Required commercial simulation Worker secrets are missing: ' + missing.join(', ') + '.')
+    }
+    return { ...candidate, secretsConfigured: true }
+  }
   if (candidate.kind === 'authentication-ux') {
     const configured = new Set(Array.isArray(secretNames) ? secretNames : [])
     const missing = candidate.requiredSecrets.filter((name) => !configured.has(name))

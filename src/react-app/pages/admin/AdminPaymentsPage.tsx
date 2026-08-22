@@ -75,6 +75,7 @@ export function AdminPaymentsPage() {
               <div><dt>Payment method</dt><dd>{payment.proof.paymentMethod}</dd></div>
               <div><dt>Reference</dt><dd>{payment.proof.transactionReference}</dd></div>
               <div><dt>Payer</dt><dd>{payment.proof.payerName ?? 'Not provided'}</dd></div>
+              <div><dt>Sender ending</dt><dd>{payment.proof.senderLastDigits ?? 'Not provided'}</dd></div>
               <div><dt>Payment date</dt><dd>{new Date(payment.proof.paymentOccurredAt).toLocaleString()}</dd></div>
               <div><dt>Submitted</dt><dd>{new Date(payment.proof.submittedAt).toLocaleString()}</dd></div>
             </dl>}

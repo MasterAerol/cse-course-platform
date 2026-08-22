@@ -73,16 +73,16 @@ function hasRule(selector: string, declarations: RegExp[]): boolean {
 describe('Full Mock Examination UI', () => {
   it('keeps the established Full Mock routes intact', () => {
     expect(appSource).toContain(
-      'path="mock-examinations/:mockExamSlug" element={<MockExamPage />}',
+      'path="mock-examinations/:mockExamSlug" element={<PremiumRoute feature="full_mock"><MockExamPage /></PremiumRoute>}',
     )
     expect(appSource).toContain(
-      'path="mock-exam-attempts/:attemptPublicId" element={<MockExamAttemptPage />}',
+      'path="mock-exam-attempts/:attemptPublicId" element={<PremiumRoute feature="full_mock"><MockExamAttemptPage /></PremiumRoute>}',
     )
     expect(appSource).toContain(
-      'path="mock-exam-attempts/:attemptPublicId/results" element={<MockExamResultPage />}',
+      'path="mock-exam-attempts/:attemptPublicId/results" element={<PremiumRoute feature="full_mock"><MockExamResultPage /></PremiumRoute>}',
     )
     expect(appSource).toContain(
-      'path="mock-exam-attempts/:attemptPublicId/review" element={<MockExamReviewPage />}',
+      'path="mock-exam-attempts/:attemptPublicId/review" element={<PremiumRoute feature="full_mock"><MockExamReviewPage /></PremiumRoute>}',
     )
   })
 

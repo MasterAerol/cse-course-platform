@@ -1,4 +1,8 @@
 import {
+  FREE_PREVIEW_LESSON_COUNT,
+  PREMIUM_LOCK_COPY,
+} from '../domain/commercial-access'
+import {
   findCourseEnrollmentById,
   findPublishedCurriculumLessons,
   findPublishedLessonByPublicId,
@@ -6,6 +10,7 @@ import {
   type PublishedLessonDetailRow,
 } from '../repositories/course.repository'
 import { AppError } from '../utils/app-error'
+import { getLearnerCommercialAccess } from './commercial.service'
 import type { EnrollmentState, LessonAccessibility } from './course.types'
 import {
   getEnrollmentError,
@@ -17,6 +22,7 @@ export interface AccessibleLessonContext {
   lesson: PublishedLessonDetailRow
   enrollment: EnrollmentState | null
   curriculumRows: CurriculumLessonRow[]
+  hasCommercialAccess: boolean
   currentLesson: CurriculumLessonRow
 }
 
@@ -37,6 +43,10 @@ export function getLockReason(
     return 'Active enrollment is required.'
   }
 
+  if (accessibility.reason === 'commercial_premium_required') {
+    return `${PREMIUM_LOCK_COPY.badge} — ${PREMIUM_LOCK_COPY.message}`
+  }
+
   return 'Complete the previous required lesson to unlock this lesson.'
 }
 
@@ -44,6 +54,7 @@ export function getLessonAccessibilityFromOrderedRows(
   row: CurriculumLessonRow,
   orderedRows: CurriculumLessonRow[],
   enrollment: EnrollmentState | null,
+  hasCommercialAccess = true,
 ): LessonAccessibility {
   if (row.is_preview === 1) {
     return { canAccess: true, reason: 'preview' }
@@ -51,6 +62,16 @@ export function getLessonAccessibilityFromOrderedRows(
 
   if (!isActiveEnrollment(enrollment)) {
     return { canAccess: false, reason: 'enrollment_required' }
+  }
+
+  const normalProgressionIndex = orderedRows.findIndex(
+    (candidate) => candidate.lesson_public_id === row.lesson_public_id,
+  )
+  const isFreePreviewLesson =
+    normalProgressionIndex >= 0 &&
+    normalProgressionIndex < FREE_PREVIEW_LESSON_COUNT
+  if (!hasCommercialAccess && !isFreePreviewLesson) {
+    return { canAccess: false, reason: 'commercial_premium_required' }
   }
 
   if (!isRequiredLesson(row)) {
@@ -86,8 +107,14 @@ export function getLessonAccessibility(
   row: CurriculumLessonRow,
   orderedRows: CurriculumLessonRow[],
   enrollment: EnrollmentState | null,
+  hasCommercialAccess = true,
 ): LessonAccessibility {
-  return getLessonAccessibilityFromOrderedRows(row, orderedRows, enrollment)
+  return getLessonAccessibilityFromOrderedRows(
+    row,
+    orderedRows,
+    enrollment,
+    hasCommercialAccess,
+  )
 }
 
 export async function getAccessibleLessonContext(
@@ -137,17 +164,23 @@ export async function getAccessibleLessonContext(
     )
   }
 
+  const commercialAccess = await getLearnerCommercialAccess(database, userId)
   const accessibility = getLessonAccessibilityFromOrderedRows(
     currentLesson,
     curriculumRows,
     enrollment,
+    commercialAccess.features.full_curriculum,
   )
 
   if (!accessibility.canAccess) {
+    const commercialLock =
+      accessibility.reason === 'commercial_premium_required'
     throw new AppError(
       403,
-      'LESSON_LOCKED',
-      'Complete the previous required lesson to unlock this lesson.',
+      commercialLock ? 'PREMIUM_ACCESS_REQUIRED' : 'LESSON_LOCKED',
+      commercialLock
+        ? PREMIUM_LOCK_COPY.message
+        : 'Complete the previous required lesson to unlock this lesson.',
     )
   }
 
@@ -156,6 +189,7 @@ export async function getAccessibleLessonContext(
     enrollment,
     curriculumRows,
     currentLesson,
+    hasCommercialAccess: commercialAccess.features.full_curriculum,
   }
 }
 

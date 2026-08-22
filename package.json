@@ -14,8 +14,8 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.ui-test.json --noEmit && tsc -p tsconfig.node.json --noEmit && npm run cf-typegen:check",
     "lint": "eslint .",
     "test": "vitest run",
-    "cf-typegen": "wrangler types ./src/worker/worker-configuration.d.ts",
-    "cf-typegen:check": "wrangler types ./src/worker/worker-configuration.d.ts --check",
+    "cf-typegen": "node scripts/worker-typegen.mjs",
+    "cf-typegen:check": "node scripts/worker-typegen.mjs --check",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote"
   },
@@ -28,8 +28,8 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.15.3",
-    "@cloudflare/vitest-pool-workers": "^0.18.8",
+    "@cloudflare/vite-plugin": "^1.53.1",
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
@@ -43,7 +43,7 @@
     "typescript-eslint": "^8.65.0",
     "vite": "^7.0.0",
     "vitest": "^4.0.16",
-    "wrangler": "^4.114.0"
+    "wrangler": "^4.125.0"
   },
   "engines": {
     "node": ">=20.19.0"

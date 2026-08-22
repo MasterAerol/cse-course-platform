@@ -37,6 +37,7 @@ import {
   updateCommercialSettings,
   upsertCommercialPaymentMethod,
 } from '../../services/admin/commercial-settings.service'
+import { getLaunchReadiness } from '../../services/admin/launch-readiness.service'
 import {
   getCommercialSettingsDetail,
   listInternalPlans,
@@ -61,6 +62,11 @@ adminCommercialRoutes.get('/commercial/settings', async (context) =>
     ...(await getCommercialSettingsDetail(context.env.DB)),
     plans: await listInternalPlans(context.env.DB),
     paymentMethods: await listAdminPaymentMethods(context.env.DB),
+    launchReadiness: await getLaunchReadiness(
+      context.env.DB,
+      context.env,
+      new URL(context.req.url).hostname,
+    ),
   }),
 )
 

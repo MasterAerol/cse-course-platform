@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router'
 import { AdminRoute } from './components/AdminRoute'
 import { AdminLayout } from './components/admin/AdminLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { PremiumRoute } from './components/PremiumRoute'
 import { PublicOnlyRoute } from './components/PublicOnlyRoute'
 import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage'
 import { AdminCourseBuilderPage } from './pages/admin/AdminCourseBuilderPage'
@@ -11,6 +12,7 @@ import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
 import { AdminBusinessPage } from './pages/admin/AdminBusinessPage'
 import { AdminCommercialLearnersPage } from './pages/admin/AdminCommercialLearnersPage'
 import { AdminCommercialSettingsPage } from './pages/admin/AdminCommercialSettingsPage'
+import { AdminFeedbackPage } from './pages/admin/AdminFeedbackPage'
 import { AdminLearnerAccessPage } from './pages/admin/AdminLearnerAccessPage'
 import { AdminPaymentsPage } from './pages/admin/AdminPaymentsPage'
 import { AdminStudentsPage } from './pages/admin/AdminStudentsPage'
@@ -61,30 +63,30 @@ export function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="account" element={<AccountPage />} />
         <Route path="exam-calendar" element={<ExamCalendarPage />} />
-        <Route path="mistake-notebook" element={<MistakeNotebookPage />} />
-        <Route path="readiness" element={<ReadinessPage />} />
-        <Route path="mistake-notebook/:entryId" element={<MistakeNotebookDetailPage />} />
-        <Route path="smart-recovery" element={<SmartRecoveryPage />} />
+        <Route path="mistake-notebook" element={<PremiumRoute feature="mistake_notebook"><MistakeNotebookPage /></PremiumRoute>} />
+        <Route path="readiness" element={<PremiumRoute feature="readiness_score"><ReadinessPage /></PremiumRoute>} />
+        <Route path="mistake-notebook/:entryId" element={<PremiumRoute feature="mistake_notebook"><MistakeNotebookDetailPage /></PremiumRoute>} />
+        <Route path="smart-recovery" element={<PremiumRoute feature="smart_recovery"><SmartRecoveryPage /></PremiumRoute>} />
         <Route
           path="smart-recovery/skills/:skillSlug"
-          element={<SmartRecoverySkillPage />}
+          element={<PremiumRoute feature="smart_recovery"><SmartRecoverySkillPage /></PremiumRoute>}
         />
         <Route
           path="smart-recovery/attempts/:attemptPublicId"
-          element={<SmartRecoveryAttemptPage />}
+          element={<PremiumRoute feature="smart_recovery"><SmartRecoveryAttemptPage /></PremiumRoute>}
         />
         <Route
           path="smart-recovery/attempts/:attemptPublicId/results"
-          element={<SmartRecoveryResultPage />}
+          element={<PremiumRoute feature="smart_recovery"><SmartRecoveryResultPage /></PremiumRoute>}
         />
-        <Route path="assessments/:assessmentSlug" element={<SubjectAssessmentPage />} />
-        <Route path="assessment-attempts/:attemptPublicId" element={<SubjectAssessmentAttemptPage />} />
-        <Route path="assessment-attempts/:attemptPublicId/results" element={<SubjectAssessmentResultPage />} />
-        <Route path="assessment-attempts/:attemptPublicId/review" element={<SubjectAssessmentReviewPage />} />
-        <Route path="mock-examinations/:mockExamSlug" element={<MockExamPage />} />
-        <Route path="mock-exam-attempts/:attemptPublicId" element={<MockExamAttemptPage />} />
-        <Route path="mock-exam-attempts/:attemptPublicId/results" element={<MockExamResultPage />} />
-        <Route path="mock-exam-attempts/:attemptPublicId/review" element={<MockExamReviewPage />} />
+        <Route path="assessments/:assessmentSlug" element={<PremiumRoute feature="subject_assessments"><SubjectAssessmentPage /></PremiumRoute>} />
+        <Route path="assessment-attempts/:attemptPublicId" element={<PremiumRoute feature="subject_assessments"><SubjectAssessmentAttemptPage /></PremiumRoute>} />
+        <Route path="assessment-attempts/:attemptPublicId/results" element={<PremiumRoute feature="subject_assessments"><SubjectAssessmentResultPage /></PremiumRoute>} />
+        <Route path="assessment-attempts/:attemptPublicId/review" element={<PremiumRoute feature="subject_assessments"><SubjectAssessmentReviewPage /></PremiumRoute>} />
+        <Route path="mock-examinations/:mockExamSlug" element={<PremiumRoute feature="full_mock"><MockExamPage /></PremiumRoute>} />
+        <Route path="mock-exam-attempts/:attemptPublicId" element={<PremiumRoute feature="full_mock"><MockExamAttemptPage /></PremiumRoute>} />
+        <Route path="mock-exam-attempts/:attemptPublicId/results" element={<PremiumRoute feature="full_mock"><MockExamResultPage /></PremiumRoute>} />
+        <Route path="mock-exam-attempts/:attemptPublicId/review" element={<PremiumRoute feature="full_mock"><MockExamReviewPage /></PremiumRoute>} />
         <Route
           path="courses/:courseSlug/lessons/:lessonPublicId"
           element={<LessonPage />}
@@ -116,6 +118,7 @@ export function App() {
             <Route path="payments" element={<AdminPaymentsPage />} />
             <Route path="business" element={<AdminBusinessPage />} />
             <Route path="commercial-settings" element={<AdminCommercialSettingsPage />} />
+            <Route path="feedback" element={<AdminFeedbackPage />} />
             <Route path="audit-log" element={<AdminAuditLogPage />} />
           </Route>
         </Route>

@@ -20,6 +20,18 @@ export const DEFAULT_COMMERCIAL_SETTINGS: CommercialSettings = {
   publicCheckout: false,
   premiumAccessEnforcement: false,
 }
+export const FREE_PREVIEW_LESSON_COUNT = 3
+export const TESTER_PROGRAM_CAPACITY = 20
+
+export const PREMIUM_LOCK_COPY = {
+  badge: 'Premium',
+  title: 'PasaWise Premium',
+  message: 'Unlock the complete PasaWise experience.',
+} as const
+
+export const PREMIUM_FEATURE_SUMMARY =
+  'Unlock complete access to lessons, assessments, Smart Recovery, Readiness Score, and Full Mock.'
+
 
 export type CommercialAccessType = 'FREE' | 'PREMIUM' | 'TESTER' | 'EXPIRED'
 

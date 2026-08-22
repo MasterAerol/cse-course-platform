@@ -1,4 +1,7 @@
-import { addUtcDays } from '../../domain/commercial-access'
+import {
+  TESTER_PROGRAM_CAPACITY,
+  addUtcDays,
+} from '../../domain/commercial-access'
 import type {
   AdminExtendAccessInput,
   AdminGrantAccessInput,
@@ -253,6 +256,27 @@ export async function grantAdminAccess(
   if (plan === null || plan.duration_days === null) {
     throw new AppError(404, 'PLAN_NOT_FOUND', 'Subscription plan not found.')
   }
+  if (plan.access_type === 'TESTER') {
+    const activeTesterCount = await database
+      .prepare(
+        `SELECT COUNT(*) AS count
+        FROM commercial_entitlements
+        WHERE access_type = 'TESTER'
+          AND status = 'active'
+          AND datetime(starts_at) <= CURRENT_TIMESTAMP
+          AND datetime(expires_at) > CURRENT_TIMESTAMP
+          AND user_id <> ?1`,
+      )
+      .bind(learner.internal_id)
+      .first<{ count: number }>()
+    if ((activeTesterCount?.count ?? 0) >= TESTER_PROGRAM_CAPACITY) {
+      throw new AppError(
+        409,
+        'TESTER_PROGRAM_FULL',
+        'The 20-person Tester Program is currently full.',
+      )
+    }
+  }
   const startsAt = new Date()
   const durationDays = input.durationDays ?? plan.duration_days
   const expiresAt = addUtcDays(startsAt, durationDays)
@@ -454,6 +478,8 @@ interface BusinessMetricsRow {
   rejected_payments: number
   refunded_payments: number
   revenue_today: number
+  tester_expiring_soon: number
+  tester_expired: number
   revenue_week: number
   revenue_month: number
   revenue_all_time: number
@@ -511,6 +537,14 @@ export async function getBusinessOverview(database: D1Database) {
             AND datetime(expires_at) > CURRENT_TIMESTAMP) AS active_premium,
         (SELECT COUNT(*) FROM learner_access
           WHERE access_type = 'TESTER' AND entitlement_status = 'active'
+            AND datetime(expires_at) > CURRENT_TIMESTAMP
+            AND datetime(expires_at) <= datetime('now', '+7 days')) AS tester_expiring_soon,
+        (SELECT COUNT(*) FROM learner_access
+          WHERE access_type = 'TESTER'
+            AND NOT (entitlement_status = 'active'
+              AND datetime(expires_at) > CURRENT_TIMESTAMP)) AS tester_expired,
+        (SELECT COUNT(*) FROM learner_access
+          WHERE access_type = 'TESTER' AND entitlement_status = 'active'
             AND datetime(expires_at) > CURRENT_TIMESTAMP) AS tester_accounts,
         (SELECT COUNT(*) FROM learner_access WHERE access_type IS NULL) AS free_learners,
         (SELECT COUNT(*) FROM learner_access
@@ -542,6 +576,15 @@ export async function getBusinessOverview(database: D1Database) {
       newToday: row.new_today,
       newThisWeek: row.new_week,
       newThisMonth: row.new_month,
+    },
+    testerProgram: {
+      capacity: TESTER_PROGRAM_CAPACITY,
+      active: row.tester_accounts,
+      available: Math.max(0, TESTER_PROGRAM_CAPACITY - row.tester_accounts),
+      expiringSoon: row.tester_expiring_soon,
+      expired: row.tester_expired,
+      durationDays: 14 as const,
+      revenueMinor: 0 as const,
     },
     online: { onlineNow: row.online_now, definitionMinutes: 5 as const },
     access: {

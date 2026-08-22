@@ -52,6 +52,22 @@ export function AdminBusinessPage() {
         {metrics.map(([label, value]) => <article className="admin-panel" key={label}><span>{label}</span><strong>{value}</strong></article>)}
       </section>
       {data !== null && (
+        <section className="admin-panel tester-program" aria-labelledby="tester-program-title">
+          <div className="tester-program__heading">
+            <div><p className="eyebrow">External beta</p><h2 id="tester-program-title">Tester Program</h2></div>
+            <strong>{data.testerProgram.active} / {data.testerProgram.capacity}</strong>
+          </div>
+          <progress aria-label="Active Tester Program capacity" max={data.testerProgram.capacity} value={data.testerProgram.active} />
+          <dl className="commercial-detail-grid">
+            <div><dt>Available</dt><dd>{data.testerProgram.available}</dd></div>
+            <div><dt>Expiring in 7 days</dt><dd>{data.testerProgram.expiringSoon}</dd></div>
+            <div><dt>Expired testers</dt><dd>{data.testerProgram.expired}</dd></div>
+            <div><dt>Access grant</dt><dd>{data.testerProgram.durationDays} days · {php(data.testerProgram.revenueMinor)}</dd></div>
+          </dl>
+          <p>Tester Premium is granted manually and never assigned on signup.</p>
+        </section>
+      )}
+      {data !== null && (
         <section className="admin-panel">
           <h2>Verified revenue</h2>
           <p>Revenue includes approved, non-zero, revenue-counting payments only. Tester access never contributes.</p>
@@ -61,7 +77,7 @@ export function AdminBusinessPage() {
             <div><dt>This month</dt><dd>{php(data.revenue.thisMonthMinor)}</dd></div>
             <div><dt>All time</dt><dd>{php(data.revenue.allTimeMinor)}</dd></div>
             <div><dt>Paid customers</dt><dd>{data.revenue.paidCustomers}</dd></div>
-            <div><dt>Paid transactions</dt><dd>{data.revenue.approvedPaidTransactions}</dd></div>
+            <div><dt>Approved transactions</dt><dd>{data.revenue.approvedPaidTransactions}</dd></div>
           </dl>
         </section>
       )}

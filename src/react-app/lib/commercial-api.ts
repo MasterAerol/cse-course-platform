@@ -43,6 +43,9 @@ const planSchema = z.object({
   publicVisible: z.boolean(),
   checkoutEnabled: z.boolean(),
   countsAsRevenue: z.boolean(),
+  purchaseLimit: z.number().int().positive().nullable(),
+  approvedPurchaseCount: z.number().int().nonnegative(),
+  purchaseAvailable: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
@@ -80,6 +83,7 @@ const paymentRequestSchema = z.object({
     slug: z.string(),
     name: z.string(),
     accessType: z.enum(['PREMIUM', 'TESTER']),
+    durationDays: z.number().int().positive().nullable(),
   }),
   expectedAmountMinor: z.number().int().nonnegative(),
   currency: z.literal('PHP'),
@@ -116,6 +120,30 @@ const settingsSchema = z.object({
   publicCheckout: z.boolean(),
   premiumAccessEnforcement: z.boolean(),
 })
+const readinessCheckSchema = z.object({
+  ready: z.boolean(),
+  value: z.string().optional(),
+})
+const launchReadinessSchema = z.object({
+  readyForInternalSimulation: z.boolean(),
+  checks: z.object({
+    domain: readinessCheckSchema,
+    google: readinessCheckSchema,
+    emailOtp: readinessCheckSchema,
+    resend: readinessCheckSchema,
+    r2Receipts: readinessCheckSchema,
+    registration: readinessCheckSchema,
+    publicSignup: readinessCheckSchema,
+    premiumEnforcement: readinessCheckSchema,
+    pricing: readinessCheckSchema,
+    checkout: readinessCheckSchema,
+    paymentMethod: readinessCheckSchema,
+    foundingLearner: readinessCheckSchema,
+    testerPremium: readinessCheckSchema.extend({
+      capacity: z.number().int().positive(),
+    }),
+  }),
+})
 const adminSettingsSchema = z.object({
   settings: settingsSchema,
   controls: z.array(
@@ -128,6 +156,7 @@ const adminSettingsSchema = z.object({
   ),
   plans: z.array(planSchema),
   paymentMethods: z.array(paymentMethodSchema),
+  launchReadiness: launchReadinessSchema,
 })
 const learnerSummarySchema = z.object({
   id: z.string(),
@@ -162,6 +191,15 @@ const businessSchema = z.object({
     newThisWeek: z.number(),
     newThisMonth: z.number(),
   }),
+  testerProgram: z.object({
+    capacity: z.number().int().positive(),
+    active: z.number().int().nonnegative(),
+    available: z.number().int().nonnegative(),
+    expiringSoon: z.number().int().nonnegative(),
+    expired: z.number().int().nonnegative(),
+    durationDays: z.literal(14),
+    revenueMinor: z.literal(0),
+  }),
   online: z.object({ onlineNow: z.number(), definitionMinutes: z.literal(5) }),
   access: z.object({
     activePremium: z.number(),
@@ -188,6 +226,7 @@ const businessSchema = z.object({
 })
 
 export type CommercialAccess = z.infer<typeof accessSchema>
+export type CommercialFeature = keyof CommercialAccess['features']
 export type CommercialPlan = z.infer<typeof planSchema>
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>
 export type CommercialPaymentRequest = z.infer<typeof paymentRequestSchema>
@@ -213,6 +252,8 @@ export async function fetchLearnerPlans(signal?: AbortSignal) {
         z.object({
           checkoutEnabled: z.boolean(),
           showPricing: z.boolean(),
+          paymentMethodConfigured: z.boolean(),
+          regularReferencePriceMinor: z.number().int().nonnegative().nullable(),
           plans: z.array(planSchema),
         }),
       ),
@@ -438,6 +479,74 @@ export async function decidePayment(
       `/api/admin/commercial/payments/${encodeURIComponent(id)}/${action}`,
       success(paymentRequestSchema),
       { method: 'POST', body },
+    )
+  ).data
+}
+
+const feedbackCategorySchema = z.enum([
+  'bug',
+  'content',
+  'confusing',
+  'suggestion',
+  'other',
+])
+const feedbackStatusSchema = z.enum(['new', 'reviewed', 'resolved'])
+const feedbackSchema = z.object({
+  id: z.string(),
+  learner: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string(),
+  }),
+  category: feedbackCategorySchema,
+  message: z.string(),
+  pagePath: z.string(),
+  status: feedbackStatusSchema,
+  reviewedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export type FeedbackCategory = z.infer<typeof feedbackCategorySchema>
+export type FeedbackStatus = z.infer<typeof feedbackStatusSchema>
+export type BetaFeedback = z.infer<typeof feedbackSchema>
+
+export async function submitFeedback(input: {
+  category: FeedbackCategory
+  message: string
+  pagePath: string
+}) {
+  return (
+    await request('/api/student/feedback', success(feedbackSchema), {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+  ).data
+}
+
+export async function fetchAdminFeedback(
+  status?: FeedbackStatus,
+  signal?: AbortSignal,
+) {
+  const query = status === undefined ? '' : `?status=${status}`
+  return (
+    await request(
+      `/api/admin/feedback${query}`,
+      success(z.array(feedbackSchema)),
+      { signal },
+    )
+  ).data
+}
+
+export async function updateFeedbackStatus(
+  feedbackId: string,
+  status: FeedbackStatus,
+) {
+  return (
+    await request(
+      `/api/admin/feedback/${encodeURIComponent(feedbackId)}`,
+      success(feedbackSchema),
+      { method: 'PATCH', body: JSON.stringify({ status }) },
     )
   ).data
 }

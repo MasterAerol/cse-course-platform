@@ -45,12 +45,18 @@ export function CurriculumLessonItem({
   }
 
   const metadata = metaParts.join(' · ')
-  const lockMessage = 'Complete the previous lesson first.'
+  const commercialLock =
+    lesson.accessibility.reason === 'commercial_premium_required'
+  const lockMessage = commercialLock
+    ? 'Unlock the complete PasaWise experience.'
+    : 'Complete the previous lesson first.'
 
   if (lesson.isLocked) {
     return (
       <li
         className={`lesson-item lesson-item--locked ${
+          commercialLock ? 'lesson-item--premium ' : ''
+        }${
           compact ? 'lesson-item--compact' : ''
         }`}
       >
@@ -60,10 +66,17 @@ export function CurriculumLessonItem({
             <span className="lesson-item__meta">{metadata}</span>
           </span>
           <span className="curriculum-lock-state" aria-label={lesson.lockReason ?? 'Locked'}>
-            <span className="curriculum-lock-badge">Locked</span>
+            <span className="curriculum-lock-badge">
+              {commercialLock ? 'Premium' : 'Locked'}
+            </span>
             <span className="curriculum-lock-message">{lockMessage}</span>
             {lesson.lockReason ? (
               <span className="visually-hidden">{`Reason: ${lesson.lockReason}`}</span>
+            ) : null}
+            {commercialLock && !compact ? (
+              <Link className="curriculum-lock-link" to="/account#plans">
+                View plans
+              </Link>
             ) : null}
           </span>
         </span>

@@ -94,6 +94,7 @@ const lessonAccessibilitySchema = z.object({
     'not_required',
     'enrollment_required',
     'previous_required_lesson_incomplete',
+    'commercial_premium_required',
   ]),
 })
 

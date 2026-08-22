@@ -7,6 +7,7 @@ export const MAX_CHANGED_FILE_BYTES: number
 export const APPROVED_COMMERCIAL_INFRASTRUCTURE: Readonly<{ migrationFile:string; migrationName:string; migrationSha256:string; databaseName:string; wranglerFile:string; r2Binding:string; r2Bucket:string }>
 export const APPROVED_GOOGLE_AUTH_INFRASTRUCTURE: Readonly<{ migrationFile:string; migrationName:string; migrationSha256:string; databaseName:string; wranglerFile:string; googleClientId:string }>
 export const APPROVED_AUTH_UX_INFRASTRUCTURE: Readonly<{ migrationFile:string; migrationName:string; migrationSha256:string; databaseName:string; wranglerFile:string; requiredSecrets:readonly string[]; rateLimits:ReadonlyArray<{ name:string; namespace_id:string; simple:{ limit:number; period:number } }> }>
+export const APPROVED_COMMERCIAL_BETA_INFRASTRUCTURE: Readonly<{ migrationFile:string; migrationName:string; migrationSha256:string; databaseName:string; wranglerFile:string; requiredSecrets:readonly string[] }>
 export type ReleaseOptions = { message: string; dryRun: boolean; codex: boolean; skipValidation: boolean; skipDeploy: boolean; deployCurrent: boolean }
 export type RiskBlocker = { code: string; reason: string; files: string[] }
 export function parseReleaseArgs(argv?: string[]): Map<string, string>
@@ -15,11 +16,12 @@ export function normalizeGitPath(file: string): string
 export type ApprovedAuthUxWranglerCandidate = { kind:'authentication-ux'; requiredSecrets:string[]; rateLimits:Array<{ name:string; namespace_id:string; simple:{ limit:number; period:number } }>; registrationMode:'closed' }
 export type ApprovedCommercialWranglerCandidate = { kind:'commercial-r2'; binding:string; bucketName:string }
 export type ApprovedGoogleAuthWranglerCandidate = { kind:'google-auth'; clientId:string; registrationMode:'closed' }
+export type ApprovedCommercialSimulationWranglerCandidate = { kind:'commercial-simulation'; registrationMode:'open'; requiredSecrets:string[] }
 export function validateApprovedMigrationCandidate(input:{ files:string[]; content:string }):{ name:string; sha256:string; databaseName:string }
 export function validateApprovedMigrationRelease(input:{ files:string[]; content:string; appliedMigrations:string[]; pendingMigrations:string[] }):{ name:string; sha256:string; databaseName:string; applied:true; pending:[] }
-export function validateApprovedWranglerCandidate(input:{ files:string[]; baselineContent:string; currentContent:string }):ApprovedCommercialWranglerCandidate | ApprovedGoogleAuthWranglerCandidate | ApprovedAuthUxWranglerCandidate
+export function validateApprovedWranglerCandidate(input:{ files:string[]; baselineContent:string; currentContent:string }):ApprovedCommercialWranglerCandidate | ApprovedGoogleAuthWranglerCandidate | ApprovedAuthUxWranglerCandidate | ApprovedCommercialSimulationWranglerCandidate
 export function parseWorkerSecretNames(output:string):string[]
-export function validateApprovedWranglerRelease(input:{ files:string[]; baselineContent:string; currentContent:string; bucketState?:{ exists:boolean; name:string; devUrlEnabled:boolean; customDomains:string[] }; secretNames?:string[] }):{ binding:string; bucketName:string; private:true } | ApprovedGoogleAuthWranglerCandidate | (ApprovedAuthUxWranglerCandidate & { secretsConfigured:true })
+export function validateApprovedWranglerRelease(input:{ files:string[]; baselineContent:string; currentContent:string; bucketState?:{ exists:boolean; name:string; devUrlEnabled:boolean; customDomains:string[] }; secretNames?:string[] }):{ binding:string; bucketName:string; private:true } | ApprovedGoogleAuthWranglerCandidate | (ApprovedAuthUxWranglerCandidate & { secretsConfigured:true }) | (ApprovedCommercialSimulationWranglerCandidate & { secretsConfigured:true })
 export function parseAppliedMigrationNames(output:string):string[]
 export function parsePendingMigrations(output:string):string[]
 export function parseR2BucketInfo(output:string):{ exists:true; name:string }

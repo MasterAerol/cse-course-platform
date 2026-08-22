@@ -19,6 +19,7 @@ import type {
   LessonNavigationItem,
   StudentCourseCurriculum,
 } from './course.types'
+import { getLearnerCommercialAccess } from './commercial.service'
 import {
   accessDeniedError,
   isActiveEnrollment,
@@ -35,6 +36,7 @@ import {
 export function mapCurriculum(
   rows: CurriculumLessonRow[],
   enrollment: EnrollmentState | null,
+  hasCommercialAccess = true,
 ): CurriculumSubjectSummary[] {
   const subjects = new Map<number, CurriculumSubjectSummary>()
   const topics = new Set<string>()
@@ -68,7 +70,12 @@ export function mapCurriculum(
       topics.add(topicKey)
     }
 
-    const accessibility = getLessonAccessibility(row, rows, enrollment)
+    const accessibility = getLessonAccessibility(
+      row,
+      rows,
+      enrollment,
+      hasCommercialAccess,
+    )
 
     topic.lessons.push({
       publicId: row.lesson_public_id,
@@ -100,6 +107,7 @@ export function mapNavigationLesson(
   row: CurriculumLessonRow | undefined,
   orderedRows: CurriculumLessonRow[],
   enrollment: EnrollmentState | null,
+  hasCommercialAccess = true,
 ): LessonNavigationItem | null {
   if (row === undefined) {
     return null
@@ -108,6 +116,7 @@ export function mapNavigationLesson(
     row,
     orderedRows,
     enrollment,
+    hasCommercialAccess,
   )
 
   return {
@@ -147,7 +156,12 @@ export async function getStudentCourseCurriculum(
     course.id,
     userId,
   )
-  const subjects = mapCurriculum(curriculumRows, enrollment)
+  const commercialAccess = await getLearnerCommercialAccess(database, userId)
+  const subjects = mapCurriculum(
+    curriculumRows,
+    enrollment,
+    commercialAccess.features.full_curriculum,
+  )
 
   if (
     !isActiveEnrollment(enrollment) &&
@@ -168,10 +182,11 @@ export async function buildStudentLessonDetail(
     lesson: PublishedLessonDetailRow
     enrollment: EnrollmentState | null
     curriculumRows: CurriculumLessonRow[]
+    hasCommercialAccess: boolean
   },
   progress: LessonProgressRow | null,
 ): Promise<LessonDetail> {
-  const { lesson, enrollment, curriculumRows } = context
+  const { lesson, enrollment, curriculumRows, hasCommercialAccess } = context
   const blockRows = await findLessonBlocks(database, lesson.lesson_id)
   const blocks: LessonBlock[] = []
   let malformedBlockCount = 0
@@ -207,11 +222,13 @@ export async function buildStudentLessonDetail(
     curriculumRows[currentIndex - 1],
     curriculumRows,
     enrollment,
+    hasCommercialAccess,
   )
   const nextLesson = mapNavigationLesson(
     curriculumRows[currentIndex + 1],
     curriculumRows,
     enrollment,
+    hasCommercialAccess,
   )
 
   return {

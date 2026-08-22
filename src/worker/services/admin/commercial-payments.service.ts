@@ -16,6 +16,8 @@ interface PaymentAdminRow {
   plan_slug: string
   plan_access_type: 'PREMIUM' | 'TESTER'
   duration_days: number | null
+  purchase_limit: number | null
+  approved_purchase_count: number
   expected_amount_minor: number
   currency: string
   status: PaymentState
@@ -39,6 +41,11 @@ async function findPaymentAdminRow(
         subscription_plans.slug AS plan_slug,
         subscription_plans.access_type AS plan_access_type,
         subscription_plans.duration_days,
+        subscription_plans.purchase_limit,
+        (SELECT COUNT(*) FROM payment_requests AS approved_requests
+          WHERE approved_requests.plan_id = payment_requests.plan_id
+            AND approved_requests.status = 'approved'
+        ) AS approved_purchase_count,
         payment_requests.expected_amount_minor,
         payment_requests.currency,
         payment_requests.status,
@@ -205,6 +212,17 @@ export async function approvePaymentRequest(
 
   const approvedAt = new Date().toISOString()
   const expiresAt = addUtcDays(new Date(approvedAt), row.duration_days).toISOString()
+  if (
+    row.purchase_limit !== null &&
+    row.approved_purchase_count >= row.purchase_limit
+  ) {
+    throw new AppError(
+      409,
+      'PLAN_PURCHASE_LIMIT_REACHED',
+      'The Founding Learner offer has reached its paid-customer limit.',
+    )
+  }
+
   const subscriptionPublicId = crypto.randomUUID()
   const entitlementPublicId = crypto.randomUUID()
   const metadata = JSON.stringify({

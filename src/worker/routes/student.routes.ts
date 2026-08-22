@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 
 import { requireAuthentication } from '../middleware/auth.middleware'
-import { requireCommercialFeature } from '../middleware/commercial-access.middleware'
 import {
   courseSlugSchema,
   lessonPublicIdSchema,
@@ -21,8 +20,6 @@ import { parseValidatedInput } from '../utils/validation'
 export const studentRoutes = new Hono<AppEnv>()
 
 studentRoutes.use('*', requireAuthentication)
-studentRoutes.use('/courses/:courseSlug/curriculum', requireCommercialFeature('full_curriculum'))
-studentRoutes.use('/lessons/*', requireCommercialFeature('full_curriculum'))
 
 studentRoutes.get('/dashboard', async (context) => {
   const result = await getStudentDashboard(

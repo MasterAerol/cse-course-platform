@@ -42,6 +42,8 @@ interface PlanRow {
   active: 0 | 1
   public_visible: 0 | 1
   checkout_enabled: 0 | 1
+  purchase_limit: number | null
+  approved_purchase_count: number
   counts_as_revenue: 0 | 1
   created_at: string
   updated_at: string
@@ -180,6 +182,9 @@ export interface CommercialPlan {
   active: boolean
   publicVisible: boolean
   checkoutEnabled: boolean
+  purchaseLimit: number | null
+  approvedPurchaseCount: number
+  purchaseAvailable: boolean
   countsAsRevenue: boolean
   createdAt: string
   updatedAt: string
@@ -207,7 +212,12 @@ export interface CommercialPaymentRequest {
     email: string
     currentAccess: CommercialAccessDecision['accessType']
   }
-  plan: { slug: string; name: string; accessType: 'PREMIUM' | 'TESTER' }
+  plan: {
+    slug: string
+    name: string
+    accessType: 'PREMIUM' | 'TESTER'
+    durationDays: number | null
+  }
   expectedAmountMinor: number
   currency: string
   status: PaymentState
@@ -247,6 +257,11 @@ function mapPlan(row: PlanRow): CommercialPlan {
     active: row.active === 1,
     publicVisible: row.public_visible === 1,
     checkoutEnabled: row.checkout_enabled === 1,
+    purchaseLimit: row.purchase_limit,
+    approvedPurchaseCount: row.approved_purchase_count,
+    purchaseAvailable:
+      row.purchase_limit === null ||
+      row.approved_purchase_count < row.purchase_limit,
     countsAsRevenue: row.counts_as_revenue === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -310,6 +325,7 @@ async function mapPaymentRequest(
       slug: row.plan_slug,
       name: row.plan_name,
       accessType: row.plan_access_type,
+      durationDays: row.plan_duration_days,
     },
     expectedAmountMinor: row.expected_amount_minor,
     currency: row.currency,
@@ -531,30 +547,61 @@ export async function listInternalPlans(
 ): Promise<CommercialPlan[]> {
   const result = await database
     .prepare(
-      `SELECT * FROM subscription_plans
+      `SELECT subscription_plans.*,
+        (SELECT COUNT(*) FROM payment_requests
+          WHERE plan_id = subscription_plans.id AND status = 'approved'
+        ) AS approved_purchase_count
+      FROM subscription_plans
       ORDER BY price_minor ASC, id ASC`,
     )
     .all<PlanRow>()
   return result.results.map(mapPlan)
 }
 
-export async function listLearnerPlans(
-  database: D1Database,
-): Promise<{ checkoutEnabled: boolean; showPricing: boolean; plans: CommercialPlan[] }> {
+export async function listLearnerPlans(database: D1Database) {
   const settings = await getCommercialSettings(database)
-  if (!settings.publicCheckout || !settings.showPricing) {
-    return { checkoutEnabled: false, showPricing: false, plans: [] }
+  if (!settings.showPricing) {
+    return {
+      checkoutEnabled: false,
+      showPricing: false,
+      paymentMethodConfigured: false,
+      regularReferencePriceMinor: null,
+      plans: [],
+    }
   }
-  const result = await database
-    .prepare(
-      `SELECT * FROM subscription_plans
-      WHERE active = 1 AND public_visible = 1 AND checkout_enabled = 1
-      ORDER BY price_minor ASC, id ASC`,
-    )
-    .all<PlanRow>()
+  const [result, referencePlan, configuredMethod] = await Promise.all([
+    database
+      .prepare(
+        `SELECT subscription_plans.*,
+          (SELECT COUNT(*) FROM payment_requests
+            WHERE plan_id = subscription_plans.id AND status = 'approved'
+          ) AS approved_purchase_count
+        FROM subscription_plans
+        WHERE active = 1 AND public_visible = 1 AND checkout_enabled = 1
+        ORDER BY price_minor ASC, id ASC`,
+      )
+      .all<PlanRow>(),
+    database
+      .prepare(
+        `SELECT price_minor FROM subscription_plans
+        WHERE slug = 'regular-monthly' AND active = 1 LIMIT 1`,
+      )
+      .first<{ price_minor: number }>(),
+    database
+      .prepare(
+        `SELECT 1 AS configured FROM commercial_payment_methods
+        WHERE enabled = 1 AND qr_object_key IS NOT NULL
+          AND length(trim(instructions)) > 0
+        LIMIT 1`,
+      )
+      .first<{ configured: number }>(),
+  ])
+  const paymentMethodConfigured = configuredMethod !== null
   return {
-    checkoutEnabled: true,
+    checkoutEnabled: settings.publicCheckout && paymentMethodConfigured,
     showPricing: true,
+    paymentMethodConfigured,
+    regularReferencePriceMinor: referencePlan?.price_minor ?? null,
     plans: result.results.map(mapPlan),
   }
 }
@@ -622,7 +669,11 @@ export async function createLearnerPaymentRequest(
   }
   const plan = await database
     .prepare(
-      `SELECT * FROM subscription_plans
+      `SELECT subscription_plans.*,
+        (SELECT COUNT(*) FROM payment_requests
+          WHERE plan_id = subscription_plans.id AND status = 'approved'
+        ) AS approved_purchase_count
+      FROM subscription_plans
       WHERE slug = ?1
         AND active = 1
         AND public_visible = 1
@@ -634,6 +685,31 @@ export async function createLearnerPaymentRequest(
     .first<PlanRow>()
   if (plan === null) {
     throw new AppError(404, 'PLAN_NOT_FOUND', 'Subscription plan not found.')
+  }
+  if (
+    plan.purchase_limit !== null &&
+    plan.approved_purchase_count >= plan.purchase_limit
+  ) {
+    throw new AppError(
+      409,
+      'PLAN_PURCHASE_LIMIT_REACHED',
+      'The Founding Learner offer is no longer available.',
+    )
+  }
+  const configuredMethod = await database
+    .prepare(
+      `SELECT 1 AS configured FROM commercial_payment_methods
+      WHERE enabled = 1 AND qr_object_key IS NOT NULL
+        AND length(trim(instructions)) > 0
+      LIMIT 1`,
+    )
+    .first<{ configured: number }>()
+  if (configuredMethod === null) {
+    throw new AppError(
+      503,
+      'PAYMENT_METHOD_NOT_CONFIGURED',
+      'Checkout is being prepared. Please try again later.',
+    )
   }
 
   let publicId = ''

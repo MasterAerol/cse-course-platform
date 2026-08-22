@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { useAuth } from '../auth/use-auth'
+import { BetaFeedbackForm } from '../components/BetaFeedbackForm'
 import { CommercialAccessPanel } from '../components/CommercialAccessPanel'
 import { ChangePasswordForm } from '../components/ChangePasswordForm'
 import { CseExamTargetCard } from '../components/CseExamTarget'
@@ -133,6 +134,7 @@ export function AccountPageView({
 
         <aside className="account-side-column">
           <CseExamTargetCard configuredDates={cseExamDates} compact linkToCalendar />
+          <BetaFeedbackForm />
           <CommercialAccessPanel />
           <section className="account-panel" aria-labelledby="sign-in-methods-title">
             <div className="account-panel__heading">

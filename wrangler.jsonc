@@ -13,7 +13,7 @@
   },
   "vars": {
     "ENVIRONMENT": "production",
-    "REGISTRATION_MODE": "closed",
+    "REGISTRATION_MODE": "open",
     "GOOGLE_CLIENT_ID": "247375246816-10qnqrcf5c2sarc6gvbpdbtdocbs5p1o.apps.googleusercontent.com"
   },
   "secrets": {

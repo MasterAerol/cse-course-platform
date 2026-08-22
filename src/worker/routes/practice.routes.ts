@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 
 import { requireAuthentication } from '../middleware/auth.middleware'
-import { requireCommercialFeature } from '../middleware/commercial-access.middleware'
 import { requireLearnerMutationRateLimit } from '../middleware/rate-limit.middleware'
 import { lessonPublicIdSchema } from '../schemas/course.schemas'
 import {
@@ -28,7 +27,6 @@ import {
 export const practiceRoutes = new Hono<AppEnv>()
 
 practiceRoutes.use('*', requireAuthentication)
-practiceRoutes.use('*', requireCommercialFeature('premium_practice'))
 practiceRoutes.use('*', requireLearnerMutationRateLimit)
 
 practiceRoutes.get('/lessons/:lessonPublicId/practice', async (context) => {
